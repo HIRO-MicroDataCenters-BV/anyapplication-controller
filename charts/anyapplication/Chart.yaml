@@ -1,0 +1,10 @@
+apiVersion: v2
+name: anyapplication
+description: Decentralized Control Plane Application Controller
+type: application
+version: "0.0.0"
+appVersion: "0.0.0"
+home: https://github.com/HIRO-MicroDataCenters-BV/anyapplication-controller
+maintainers:
+  - name: HIRO-Microdatacenters
+    url: https://hiro-microdatacenters.nl
