@@ -20,22 +20,43 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // AnyApplicationSpec defines the desired state of AnyApplication.
 type AnyApplicationSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// Foo is an example field of AnyApplication. Edit anyapplication_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Application     ApplicationMatcherSpec `json:"application,omitempty"`
+	Zones           int                    `json:"zones,omitempty"`
+	RecoverStrategy RecoverStrategySpec    `json:"recover-strategy,omitempty"`
+}
+
+type ApplicationMatcherSpec struct {
+	Labels map[string]string `json:"labels,omitempty"`
+}
+
+type RecoverStrategySpec struct {
+	Tolerance  int `json:"tolerance,omitempty"`
+	MaxRetries int `json:"max-retries,omitempty"`
 }
 
 // AnyApplicationStatus defines the observed state of AnyApplication.
 type AnyApplicationStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	State      string            `json:"state,omitempty"`
+	Placements []PlacementStatus `json:"placements,omitempty"`
+	Owner      string            `json:"owner,omitempty"`
+	Conditions []ConditionStatus `json:"conditions,omitempty"`
+}
+
+type PlacementStatus struct {
+	Zone         string   `json:"zone,omitempty"`
+	NodeAffinity []string `json:"node-affinity,omitempty"`
+}
+
+type ConditionStatus struct {
+	Type               string      `json:"type,omitempty"`
+	Id                 string      `json:"id,omitempty"`
+	Status             string      `json:"status,omitempty"`
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+	Reason             string      `json:"reason,omitempty"`
+	Msg                string      `json:"msg,omitempty"`
 }
 
 // +kubebuilder:object:root=true
