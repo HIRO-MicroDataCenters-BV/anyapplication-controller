@@ -1,0 +1,9 @@
+apiVersion: dcp.hiro.io/v1
+kind: AnyApplication
+metadata:
+  labels:
+    app.kubernetes.io/name: anyapplication-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: anyapplication-sample
+spec:
+  # TODO(user): Add fields here

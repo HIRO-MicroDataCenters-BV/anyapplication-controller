@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- dcp_v1_anyapplication.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

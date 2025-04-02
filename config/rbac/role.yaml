@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - dcp.hiro.io
+  resources:
+  - anyapplications
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - dcp.hiro.io
+  resources:
+  - anyapplications/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - dcp.hiro.io
+  resources:
+  - anyapplications/status
+  verbs:
+  - get
+  - patch
+  - update
