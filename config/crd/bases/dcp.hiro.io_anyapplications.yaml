@@ -39,13 +39,68 @@ spec:
           spec:
             description: AnyApplicationSpec defines the desired state of AnyApplication.
             properties:
-              foo:
+              application:
                 description: Foo is an example field of AnyApplication. Edit anyapplication_types.go
                   to remove/update
-                type: string
+                properties:
+                  resourceSelector:
+                    items:
+                      properties:
+                        apiVersion:
+                          type: string
+                        kind:
+                          type: string
+                        name:
+                          type: string
+                      type: object
+                    type: array
+                type: object
+              recover-strategy:
+                properties:
+                  max-retries:
+                    type: integer
+                  tolerance:
+                    type: integer
+                type: object
+              zones:
+                type: integer
             type: object
           status:
             description: AnyApplicationStatus defines the observed state of AnyApplication.
+            properties:
+              conditions:
+                items:
+                  properties:
+                    id:
+                      type: string
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    msg:
+                      type: string
+                    reason:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+              owner:
+                type: string
+              placements:
+                items:
+                  properties:
+                    node-affinity:
+                      items:
+                        type: string
+                      type: array
+                    zone:
+                      type: string
+                  type: object
+                type: array
+              state:
+                type: string
             type: object
         type: object
     served: true
