@@ -58,7 +58,7 @@ type PlacementStatus struct {
 
 type ConditionStatus struct {
 	Type               string      `json:"type,omitempty"`
-	Id                 string      `json:"id,omitempty"`
+	ZoneId             string      `json:"zoneId,omitempty"`
 	Status             string      `json:"status,omitempty"`
 	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
 	Reason             string      `json:"reason,omitempty"`

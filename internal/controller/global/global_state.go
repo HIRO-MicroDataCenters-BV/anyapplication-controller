@@ -3,13 +3,13 @@ package global
 type GlobalState int
 
 const (
-	NewGlobal GlobalState = iota
+	UnknownGlobal GlobalState = iota
+	NewGlobal
 	Placement
 	Operational
 	Relocation
 	Failure
 	OwnershipTransfer
-	UnknownGlobal
 )
 
 func (s GlobalState) String() string {

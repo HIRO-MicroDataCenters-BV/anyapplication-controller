@@ -1,0 +1,37 @@
+package job
+
+import "github.com/samber/mo"
+
+type AsyncJobType int
+
+const (
+	AsyncJobTypeUnknown AsyncJobType = iota
+	AsyncJobTypeFetch
+)
+
+type AsyncJobState int
+
+const (
+	AsyncJobStateUnknown AsyncJobState = iota
+	AsyncJobStateNew
+	AsyncJobStateExecuting
+	AsyncJobStateCompleted
+)
+
+type AsyncJobStatus int
+
+const (
+	AsyncJobStatusUnknown AsyncJobStatus = iota
+	AsyncJobStatusSuccess
+	AsyncJobStatusFailure
+	AsyncJobStatusCancelled
+)
+
+type AsyncJob interface {
+	GetJobID() int
+	GetType() AsyncJobType
+	GetState() AsyncJobState
+	GetCompletionStatus() mo.Option[AsyncJobStatus]
+	GetCompletionComment() mo.Option[string]
+	Run()
+}

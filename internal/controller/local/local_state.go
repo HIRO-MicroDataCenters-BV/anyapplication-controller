@@ -3,11 +3,11 @@ package local
 type LocalState int
 
 const (
-	NewLocal LocalState = iota
+	UnknownLocal LocalState = iota
+	NewLocal
 	Starting
 	Running
-	Terminated
-	UnknownLocal
+	Completed
 )
 
 func (s LocalState) String() string {
@@ -18,7 +18,7 @@ func (s LocalState) String() string {
 		return "Starting"
 	case Running:
 		return "Running"
-	case Terminated:
+	case Completed:
 		return "Terminated"
 	default:
 		return "Unknown"

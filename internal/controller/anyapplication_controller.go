@@ -25,6 +25,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/controller/reconciler"
 )
 
 // AnyApplicationReconciler reconciles a AnyApplication object
@@ -47,9 +48,32 @@ type AnyApplicationReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.4/pkg/reconcile
 func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	log := logf.FromContext(ctx)
 
-	// TODO(user): your logic here
+	resource := &dcpv1.AnyApplication{}
+	if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
+		log.Error(err, "Unable to get AnyApplication ", "name", req.Name, "namespace", req.Namespace)
+		// TODO (user): handle error
+		return ctrl.Result{}, nil
+	}
+
+	reconcilerBuilder := reconciler.NewReconcilerBuilder(r.Client, resource)
+	reconciler, err := reconcilerBuilder.Build()
+	if err != nil {
+		// TODO (user): handle error
+		return ctrl.Result{}, nil
+	}
+
+	result := reconciler.DoReconcile()
+
+	resource.Status = result.Status.OrElse(resource.Status)
+
+	if r.Client.Status().Update(ctx, resource); err != nil {
+		log.Error(err, "failed to update AnyApplication status")
+		return ctrl.Result{}, err
+	}
+
+	log.Info("AnyApplicaitonResource status synced")
 
 	return ctrl.Result{}, nil
 }
