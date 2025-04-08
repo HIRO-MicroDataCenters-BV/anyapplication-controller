@@ -101,12 +101,6 @@ make_docker_images_with_tags() {
   echo -n "${RESULT}" > "${DOCKER_IMAGES_PATH}"
 }
 
-patch_versions_in_project_files() {
-  VERSION_APP=$(cat "${VERSION_APP_PATH}")
-
-  sed -i "s#^version = \"[0-9a-zA-Z\.-_\+]*\"#version = \"$VERSION_APP\"#" "${ROOT}/rhio/Cargo.toml"
-}
-
 patch_versions_in_helm_chart() {
   DOCKER_IMAGE_NAME="$1"
   CHART_NAME="$2"
@@ -128,7 +122,6 @@ main() {
 
   make_version "$GIT_SHA"
   make_docker_images_with_tags "$DOCKER_IMAGE_NAME"
-  patch_versions_in_project_files "$DOCKER_IMAGE_NAME"
   patch_versions_in_helm_chart "$DOCKER_IMAGE_NAME" "anyapplication"
 }
 
