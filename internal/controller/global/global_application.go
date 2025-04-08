@@ -1,6 +1,8 @@
 package global
 
 import (
+	"context"
+
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/controller/local"
@@ -13,8 +15,8 @@ type GlobalApplication struct {
 	application     *v1.AnyApplication
 }
 
-func LoadFromKubernetes(client client.Client, application *v1.AnyApplication) GlobalApplication {
-	localApplication, err := local.LoadFromKubernetes(client, &application.Spec.Application)
+func LoadFromKubernetes(ctx context.Context, client client.Client, application *v1.AnyApplication) GlobalApplication {
+	localApplication, err := local.LoadFromKubernetes(ctx, client, &application.Spec.Application)
 	if err != nil {
 		log.Log.Info("error loading from kubernetes")
 	}

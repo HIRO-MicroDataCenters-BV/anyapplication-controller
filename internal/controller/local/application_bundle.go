@@ -1,6 +1,7 @@
 package local
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 
@@ -11,33 +12,114 @@ import (
 )
 
 type ApplicationBundle struct {
-	Deployments   *unstructured.UnstructuredList
-	StatefullSets *unstructured.UnstructuredList
-	Jobs          *unstructured.UnstructuredList
-	DaemonSets    *unstructured.UnstructuredList
+	Services     *unstructured.UnstructuredList
+	Deployments  *unstructured.UnstructuredList
+	StatefulSets *unstructured.UnstructuredList
+	Jobs         *unstructured.UnstructuredList
+	DaemonSets   *unstructured.UnstructuredList
+	Secrets      *unstructured.UnstructuredList
+	ConfigMaps   *unstructured.UnstructuredList
 }
 
-func Load(client client.Client, applicationSpec *v1.ApplicationMatcherSpec) (ApplicationBundle, error) {
-	// deployments_list := &unstructured.UnstructuredList{}
-	// for _, selectorSpec := range applicationSpec.ResourceSelector {
-	// 	deployments, err := LoadResource(client, applicationSpec, "Deployment", selectorSpec.Namespace)
-	// }
+// Also CronJob, Ingress, NetworkPolicy, PVC, ServiceAccount, Role, ClusterRole, RoleBinding, ClusterRoleBinding
 
-	return ApplicationBundle{}, nil
-}
+func LoadApplicationBundle(ctx context.Context, client client.Client, applicationSpec *v1.ApplicationMatcherSpec) (ApplicationBundle, error) {
+	serviceList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
+		Group:   "",
+		Kind:    "ServiceList",
+		Version: "v1",
+	})
+	if err != nil {
+		log.Println("Error loading Service:", err)
+		return ApplicationBundle{}, err
+	}
 
-func LoadResource(client client.Client, applicationSpec *v1.ApplicationMatcherSpec, resourceType string, namespace string) (unstructured.UnstructuredList, error) {
-	deployments_list := unstructured.UnstructuredList{}
-	deployments_list.SetGroupVersionKind(schema.GroupVersionKind{
+	deploymentsList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
 		Group:   "apps",
 		Kind:    "DeploymentList",
 		Version: "v1",
 	})
-	// _ = client.List(context.Background(), &deployments_list, &client.ListOptions{
-	// 	Namespace: namespace,
-	// })
+	if err != nil {
+		log.Println("Error loading Deployment:", err)
+		return ApplicationBundle{}, err
+	}
 
-	return deployments_list, nil
+	statefulsetList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
+		Group:   "apps",
+		Kind:    "StatefulSetList",
+		Version: "v1",
+	})
+	if err != nil {
+		log.Println("Error loading StatefulSet:", err)
+		return ApplicationBundle{}, err
+	}
+
+	jobsList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
+		Group:   "batch",
+		Kind:    "JobList",
+		Version: "v1",
+	})
+	if err != nil {
+		log.Println("Error loading Jobs:", err)
+		return ApplicationBundle{}, err
+	}
+
+	daemonsetList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
+		Group:   "apps",
+		Kind:    "DaemonSetList",
+		Version: "v1",
+	})
+	if err != nil {
+		log.Println("Error loading DaemonSets:", err)
+		return ApplicationBundle{}, err
+	}
+
+	secretList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
+		Group:   "",
+		Kind:    "SecretList",
+		Version: "v1",
+	})
+	if err != nil {
+		log.Println("Error loading Secrets:", err)
+		return ApplicationBundle{}, err
+	}
+
+	configMapList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
+		Group:   "",
+		Kind:    "ConfigMapList",
+		Version: "v1",
+	})
+	if err != nil {
+		log.Println("Error loading ConfigMap:", err)
+		return ApplicationBundle{}, err
+	}
+
+	return ApplicationBundle{
+		Deployments:  &deploymentsList,
+		StatefulSets: &statefulsetList,
+		Jobs:         &jobsList,
+		DaemonSets:   &daemonsetList,
+		Services:     &serviceList,
+		Secrets:      &secretList,
+		ConfigMaps:   &configMapList,
+	}, nil
+}
+
+func loadResource(
+	ctx context.Context,
+	k8sClient client.Client,
+	applicationSpec *v1.ApplicationMatcherSpec,
+	kind schema.GroupVersionKind,
+) (unstructured.UnstructuredList, error) {
+	resources := unstructured.UnstructuredList{}
+	resources.SetGroupVersionKind(kind)
+	opts := []client.ListOption{
+		// client.InNamespace(namespace),
+		client.MatchingLabels(applicationSpec.ResourceSelector),
+	}
+	err := k8sClient.List(ctx, &resources, opts...)
+
+	return resources, err
 }
 
 func Deserialize(data string) (ApplicationBundle, error) {
@@ -57,3 +139,135 @@ func (bundle *ApplicationBundle) Serialize() (string, error) {
 	}
 	return string(jsonData), nil
 }
+
+func (bundle *ApplicationBundle) CleanResources() ApplicationBundle {
+	Deployments := bundle.Deployments.DeepCopy()
+	Services := bundle.Services.DeepCopy()
+	StatefulSets := bundle.StatefulSets.DeepCopy()
+	Jobs := bundle.Jobs.DeepCopy()
+	DaemonSets := bundle.DaemonSets.DeepCopy()
+	Secrets := bundle.Secrets.DeepCopy()
+	ConfigMaps := bundle.ConfigMaps.DeepCopy()
+
+	Deployments.Items = Map(Deployments.Items, cleanResource)
+	Services.Items = Map(Services.Items, cleanResource)
+	StatefulSets.Items = Map(StatefulSets.Items, cleanResource)
+	Jobs.Items = Map(Jobs.Items, cleanResource)
+	DaemonSets.Items = Map(DaemonSets.Items, cleanResource)
+	Secrets.Items = Map(Secrets.Items, cleanResource)
+	ConfigMaps.Items = Map(ConfigMaps.Items, cleanResource)
+
+	cleanBundle := ApplicationBundle{
+		Deployments:  Deployments,
+		Services:     Services,
+		StatefulSets: StatefulSets,
+		Jobs:         Jobs,
+		DaemonSets:   DaemonSets,
+		Secrets:      Secrets,
+		ConfigMaps:   ConfigMaps,
+	}
+
+	return cleanBundle
+}
+
+func cleanResource(resource unstructured.Unstructured) unstructured.Unstructured {
+
+	log.Default().Printf("kind %s", resource.GetKind())
+
+	switch resource.GetKind() {
+	case "Service":
+		// Clean Service-specific runtime details
+		unstructured.RemoveNestedField(resource.Object, "status")
+		unstructured.RemoveNestedField(resource.Object, "spec", "clusterIP")
+		unstructured.RemoveNestedField(resource.Object, "spec", "clusterIPs")
+
+	case "Deployment":
+		// Clean Deployment-specific runtime details
+		unstructured.RemoveNestedField(resource.Object, "status")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "nodeName")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "affinity")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "tolerations")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "hostAliases")
+	case "StatefulSet":
+		// Clean StatefulSet-specific runtime details
+		unstructured.RemoveNestedField(resource.Object, "status")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "nodeName")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "affinity")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "tolerations")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "hostAliases")
+	case "DaemonSet":
+		// Clean DaemonSet-specific runtime details
+		unstructured.RemoveNestedField(resource.Object, "status")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "nodeName")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "affinity")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "tolerations")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "hostAliases")
+
+	case "Job":
+		// Clean Job-specific runtime details
+		unstructured.RemoveNestedField(resource.Object, "status")
+		unstructured.RemoveNestedField(resource.Object, "spec", "template", "spec", "nodeName")
+
+	case "Secret":
+	case "ConfigMap":
+		// Clean Secret/ConfigMap-specific runtime details
+	default:
+		// Handle other resources similarly if needed (StatefulSets, ReplicaSets, etc.)
+	}
+
+	// Clean metadata (like `status`, `resourceVersion`, etc.)
+	unstructured.RemoveNestedField(resource.Object, "metadata", "selfLink")
+	unstructured.RemoveNestedField(resource.Object, "metadata", "uid")
+	unstructured.RemoveNestedField(resource.Object, "metadata", "creationTimestamp")
+	unstructured.RemoveNestedField(resource.Object, "metadata", "resourceVersion")
+	unstructured.RemoveNestedField(resource.Object, "metadata", "generation")
+	unstructured.RemoveNestedField(resource.Object, "metadata", "managedFields")
+	unstructured.RemoveNestedField(resource.Object, "metadata", "deletionTimestamp")
+	unstructured.RemoveNestedField(resource.Object, "metadata", "finalizers")
+	unstructured.RemoveNestedField(resource.Object, "metadata", "ownerReferences")
+	unstructured.RemoveNestedField(resource.Object, "metadata", "clusterName")
+	return resource
+}
+
+func Map[T any, R any](slice []T, f func(T) R) []R {
+	result := make([]R, len(slice))
+	for i, v := range slice {
+		result[i] = f(v)
+	}
+	return result
+}
+
+func (bundle *ApplicationBundle) DetermineState() LocalState {
+	// deploymentStates := Map(bundle.Deployments.Items, determineDeploymentState)
+	// statefulSetStates := Map(bundle.StatefulSets.Items, determineStatefulSetState)
+	// daemonSetStates := Map(bundle.DaemonSets.Items, determineDaemonSetState)
+	// allStates := append(deploymentStates, statefulSetStates...)
+	// allStates = append(allStates, daemonSetStates...)
+
+	// if at least on is failed then Completed with failure
+	// if at least one is starting then starting
+	// if all are running then running
+
+	// states := lo.Uniq(allStates)
+
+	// result := lo.GroupByMap(groupedStates, func(v []LocalState) (LocalState, int) {
+	// 	return v[0], len(v)
+	// })
+
+	return NewLocal
+}
+
+// func determineDeploymentState(deployment unstructured.Unstructured) LocalState {
+// 	// return health.GetResourceHealth(deployment)
+// 	return NewLocal
+// }
+
+// func determineStatefulSetState(deployment unstructured.Unstructured) LocalState {
+// 	// return health.GetResourceHealth(deployment)
+// 	return NewLocal
+// }
+
+// func determineDaemonSetState(deployment unstructured.Unstructured) LocalState {
+// 	// Implement logic to determine the state of the deployment
+// 	return NewLocal
+// }

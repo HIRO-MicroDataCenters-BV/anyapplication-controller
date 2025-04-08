@@ -57,7 +57,7 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	reconcilerBuilder := reconciler.NewReconcilerBuilder(r.Client, resource)
+	reconcilerBuilder := reconciler.NewReconcilerBuilder(ctx, r.Client, resource)
 	reconciler, err := reconcilerBuilder.Build()
 	if err != nil {
 		// TODO (user): handle error

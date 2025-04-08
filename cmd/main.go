@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -39,6 +40,7 @@ import (
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/controller"
+	"hiro.io/anyapplication/internal/httpapi"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -235,6 +237,18 @@ func main() {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
+	setupLog.Info("starting Application API Server")
+	// TODO make configurable
+	options := httpapi.ApplicationApiOptions{
+		Address: "0.0.0.0:9000",
+	}
+	httpServer := httpapi.NewHttpServer(options)
+
+	go func() {
+		if err := httpServer.Start(); err != nil {
+			log.Fatalf("Http Server start error: %v", err)
+		}
+	}()
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

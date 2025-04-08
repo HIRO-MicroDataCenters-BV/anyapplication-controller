@@ -44,18 +44,9 @@ spec:
                   to remove/update
                 properties:
                   resourceSelector:
-                    items:
-                      properties:
-                        apiVersion:
-                          type: string
-                        kind:
-                          type: string
-                        name:
-                          type: string
-                        namespace:
-                          type: string
-                      type: object
-                    type: array
+                    additionalProperties:
+                      type: string
+                    type: object
                 type: object
               recover-strategy:
                 properties:

@@ -29,14 +29,7 @@ type AnyApplicationSpec struct {
 }
 
 type ApplicationMatcherSpec struct {
-	ResourceSelector []ResourceSelectorSpec `json:"resourceSelector,omitempty"`
-}
-
-type ResourceSelectorSpec struct {
-	ApiVersion string `json:"apiVersion,omitempty"`
-	Kind       string `json:"kind,omitempty"`
-	Name       string `json:"name,omitempty"`
-	Namespace  string `json:"namespace,omitempty"`
+	ResourceSelector map[string]string `json:"resourceSelector,omitempty"`
 }
 
 type RecoverStrategySpec struct {
