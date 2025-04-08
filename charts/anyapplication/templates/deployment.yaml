@@ -35,7 +35,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
-            - /usr/local/bin/dcp-application-controller
+            - /manager
           ports:
           # the port for the p2p networking endpoint
           - name: network

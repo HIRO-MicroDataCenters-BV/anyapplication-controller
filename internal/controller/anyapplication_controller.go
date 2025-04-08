@@ -68,7 +68,8 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	resource.Status = result.Status.OrElse(resource.Status)
 
-	if r.Client.Status().Update(ctx, resource); err != nil {
+	err = r.Client.Status().Update(ctx, resource)
+	if err != nil {
 		log.Error(err, "failed to update AnyApplication status")
 		return ctrl.Result{}, err
 	}

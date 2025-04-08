@@ -5,6 +5,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/controller/local"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type GlobalApplication struct {
@@ -15,10 +16,11 @@ type GlobalApplication struct {
 func LoadFromKubernetes(client client.Client, application *v1.AnyApplication) GlobalApplication {
 	localApplication, err := local.LoadFromKubernetes(client, &application.Spec.Application)
 	if err != nil {
-
+		log.Log.Info("error loading from kubernetes")
 	}
 	return GlobalApplication{
 		locaApplication: localApplication,
+		application:     application,
 	}
 }
 
