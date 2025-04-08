@@ -36,6 +36,7 @@ type ResourceSelectorSpec struct {
 	ApiVersion string `json:"apiVersion,omitempty"`
 	Kind       string `json:"kind,omitempty"`
 	Name       string `json:"name,omitempty"`
+	Namespace  string `json:"namespace,omitempty"`
 }
 
 type RecoverStrategySpec struct {

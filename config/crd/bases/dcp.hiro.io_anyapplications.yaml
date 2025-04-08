@@ -52,6 +52,8 @@ spec:
                           type: string
                         name:
                           type: string
+                        namespace:
+                          type: string
                       type: object
                     type: array
                 type: object
@@ -71,8 +73,6 @@ spec:
               conditions:
                 items:
                   properties:
-                    id:
-                      type: string
                     lastTransitionTime:
                       format: date-time
                       type: string
@@ -83,6 +83,8 @@ spec:
                     status:
                       type: string
                     type:
+                      type: string
+                    zoneId:
                       type: string
                   type: object
                 type: array

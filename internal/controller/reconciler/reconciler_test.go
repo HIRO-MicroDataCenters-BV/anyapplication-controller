@@ -6,8 +6,8 @@ import (
 
 func TestReconcile(t *testing.T) {
 
-	input := "some input"
-	expected := "expected output"
+	// input := "some input"
+	// expected := "expected output"
 
 	// // Act (Call the function under test)
 	// result := FunctionName(input)
