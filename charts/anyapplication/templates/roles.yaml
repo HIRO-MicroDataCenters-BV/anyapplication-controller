@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "operator.fullname" . }}-clusterrole
+  name: {{ include "app.fullname" . }}-clusterrole
   labels:
   {{- include "operator.labels" . | nindent 4 }}
 rules:
@@ -49,7 +49,7 @@ rules:
     verbs:
       - bind
     resourceNames:
-      - {{ include "operator.name" . }}-clusterrole
+      - {{ include "app.fullname" . }}-clusterrole
   - apiGroups:
       - apps
     resources:
@@ -114,9 +114,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "operator.name" . }}-clusterrole
+  name: {{ include "app.fullname" . }}-clusterrole
   labels:
-  {{- include "operator.labels" . | nindent 4 }}
+  {{- include "app.labels" . | nindent 4 }}
 rules:
   - apiGroups:
       - ""

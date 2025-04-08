@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -20,7 +21,11 @@ func LoadConfig(filePath string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error opening config file: %v", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("error closing file: %v", err)
+		}
+	}()
 
 	// Create a new Config instance
 	config := &Config{}
