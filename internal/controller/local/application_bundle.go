@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 
+	health "github.com/argoproj/gitops-engine/pkg/health"
 	v1 "hiro.io/anyapplication/api/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -237,37 +238,84 @@ func Map[T any, R any](slice []T, f func(T) R) []R {
 	return result
 }
 
-func (bundle *ApplicationBundle) DetermineState() LocalState {
-	// deploymentStates := Map(bundle.Deployments.Items, determineDeploymentState)
-	// statefulSetStates := Map(bundle.StatefulSets.Items, determineStatefulSetState)
-	// daemonSetStates := Map(bundle.DaemonSets.Items, determineDaemonSetState)
-	// allStates := append(deploymentStates, statefulSetStates...)
-	// allStates = append(allStates, daemonSetStates...)
+func (bundle *ApplicationBundle) DetermineState() (health.HealthStatusCode, []string, error) {
 
-	// if at least on is failed then Completed with failure
-	// if at least one is starting then starting
-	// if all are running then running
+	deploymentStatuses, err := foldLeft(bundle.Deployments.Items, make([]health.HealthStatus, 0),
+		func(acc []health.HealthStatus, item unstructured.Unstructured) ([]health.HealthStatus, error) {
+			status, err := determineResourceState(&item)
+			if err != nil {
+				return acc, err
+			}
+			acc = append(acc, *status)
+			return acc, nil
+		})
+	if err != nil {
+		return health.HealthStatusUnknown, nil, err
+	}
+	statefulSetStatuses, err := foldLeft(bundle.StatefulSets.Items, make([]health.HealthStatus, 0),
+		func(acc []health.HealthStatus, item unstructured.Unstructured) ([]health.HealthStatus, error) {
+			status, err := determineResourceState(&item)
+			if err != nil {
+				return acc, err
+			}
+			acc = append(acc, *status)
+			return acc, nil
+		})
+	if err != nil {
+		return health.HealthStatusUnknown, nil, err
+	}
 
-	// states := lo.Uniq(allStates)
+	daemonSetStatuses, err := foldLeft(bundle.StatefulSets.Items, make([]health.HealthStatus, 0),
+		func(acc []health.HealthStatus, item unstructured.Unstructured) ([]health.HealthStatus, error) {
+			status, err := determineResourceState(&item)
+			if err != nil {
+				return acc, err
+			}
+			acc = append(acc, *status)
+			return acc, nil
+		},
+	)
+	if err != nil {
+		return health.HealthStatusUnknown, nil, err
+	}
 
-	// result := lo.GroupByMap(groupedStates, func(v []LocalState) (LocalState, int) {
-	// 	return v[0], len(v)
-	// })
+	allStatuses := append(deploymentStatuses, statefulSetStatuses...)
+	allStatuses = append(allStatuses, daemonSetStatuses...)
 
-	return NewLocal
+	healthStatus, _ := foldLeft(allStatuses, health.HealthStatusHealthy,
+		func(acc health.HealthStatusCode, item health.HealthStatus) (health.HealthStatusCode, error) {
+			if health.IsWorse(acc, item.Status) {
+				acc = item.Status
+			}
+			return acc, nil
+		},
+	)
+
+	messages, _ := foldLeft(allStatuses, make([]string, 0),
+		func(acc []string, item health.HealthStatus) ([]string, error) {
+			if item.Message != "" {
+				acc = append(acc, item.Message)
+			}
+			return acc, nil
+		},
+	)
+
+	return healthStatus, messages, nil
 }
 
-// func determineDeploymentState(deployment unstructured.Unstructured) LocalState {
-// 	// return health.GetResourceHealth(deployment)
-// 	return NewLocal
-// }
+func determineResourceState(resource *unstructured.Unstructured) (*health.HealthStatus, error) {
+	status, err := health.GetResourceHealth(resource, nil)
+	return status, err
+}
 
-// func determineStatefulSetState(deployment unstructured.Unstructured) LocalState {
-// 	// return health.GetResourceHealth(deployment)
-// 	return NewLocal
-// }
-
-// func determineDaemonSetState(deployment unstructured.Unstructured) LocalState {
-// 	// Implement logic to determine the state of the deployment
-// 	return NewLocal
-// }
+func foldLeft[T, R any](arr []T, initial R, fn func(acc R, item T) (R, error)) (R, error) {
+	acc := initial
+	for _, item := range arr {
+		var err error
+		acc, err = fn(acc, item)
+		if err != nil {
+			return acc, err // Return the accumulator and the error if one occurred
+		}
+	}
+	return acc, nil
+}
