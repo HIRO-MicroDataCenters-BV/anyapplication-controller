@@ -15,10 +15,10 @@ type GlobalApplication struct {
 	application     *v1.AnyApplication
 }
 
-func LoadFromKubernetes(ctx context.Context, client client.Client, application *v1.AnyApplication) GlobalApplication {
-	localApplication, err := local.LoadFromKubernetes(ctx, client, &application.Spec.Application)
+func LoadCurrentState(ctx context.Context, client client.Client, application *v1.AnyApplication) GlobalApplication {
+	localApplication, err := local.LoadCurrentState(ctx, client, &application.Spec.Application)
 	if err != nil {
-		log.Log.Info("error loading from kubernetes")
+		log.Log.Info("error loading current state")
 	}
 	return GlobalApplication{
 		locaApplication: localApplication,
@@ -26,6 +26,11 @@ func LoadFromKubernetes(ctx context.Context, client client.Client, application *
 	}
 }
 
-func (g *GlobalApplication) GetNextState() GlobalState {
-	return NewGlobal
+func (g *GlobalApplication) DeriveNewStatus() mo.Option[v1.AnyApplicationStatus] {
+	status := g.application.Status
+	// statusUpdated := false
+	// if status == nil {
+	// 	status = v1.AnyApplicationStatus{}
+	// }
+	return mo.Some(status)
 }

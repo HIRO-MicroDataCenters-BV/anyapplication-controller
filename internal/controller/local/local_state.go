@@ -24,3 +24,9 @@ func (s LocalState) String() string {
 		return "Unknown"
 	}
 }
+
+type ApplicationConditionType string
+
+const (
+	LocalStatusType ApplicationConditionType = "LocalStatus"
+)

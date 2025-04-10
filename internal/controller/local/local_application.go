@@ -6,16 +6,26 @@ import (
 	"github.com/argoproj/gitops-engine/pkg/health"
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type LocalApplication struct {
-	bundle   *ApplicationBundle
-	status   health.HealthStatusCode
-	messages []string
+type ApplicationRuntimeOptions struct {
+	ZoneId string
 }
 
-func LoadFromKubernetes(ctx context.Context, client client.Client, applicationSpec *v1.ApplicationMatcherSpec) (mo.Option[LocalApplication], error) {
+type LocalApplication struct {
+	bundle         *ApplicationBundle
+	runtimeOptions ApplicationRuntimeOptions
+	status         health.HealthStatusCode
+	messages       []string
+}
+
+func LoadCurrentState(
+	ctx context.Context,
+	client client.Client,
+	applicationSpec *v1.ApplicationMatcherSpec,
+) (mo.Option[LocalApplication], error) {
 	bundle, err := LoadApplicationBundle(ctx, client, applicationSpec)
 	if err != nil {
 		return mo.None[LocalApplication](), err
@@ -31,10 +41,21 @@ func LoadFromKubernetes(ctx context.Context, client client.Client, applicationSp
 	}), nil
 }
 
-func (l *LocalApplication) GetApplicationStatus() health.HealthStatusCode {
+func (l *LocalApplication) GetStatus() health.HealthStatusCode {
 	return l.status
 }
 
-func (l *LocalApplication) GetApplicationMessages() []string {
+func (l *LocalApplication) GetMessages() []string {
 	return l.messages
+}
+
+func (l *LocalApplication) GetCondition() v1.ConditionStatus {
+	condition := v1.ConditionStatus{
+		Type:               string(LocalStatusType),
+		ZoneId:             l.runtimeOptions.ZoneId,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "",
+		Msg:                "",
+	}
+	return condition
 }

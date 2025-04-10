@@ -23,7 +23,7 @@ func NewReconcilerBuilder(ctx context.Context, client client.Client, resource *v
 }
 
 func (b ReconcilerBuilder) Build() (*Reconciler, error) {
-	globalApplication := global.LoadFromKubernetes(b.ctx, b.client, b.resource)
+	globalApplication := global.LoadCurrentState(b.ctx, b.client, b.resource)
 	reconciler := NewReconciler(globalApplication)
 	return &reconciler, nil
 }
