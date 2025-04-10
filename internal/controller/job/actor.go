@@ -9,6 +9,7 @@ type JobExecutorActor struct {
 	ID      int
 	JobChan chan AsyncJob
 	Quit    chan bool
+	Current chan AsyncJob
 }
 
 func NewActor(id int) *JobExecutorActor {
@@ -27,8 +28,7 @@ func (a *JobExecutorActor) Start() {
 				// Simulate processing
 				time.Sleep(500 * time.Millisecond)
 				_ = fmt.Sprintf("Actor %d processed job %d", a.ID, job.GetJobID())
-				// result := fmt.Sprintf("Actor %d processed job %d with payload: %s", a.ID, job.GetJobID(), job.Payload)
-				// job.Result <- result
+				job.Run()
 
 			case <-a.Quit:
 				fmt.Printf("Actor %d quitting\n", a.ID)
@@ -36,6 +36,10 @@ func (a *JobExecutorActor) Start() {
 			}
 		}
 	}()
+}
+
+func (a *JobExecutorActor) GetCurrent() {
+	a.Quit <- true
 }
 
 func (a *JobExecutorActor) Stop() {

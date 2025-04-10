@@ -6,25 +6,23 @@ import (
 	"github.com/argoproj/gitops-engine/pkg/health"
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type ApplicationRuntimeOptions struct {
-	ZoneId string
-}
-
 type LocalApplication struct {
-	bundle         *ApplicationBundle
-	runtimeOptions ApplicationRuntimeOptions
-	status         health.HealthStatusCode
-	messages       []string
+	bundle   *ApplicationBundle
+	config   *config.ApplicationRuntimeConfig
+	status   health.HealthStatusCode
+	messages []string
 }
 
 func LoadCurrentState(
 	ctx context.Context,
 	client client.Client,
 	applicationSpec *v1.ApplicationMatcherSpec,
+	config *config.ApplicationRuntimeConfig,
 ) (mo.Option[LocalApplication], error) {
 	bundle, err := LoadApplicationBundle(ctx, client, applicationSpec)
 	if err != nil {
@@ -38,6 +36,7 @@ func LoadCurrentState(
 		bundle:   &bundle,
 		status:   status,
 		messages: messages,
+		config:   config,
 	}), nil
 }
 
@@ -52,8 +51,9 @@ func (l *LocalApplication) GetMessages() []string {
 func (l *LocalApplication) GetCondition() v1.ConditionStatus {
 	condition := v1.ConditionStatus{
 		Type:               string(LocalStatusType),
-		ZoneId:             l.runtimeOptions.ZoneId,
+		ZoneId:             l.config.ZoneId,
 		LastTransitionTime: metav1.Now(),
+		Status:             string(l.status),
 		Reason:             "",
 		Msg:                "",
 	}

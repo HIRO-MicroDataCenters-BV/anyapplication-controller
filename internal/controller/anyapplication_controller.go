@@ -25,6 +25,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/reconciler"
 )
 
@@ -32,6 +33,7 @@ import (
 type AnyApplicationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Config *config.ApplicationRuntimeConfig
 }
 
 // +kubebuilder:rbac:groups=dcp.hiro.io,resources=anyapplications,verbs=get;list;watch;create;update;patch;delete
@@ -57,7 +59,7 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	reconcilerBuilder := reconciler.NewReconcilerBuilder(ctx, r.Client, resource)
+	reconcilerBuilder := reconciler.NewReconcilerBuilder(ctx, r.Client, resource, r.Config)
 	reconciler, err := reconcilerBuilder.Build()
 	if err != nil {
 		// TODO (user): handle error
