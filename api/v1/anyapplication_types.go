@@ -39,24 +39,24 @@ type RecoverStrategySpec struct {
 
 // AnyApplicationStatus defines the observed state of AnyApplication.
 type AnyApplicationStatus struct {
-	State      string            `json:"state,omitempty"`
-	Placements []PlacementStatus `json:"placements,omitempty"`
+	State      GlobalState       `json:"state,omitempty"`
+	Placements []Placement       `json:"placements,omitempty"`
 	Owner      string            `json:"owner,omitempty"`
 	Conditions []ConditionStatus `json:"conditions,omitempty"`
 }
 
-type PlacementStatus struct {
+type Placement struct {
 	Zone         string   `json:"zone,omitempty"`
 	NodeAffinity []string `json:"node-affinity,omitempty"`
 }
 
 type ConditionStatus struct {
-	Type               string      `json:"type,omitempty"`
-	ZoneId             string      `json:"zoneId,omitempty"`
-	Status             string      `json:"status,omitempty"`
-	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
-	Reason             string      `json:"reason,omitempty"`
-	Msg                string      `json:"msg,omitempty"`
+	Type               ApplicationConditionType `json:"type,omitempty"`
+	ZoneId             string                   `json:"zoneId,omitempty"`
+	Status             string                   `json:"status,omitempty"`
+	LastTransitionTime metav1.Time              `json:"lastTransitionTime,omitempty"`
+	Reason             string                   `json:"reason,omitempty"`
+	Msg                string                   `json:"msg,omitempty"`
 }
 
 // +kubebuilder:object:root=true

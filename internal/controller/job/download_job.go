@@ -1,6 +1,9 @@
 package job
 
-import "github.com/samber/mo"
+import (
+	"github.com/samber/mo"
+	v1 "hiro.io/anyapplication/api/v1"
+)
 
 type DownloadJob struct {
 }
@@ -29,4 +32,8 @@ func (job *DownloadJob) GetCompletionComment() mo.Option[string] {
 }
 func (job *DownloadJob) Run() {
 
+}
+
+func (job *DownloadJob) GetCondition() v1.ConditionStatus {
+	return v1.ConditionStatus{}
 }

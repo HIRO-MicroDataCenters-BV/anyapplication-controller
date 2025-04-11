@@ -50,7 +50,7 @@ func (l *LocalApplication) GetMessages() []string {
 
 func (l *LocalApplication) GetCondition() v1.ConditionStatus {
 	condition := v1.ConditionStatus{
-		Type:               string(LocalStatusType),
+		Type:               v1.LocalConditionType,
 		ZoneId:             l.config.ZoneId,
 		LastTransitionTime: metav1.Now(),
 		Status:             string(l.status),

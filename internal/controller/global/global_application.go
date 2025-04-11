@@ -31,10 +31,10 @@ func LoadCurrentState(ctx context.Context, client client.Client, application *v1
 	}
 }
 
-func (g *GlobalApplication) DeriveNewStatus() mo.Option[v1.AnyApplicationStatus] {
+func (g *GlobalApplication) DeriveNewStatus(jobConditions JobApplicationConditions) mo.Option[v1.AnyApplicationStatus] {
 
 	status := g.application.Status
-
+	// Update local application status if exists
 	localConditionOpt := moutils.Map(g.locaApplication, func(l local.LocalApplication) v1.ConditionStatus {
 		return l.GetCondition()
 	})
@@ -43,7 +43,11 @@ func (g *GlobalApplication) DeriveNewStatus() mo.Option[v1.AnyApplicationStatus]
 		return true
 	}).OrElse(false)
 
-	stateUpdated = deriveState(&status, g.config) || stateUpdated
+	// Update job conditions
+	stateUpdated = updateJobConditions(status, jobConditions) || stateUpdated
+
+	// Update global state
+	stateUpdated = updateGlobalState(&status, g.config) || stateUpdated
 
 	if stateUpdated {
 		return mo.Some(status)
@@ -63,20 +67,91 @@ func updateLocalCondition(status *v1.AnyApplicationStatus, condition *v1.Conditi
 	}
 }
 
-func deriveState(status *v1.AnyApplicationStatus, config *config.ApplicationRuntimeConfig) bool {
+func updateGlobalState(status *v1.AnyApplicationStatus, config *config.ApplicationRuntimeConfig) bool {
 	if status.Owner != config.ZoneId {
 		return false
 	}
-	newGlobalState := UnknownGlobal
 	stateUpdated := false
-	if status.State != string(newGlobalState) {
-		status.State = string(newGlobalState)
+	newGlobalState := status.State
+	if status.State == v1.NewGlobalState {
+		// if current state is new and current node is owner
+		newGlobalState = v1.PlacementGlobalState
+		stateUpdated = true
+	} else if status.State == v1.PlacementGlobalState {
+		// if current state is placements and current node is owner
+		// check if placements are set
+		if !currentNodeInPlacementList(status, config.ZoneId) {
+			newGlobalState = v1.OwnershipTransferGlobalState
+			stateUpdated = true
+		}
+		// Do nothing and expect placement controller to set the placements
+		//
+	} else if status.State == v1.OperationalGlobalState {
+		if !currentNodeInPlacementList(status, config.ZoneId) {
+			newGlobalState = v1.OwnershipTransferGlobalState
+			stateUpdated = true
+		} else if isFailureCondition(status, config) {
+			newGlobalState = v1.FailureGlobalState
+			stateUpdated = true
+		} else if currentNodeInPlacementList(status, config.ZoneId) && currentNodeNotInConditions(status, config.ZoneId) {
+			newGlobalState = v1.RelocationGlobalState
+			stateUpdated = true
+		}
+	} else if status.State == v1.FailureGlobalState {
+		// Expect input from placement controller
+
+	} else if status.State == v1.RelocationGlobalState {
+		// set by owning controller
+
+	} else if status.State == v1.OwnershipTransferGlobalState {
+		if !currentNodeInPlacementList(status, config.ZoneId) {
+			// Do nothing still in the transfer state
+		}
+
+	}
+	// If the owner is current node and local application is not running
+	// Set ownership transfer state
+
+	// If the owner is current node and local application is not running
+	// Set ownership transfer state
+
+	// If the conditions and placements are not syncronized
+	// Set relocation state
+
+	if status.State != newGlobalState {
+		status.State = newGlobalState
 		stateUpdated = true
 	}
 	return stateUpdated
 }
 
-// State      string            `json:"state,omitempty"`
-// Placements []PlacementStatus `json:"placements,omitempty"`
-// Owner      string            `json:"owner,omitempty"`
-// Conditions []ConditionStatus `json:"conditions,omitempty"`
+func currentNodeInPlacementList(status *v1.AnyApplicationStatus, currentZone string) bool {
+	if status.Placements == nil {
+		return false
+	}
+	_, ok := lo.Find(status.Placements, func(placement v1.Placement) bool {
+		return placement.Zone == currentZone
+	})
+	return ok
+}
+
+func isFailureCondition(status *v1.AnyApplicationStatus, config *config.ApplicationRuntimeConfig) bool {
+	return false
+}
+
+func updateJobConditions(status v1.AnyApplicationStatus, jobConditions JobApplicationConditions) bool {
+
+	// localConditionOpt := moutils.Map(g.locaApplication, func(l local.LocalApplication) v1.ConditionStatus {
+	// 	return l.GetCondition()
+	// })
+	// stateUpdated := moutils.Map(localConditionOpt, func(condition v1.ConditionStatus) bool {
+	// 	updateLocalCondition(&status, &condition, g.config)
+	// 	return true
+	// }).OrElse(false)
+
+	return false
+}
+
+func currentNodeNotInConditions(status *v1.AnyApplicationStatus, currentZone string) bool {
+	return false
+}

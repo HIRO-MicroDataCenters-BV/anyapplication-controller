@@ -1,6 +1,9 @@
 package job
 
-import "github.com/samber/mo"
+import (
+	"github.com/samber/mo"
+	v1 "hiro.io/anyapplication/api/v1"
+)
 
 type AsyncJobType int
 
@@ -31,6 +34,7 @@ type AsyncJob interface {
 	GetJobID() int
 	GetType() AsyncJobType
 	GetState() AsyncJobState
+	GetCondition() v1.ConditionStatus
 	GetCompletionStatus() mo.Option[AsyncJobStatus]
 	GetCompletionComment() mo.Option[string]
 	Run()
