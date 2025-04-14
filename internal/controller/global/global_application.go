@@ -13,6 +13,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+type Action string
+
+const (
+	RelocateToCurrentNode Action = "RelocateToCurrentNode"
+)
+
 type GlobalApplication struct {
 	locaApplication mo.Option[local.LocalApplication]
 	application     *v1.AnyApplication
@@ -47,7 +53,8 @@ func (g *GlobalApplication) DeriveNewStatus(jobConditions JobApplicationConditio
 	stateUpdated = updateJobConditions(status, jobConditions) || stateUpdated
 
 	// Update global state
-	stateUpdated = updateGlobalState(&status, g.config) || stateUpdated
+	globalStateUpdated := updateGlobalState(&status, g.config)
+	stateUpdated = globalStateUpdated || stateUpdated
 
 	if stateUpdated {
 		return mo.Some(status)
@@ -103,6 +110,10 @@ func updateGlobalState(status *v1.AnyApplicationStatus, config *config.Applicati
 	} else if status.State == v1.RelocationGlobalState {
 		// set by owning controller
 
+		if !actionInConditionList(status, v1.ApplicationConditionType(RelocateToCurrentNode)) {
+
+		}
+
 	} else if status.State == v1.OwnershipTransferGlobalState {
 		if !currentNodeInPlacementList(status, config.ZoneId) {
 			// Do nothing still in the transfer state
@@ -155,3 +166,17 @@ func updateJobConditions(status v1.AnyApplicationStatus, jobConditions JobApplic
 func currentNodeNotInConditions(status *v1.AnyApplicationStatus, currentZone string) bool {
 	return false
 }
+
+func actionInConditionList(status *v1.AnyApplicationStatus, action v1.ApplicationConditionType) bool {
+	_, ok := lo.Find(status.Conditions, func(condition v1.ConditionStatus) bool {
+		return condition.Type == action
+	})
+	return ok
+}
+
+// func getCurrentActionStatus(status *v1.AnyApplicationStatus, action Action) mo.Option[v1.ConditionStatus] {
+// 	found, ok := lo.Find(status.Conditions, func(condition v1.ConditionStatus) bool {
+// 		return condition.Type == action
+// 	})
+// 	return ok
+// }

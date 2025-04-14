@@ -28,7 +28,7 @@ func (s *ApplicationConditionType) UnmarshalJSON(data []byte) error {
 		*s = ApplicationConditionType(str)
 		return nil
 	default:
-		return errors.New("invalid status value")
+		return errors.New("invalid status value: " + str)
 	}
 }
 
@@ -57,7 +57,7 @@ func (s *OwnershipTransferStatus) UnmarshalJSON(data []byte) error {
 		*s = OwnershipTransferStatus(str)
 		return nil
 	default:
-		return errors.New("invalid status value")
+		return errors.New("invalid status value: " + str)
 	}
 }
 
@@ -84,7 +84,7 @@ func (s *PlacementStatus) UnmarshalJSON(data []byte) error {
 		*s = PlacementStatus(str)
 		return nil
 	default:
-		return errors.New("invalid status value")
+		return errors.New("invalid status value: " + str)
 	}
 }
 

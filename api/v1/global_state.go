@@ -34,7 +34,7 @@ func (s *GlobalState) UnmarshalJSON(data []byte) error {
 		*s = GlobalState(str)
 		return nil
 	default:
-		return errors.New("invalid status value")
+		return errors.New("invalid status value " + str)
 	}
 }
 
