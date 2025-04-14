@@ -3,6 +3,9 @@ package helm
 import (
 	"time"
 
+	"net/url"
+	"strings"
+
 	helmclient "github.com/mittwald/go-helm-client"
 	"github.com/mittwald/go-helm-client/values"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -50,9 +53,15 @@ type TemplateArgs struct {
 }
 
 func (h *HelmClient) Template(args *TemplateArgs) (string, error) {
+
+	repoName, err := DeriveUniqueHelmRepoName(args.repoUrl)
+	if err != nil {
+		return "", err
+	}
+
 	// Define a private chart repository
 	chartRepo := repo.Entry{
-		Name:               "nginx-repo",
+		Name:               repoName,
 		URL:                args.repoUrl,
 		PassCredentialsAll: false,
 	}
@@ -63,15 +72,15 @@ func (h *HelmClient) Template(args *TemplateArgs) (string, error) {
 	}
 
 	chartSpec := helmclient.ChartSpec{
-		ReleaseName: args.releaseName,
-		ChartName:   "nginx-repo/" + args.chartName,
-		Version:     args.version,
-		Namespace:   args.namespace,
-		UpgradeCRDs: h.options.UpgradeCRDs,
-		Wait:        true,
-		Timeout:     32 * time.Second,
-		ValuesYaml:  ``,
-		Labels:      args.labels,
+		ReleaseName:   args.releaseName,
+		ChartName:     repoName + "/" + args.chartName,
+		Version:       args.version,
+		Namespace:     args.namespace,
+		UpgradeCRDs:   h.options.UpgradeCRDs,
+		Wait:          true,
+		Timeout:       32 * time.Second,
+		ValuesOptions: args.ValuesOptions,
+		Labels:        args.labels,
 	}
 
 	options := &helmclient.HelmTemplateOptions{
@@ -84,4 +93,17 @@ func (h *HelmClient) Template(args *TemplateArgs) (string, error) {
 		panic(err)
 	}
 	return string(chartBytes), nil
+}
+
+func DeriveUniqueHelmRepoName(repoURL string) (string, error) {
+	u, err := url.Parse(repoURL)
+	if err != nil {
+		return "", err
+	}
+
+	domain := strings.ReplaceAll(u.Hostname(), ".", "-")
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	pathPart := parts[len(parts)-1]
+
+	return domain + "-" + pathPart, nil
 }

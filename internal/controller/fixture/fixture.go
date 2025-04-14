@@ -2,21 +2,22 @@ package fixture
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func SaveStringFixture(t *testing.T, filename string, value string) error {
+func SaveStringFixture(filename string, value string) error {
 	path := filepath.Join("testdata", filename)
 	return os.WriteFile(path, []byte(value), 0644)
 }
 
-func LoadStringFixture(t *testing.T, filename string) string {
+func LoadStringFixture(filename string) string {
 	path := filepath.Join("testdata", filename)
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("failed to read fixture file %s: %v", filename, err)
+		panic(fmt.Sprintf("failed to read fixture file %s: %v", filename, err))
 	}
 	return string(raw)
 }

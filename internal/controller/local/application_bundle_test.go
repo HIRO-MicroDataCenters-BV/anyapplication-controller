@@ -11,9 +11,9 @@ func TestApplicationBundle(t *testing.T) {
 	bundle := fixture.LoadJSONFixture[ApplicationBundle](t, "application_bundle.json")
 	expected := bundle.CleanResources()
 	serialized, _ := expected.Serialize()
-	_ = fixture.SaveStringFixture(t, "application_bundle_clean.json", serialized)
-	raw := fixture.LoadStringFixture(t, "application_bundle_clean.json")
-	actual, _ := Deserialize(raw)
+	// _ = fixture.SaveStringFixture("application_bundle_clean.json", serialized)
+	// raw := fixture.LoadStringFixture(t, "application_bundle_clean.json")
+	actual, _ := Deserialize(serialized)
 	if !reflect.DeepEqual(actual, expected) {
 		t.Error("Serialization/Deserialization error")
 	}

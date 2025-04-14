@@ -1,12 +1,11 @@
 package helm
 
 import (
-	"log"
-
 	"github.com/mittwald/go-helm-client/values"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/chartutil"
+	"hiro.io/anyapplication/internal/controller/fixture"
 )
 
 var _ = Describe("HelmClient", func() {
@@ -28,18 +27,27 @@ var _ = Describe("HelmClient", func() {
 
 		It("should template helm chart", func() {
 			args := TemplateArgs{
-				releaseName:   "test-release",
-				repoUrl:       "https://helm.nginx.com/stable",
-				chartName:     "nginx-ingress",
-				namespace:     "default",
-				version:       "2.0.1",
-				ValuesOptions: values.Options{},
-				labels:        map[string]string{},
+				releaseName: "test-release",
+				repoUrl:     "https://helm.nginx.com/stable",
+				chartName:   "nginx-ingress",
+				namespace:   "default",
+				version:     "2.0.1",
+				ValuesOptions: values.Options{
+					Values: []string{
+						"controller.service.type=LoadBalancer",
+					},
+				},
+				labels: map[string]string{
+					"dcp.hiro.io/managed-by": "dcp",
+				},
 			}
 
-			chartString, err := client.Template(&args)
-			log.Println(chartString)
+			actual, err := client.Template(&args)
 
+			// fixture.SaveStringFixture("nginx.yaml", chartString)
+			expected := fixture.LoadStringFixture("nginx.yaml")
+
+			Expect(actual).To(Equal(expected))
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
