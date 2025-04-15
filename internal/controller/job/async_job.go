@@ -34,7 +34,7 @@ type AsyncJob interface {
 	GetJobID() int
 	GetType() AsyncJobType
 	GetState() AsyncJobState
-	GetCondition() v1.ConditionStatus
+	GetStatus() v1.ConditionStatus
 	GetCompletionStatus() mo.Option[AsyncJobStatus]
 	GetCompletionComment() mo.Option[string]
 	Run()

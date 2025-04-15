@@ -23,13 +23,21 @@ import (
 // AnyApplicationSpec defines the desired state of AnyApplication.
 type AnyApplicationSpec struct {
 	// Foo is an example field of AnyApplication. Edit anyapplication_types.go to remove/update
-	Application     ApplicationMatcherSpec `json:"application,omitempty"`
-	Zones           int                    `json:"zones,omitempty"`
+	Application     ApplicationMatcherSpec `json:"application" validate:"required"`
+	Zones           int                    `json:"zones"`
 	RecoverStrategy RecoverStrategySpec    `json:"recover-strategy,omitempty"`
 }
 
 type ApplicationMatcherSpec struct {
-	ResourceSelector map[string]string `json:"resourceSelector,omitempty"`
+	ResourceSelector *map[string]string `json:"resourceSelector,omitempty"`
+	HelmSelector     *HelmSelectorSpec  `json:"helm,omitempty"`
+}
+
+type HelmSelectorSpec struct {
+	Repository string `json:"repository"`
+	Chart      string `json:"chart"`
+	Version    string `json:"version"`
+	Values     string `json:"values"`
 }
 
 type RecoverStrategySpec struct {
@@ -39,22 +47,22 @@ type RecoverStrategySpec struct {
 
 // AnyApplicationStatus defines the observed state of AnyApplication.
 type AnyApplicationStatus struct {
-	State      GlobalState       `json:"state,omitempty"`
+	State      GlobalState       `json:"state"`
 	Placements []Placement       `json:"placements,omitempty"`
-	Owner      string            `json:"owner,omitempty"`
+	Owner      string            `json:"owner"`
 	Conditions []ConditionStatus `json:"conditions,omitempty"`
 }
 
 type Placement struct {
-	Zone         string   `json:"zone,omitempty"`
+	Zone         string   `json:"zone"`
 	NodeAffinity []string `json:"node-affinity,omitempty"`
 }
 
 type ConditionStatus struct {
-	Type               ApplicationConditionType `json:"type,omitempty"`
-	ZoneId             string                   `json:"zoneId,omitempty"`
-	Status             string                   `json:"status,omitempty"`
-	LastTransitionTime metav1.Time              `json:"lastTransitionTime,omitempty"`
+	Type               ApplicationConditionType `json:"type"`
+	ZoneId             string                   `json:"zoneId"`
+	Status             string                   `json:"status"`
+	LastTransitionTime metav1.Time              `json:"lastTransitionTime"`
 	Reason             string                   `json:"reason,omitempty"`
 	Msg                string                   `json:"msg,omitempty"`
 }
@@ -67,7 +75,7 @@ type AnyApplication struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   AnyApplicationSpec   `json:"spec,omitempty"`
+	Spec   AnyApplicationSpec   `json:"spec"`
 	Status AnyApplicationStatus `json:"status,omitempty"`
 }
 

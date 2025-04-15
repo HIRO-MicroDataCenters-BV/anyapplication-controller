@@ -3,6 +3,7 @@ package global
 import (
 	"context"
 
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
@@ -10,7 +11,6 @@ import (
 	"hiro.io/anyapplication/internal/controller/local"
 	"hiro.io/anyapplication/internal/moutils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type Action string
@@ -25,11 +25,15 @@ type GlobalApplication struct {
 	config          *config.ApplicationRuntimeConfig
 }
 
-func LoadCurrentState(ctx context.Context, client client.Client, application *v1.AnyApplication, config *config.ApplicationRuntimeConfig) GlobalApplication {
+func LoadCurrentState(ctx context.Context, client client.Client, application *v1.AnyApplication, config *config.ApplicationRuntimeConfig) (GlobalApplication, error) {
 	localApplication, err := local.LoadCurrentState(ctx, client, &application.Spec.Application, config)
 	if err != nil {
-		log.Log.Info("error loading current state")
+		return GlobalApplication{}, errors.Wrap(err, "Failed to load local application")
 	}
+	return NewFromLocalApplication(localApplication, application, config), nil
+}
+
+func NewFromLocalApplication(localApplication mo.Option[local.LocalApplication], application *v1.AnyApplication, config *config.ApplicationRuntimeConfig) GlobalApplication {
 	return GlobalApplication{
 		locaApplication: localApplication,
 		application:     application,

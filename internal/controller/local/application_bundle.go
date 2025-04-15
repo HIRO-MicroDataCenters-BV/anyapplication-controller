@@ -116,7 +116,7 @@ func loadResource(
 	resources.SetGroupVersionKind(kind)
 	opts := []client.ListOption{
 		// client.InNamespace(namespace),
-		client.MatchingLabels(applicationSpec.ResourceSelector),
+		client.MatchingLabels(*applicationSpec.ResourceSelector),
 	}
 	err := k8sClient.List(ctx, &resources, opts...)
 

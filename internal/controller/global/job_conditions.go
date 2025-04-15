@@ -25,3 +25,7 @@ func (j *JobApplicationConditions) GetJobCondition(zoneId string, conditionType 
 func (j *JobApplicationConditions) Iterate() {
 
 }
+
+func EmptyJobConditions() JobApplicationConditions {
+	return JobApplicationConditions{}
+}
