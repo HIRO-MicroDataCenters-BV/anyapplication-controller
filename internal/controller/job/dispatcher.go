@@ -16,8 +16,8 @@ func NewDispatcher(numActors int) *Dispatcher {
 
 func (d *Dispatcher) SubmitJob(job AsyncJob) {
 	// Round-robin for simplicity
-	actor := d.Actors[job.GetJobID()%len(d.Actors)]
-	actor.JobChan <- job
+	// actor := d.Actors[job.GetJobID()%len(d.Actors)]
+	// actor.JobChan <- job
 }
 
 func (d *Dispatcher) StopAll() {

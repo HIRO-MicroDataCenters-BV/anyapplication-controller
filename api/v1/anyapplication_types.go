@@ -23,9 +23,10 @@ import (
 // AnyApplicationSpec defines the desired state of AnyApplication.
 type AnyApplicationSpec struct {
 	// Foo is an example field of AnyApplication. Edit anyapplication_types.go to remove/update
-	Application     ApplicationMatcherSpec `json:"application" validate:"required"`
-	Zones           int                    `json:"zones"`
-	RecoverStrategy RecoverStrategySpec    `json:"recover-strategy,omitempty"`
+	Application       ApplicationMatcherSpec `json:"application" validate:"required"`
+	Zones             int                    `json:"zones"`
+	PlacementStrategy PlacementStrategySpec  `json:"placement-strategy,omitempty"`
+	RecoverStrategy   RecoverStrategySpec    `json:"recover-strategy,omitempty"`
 }
 
 type ApplicationMatcherSpec struct {
@@ -38,6 +39,9 @@ type HelmSelectorSpec struct {
 	Chart      string `json:"chart"`
 	Version    string `json:"version"`
 	Values     string `json:"values"`
+}
+type PlacementStrategySpec struct {
+	Strategy PlacementStrategy `json:"strategy"`
 }
 
 type RecoverStrategySpec struct {

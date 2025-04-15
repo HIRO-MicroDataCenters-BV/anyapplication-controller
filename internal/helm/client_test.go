@@ -57,7 +57,7 @@ var _ = Describe("DeriveUniqueHelmRepoName", func() {
 	It("should create unique repository name", func() {
 		name, err := DeriveUniqueHelmRepoName("https://helm.nginx.com/stable")
 		Expect(err).NotTo(HaveOccurred())
-		Expect(name).To(Equal("nginx-com-stable"))
+		Expect(name).To(Equal("helm-nginx-com-stable"))
 
 	})
 })

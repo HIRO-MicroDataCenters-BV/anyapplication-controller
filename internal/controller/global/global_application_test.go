@@ -18,9 +18,9 @@ var _ = Describe("GlobalApplication", func() {
 		localApplication := mo.None[local.LocalApplication]()
 		applicationResource := makeApplication()
 		globalApplication := NewFromLocalApplication(localApplication, applicationResource, runtimeConfig)
-
+		// TODO job factory
 		It("transit to placement state", func() {
-			status := globalApplication.DeriveNewStatus(EmptyJobConditions())
+			status := globalApplication.DeriveNewStatus(EmptyJobConditions(), nil)
 			// statusOpt := status.OrElse(v1.AnyApplicationStatus{})
 			Expect(status.IsAbsent()).To(BeTrue())
 		})

@@ -43,10 +43,33 @@ spec:
                 description: Foo is an example field of AnyApplication. Edit anyapplication_types.go
                   to remove/update
                 properties:
+                  helm:
+                    properties:
+                      chart:
+                        type: string
+                      repository:
+                        type: string
+                      values:
+                        type: string
+                      version:
+                        type: string
+                    required:
+                    - chart
+                    - repository
+                    - values
+                    - version
+                    type: object
                   resourceSelector:
                     additionalProperties:
                       type: string
                     type: object
+                type: object
+              placement-strategy:
+                properties:
+                  strategy:
+                    type: string
+                required:
+                - strategy
                 type: object
               recover-strategy:
                 properties:
@@ -57,6 +80,9 @@ spec:
                 type: object
               zones:
                 type: integer
+            required:
+            - application
+            - zones
             type: object
           status:
             description: AnyApplicationStatus defines the observed state of AnyApplication.
@@ -77,6 +103,11 @@ spec:
                       type: string
                     zoneId:
                       type: string
+                  required:
+                  - lastTransitionTime
+                  - status
+                  - type
+                  - zoneId
                   type: object
                 type: array
               owner:
@@ -90,11 +121,18 @@ spec:
                       type: array
                     zone:
                       type: string
+                  required:
+                  - zone
                   type: object
                 type: array
               state:
                 type: string
+            required:
+            - owner
+            - state
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true

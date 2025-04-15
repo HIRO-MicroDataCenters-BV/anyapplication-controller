@@ -26,7 +26,6 @@ import (
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
-	"hiro.io/anyapplication/internal/controller/reconciler"
 )
 
 // AnyApplicationReconciler reconciles a AnyApplication object
@@ -52,29 +51,29 @@ type AnyApplicationReconciler struct {
 func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	resource := &dcpv1.AnyApplication{}
-	if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
-		log.Error(err, "Unable to get AnyApplication ", "name", req.Name, "namespace", req.Namespace)
-		// TODO (user): handle error
-		return ctrl.Result{}, nil
-	}
+	// resource := &dcpv1.AnyApplication{}
+	// if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
+	// 	log.Error(err, "Unable to get AnyApplication ", "name", req.Name, "namespace", req.Namespace)
+	// 	// TODO (user): handle error
+	// 	return ctrl.Result{}, nil
+	// }
 
-	reconcilerBuilder := reconciler.NewReconcilerBuilder(ctx, r.Client, resource, r.Config)
-	reconciler, err := reconcilerBuilder.Build()
-	if err != nil {
-		// TODO (user): handle error
-		return ctrl.Result{}, nil
-	}
+	// reconcilerBuilder := reconciler.NewReconcilerBuilder(ctx, r.Client, resource, r.Config)
+	// reconciler, err := reconcilerBuilder.Build()
+	// if err != nil {
+	// 	// TODO (user): handle error
+	// 	return ctrl.Result{}, nil
+	// }
 
-	result := reconciler.DoReconcile()
+	// result := reconciler.DoReconcile()
 
-	resource.Status = result.Status.OrElse(resource.Status)
+	// resource.Status = result.Status.OrElse(resource.Status)
 
-	err = r.Client.Status().Update(ctx, resource)
-	if err != nil {
-		log.Error(err, "failed to update AnyApplication status")
-		return ctrl.Result{}, err
-	}
+	// err = r.Client.Status().Update(ctx, resource)
+	// if err != nil {
+	// 	log.Error(err, "failed to update AnyApplication status")
+	// 	return ctrl.Result{}, err
+	// }
 
 	log.Info("AnyApplicaitonResource status synced")
 
