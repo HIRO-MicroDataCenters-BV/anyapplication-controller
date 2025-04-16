@@ -38,13 +38,13 @@ var _ = Describe("HelmClient", func() {
 					},
 				},
 				labels: map[string]string{
-					"dcp.hiro.io/managed-by": "dcp",
+					"dcp.hiro.io/test": "dcp",
 				},
 			}
 
 			actual, err := client.Template(&args)
 
-			// fixture.SaveStringFixture("nginx.yaml", chartString)
+			// fixture.SaveStringFixture("nginx.yaml", actual)
 			expected := fixture.LoadStringFixture("nginx.yaml")
 
 			Expect(actual).To(Equal(expected))
