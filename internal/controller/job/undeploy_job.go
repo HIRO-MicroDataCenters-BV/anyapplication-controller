@@ -20,7 +20,7 @@ func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.Applic
 	}
 }
 
-func (job UndeployJob) Run() {
+func (job UndeployJob) Run(context AsyncJobContext) {
 
 }
 

@@ -2,6 +2,8 @@ package job
 
 import (
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/helm"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type AsyncJobType int
@@ -18,11 +20,16 @@ type JobId struct {
 	ApplicationId string
 }
 
+type AsyncJobContext interface {
+	GetHelmClient() helm.HelmClient
+	GetKubeClient() client.Client
+}
+
 type AsyncJob interface {
 	GetJobID() JobId
 	GetType() AsyncJobType
 	GetStatus() v1.ConditionStatus
-	Run()
+	Run(context AsyncJobContext)
 }
 
 type AsyncJobFactory interface {

@@ -28,7 +28,7 @@ func (a *JobExecutorActor) Start() {
 				// Simulate processing
 				time.Sleep(500 * time.Millisecond)
 				_ = fmt.Sprintf("Actor %d processed job", a.ID)
-				job.Run()
+				job.Run(nil)
 
 			case <-a.Quit:
 				fmt.Printf("Actor %d quitting\n", a.ID)

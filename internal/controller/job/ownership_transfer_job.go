@@ -20,7 +20,7 @@ func NewOwnershipTransferJob(application *v1.AnyApplication, runtimeConfig *conf
 	}
 }
 
-func (job OwnershipTransferJob) Run() {
+func (job OwnershipTransferJob) Run(context AsyncJobContext) {
 
 }
 

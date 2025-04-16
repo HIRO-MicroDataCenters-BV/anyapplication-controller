@@ -20,7 +20,7 @@ func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.Appl
 	}
 }
 
-func (job RelocationJob) Run() {
+func (job RelocationJob) Run(context AsyncJobContext) {
 
 }
 
