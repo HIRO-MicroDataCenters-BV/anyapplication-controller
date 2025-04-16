@@ -51,6 +51,17 @@ var _ = Describe("AnyApplication Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
+					Spec: dcpv1.AnyApplicationSpec{
+						Application: dcpv1.ApplicationMatcherSpec{},
+						Zones:       1,
+						PlacementStrategy: dcpv1.PlacementStrategySpec{
+							Strategy: dcpv1.PlacementStrategyLocal,
+						},
+						RecoverStrategy: dcpv1.RecoverStrategySpec{
+							Tolerance:  1,
+							MaxRetries: 3,
+						},
+					},
 					// TODO(user): Specify other spec details if needed.
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())

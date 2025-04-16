@@ -1,58 +1,61 @@
 package local
 
 import (
+	"context"
+
+	"github.com/argoproj/gitops-engine/pkg/health"
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"hiro.io/anyapplication/internal/config"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type LocalApplication struct {
-	// deployments *unstructured.UnstructuredList{}
+	bundle   *ApplicationBundle
+	config   *config.ApplicationRuntimeConfig
+	status   health.HealthStatusCode
+	messages []string
 }
 
-func LoadFromKubernetes(client client.Client, applicationSpec *v1.ApplicationMatcherSpec) (mo.Option[LocalApplication], error) {
-	deployments_list := &unstructured.UnstructuredList{}
-	deployments_list.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "apps",
-		Kind:    "DeploymentList",
-		Version: "v1",
-	})
-	// _ = client.List(context.Background(), deployments_list, &client.ListOptions{
-	// 	Namespace: "default",
-	// })
-
-	return mo.Some(LocalApplication{}), nil
-}
-
-func (l *LocalApplication) GetCurrentState() LocalState {
-	if l.isNew() {
-		return NewLocal
-	} else if l.isStarting() {
-		return Starting
-	} else if l.isRunning() {
-		return Running
-	} else if l.isCompleted() {
-		return Completed
-	} else {
-		return UnknownLocal
+func LoadCurrentState(
+	ctx context.Context,
+	client client.Client,
+	applicationSpec *v1.ApplicationMatcherSpec,
+	config *config.ApplicationRuntimeConfig,
+) (mo.Option[LocalApplication], error) {
+	bundle, err := LoadApplicationBundle(ctx, client, applicationSpec)
+	if err != nil {
+		return mo.None[LocalApplication](), err
 	}
-
+	status, messages, err := bundle.DetermineState()
+	if err != nil {
+		return mo.None[LocalApplication](), err
+	}
+	return mo.Some(LocalApplication{
+		bundle:   &bundle,
+		status:   status,
+		messages: messages,
+		config:   config,
+	}), nil
 }
 
-func (l *LocalApplication) isCompleted() bool {
-	return false
+func (l *LocalApplication) GetStatus() health.HealthStatusCode {
+	return l.status
 }
 
-func (l *LocalApplication) isRunning() bool {
-	return false
+func (l *LocalApplication) GetMessages() []string {
+	return l.messages
 }
 
-func (l *LocalApplication) isStarting() bool {
-	return false
-}
-
-func (l *LocalApplication) isNew() bool {
-	return false
+func (l *LocalApplication) GetCondition() v1.ConditionStatus {
+	condition := v1.ConditionStatus{
+		Type:               v1.LocalConditionType,
+		ZoneId:             l.config.ZoneId,
+		LastTransitionTime: metav1.Now(),
+		Status:             string(l.status),
+		Reason:             "",
+		Msg:                "",
+	}
+	return condition
 }

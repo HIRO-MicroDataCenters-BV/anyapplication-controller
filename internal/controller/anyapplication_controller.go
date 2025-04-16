@@ -25,13 +25,14 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
-	"hiro.io/anyapplication/internal/controller/reconciler"
+	"hiro.io/anyapplication/internal/config"
 )
 
 // AnyApplicationReconciler reconciles a AnyApplication object
 type AnyApplicationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Config *config.ApplicationRuntimeConfig
 }
 
 // +kubebuilder:rbac:groups=dcp.hiro.io,resources=anyapplications,verbs=get;list;watch;create;update;patch;delete
@@ -50,29 +51,29 @@ type AnyApplicationReconciler struct {
 func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	resource := &dcpv1.AnyApplication{}
-	if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
-		log.Error(err, "Unable to get AnyApplication ", "name", req.Name, "namespace", req.Namespace)
-		// TODO (user): handle error
-		return ctrl.Result{}, nil
-	}
+	// resource := &dcpv1.AnyApplication{}
+	// if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
+	// 	log.Error(err, "Unable to get AnyApplication ", "name", req.Name, "namespace", req.Namespace)
+	// 	// TODO (user): handle error
+	// 	return ctrl.Result{}, nil
+	// }
 
-	reconcilerBuilder := reconciler.NewReconcilerBuilder(r.Client, resource)
-	reconciler, err := reconcilerBuilder.Build()
-	if err != nil {
-		// TODO (user): handle error
-		return ctrl.Result{}, nil
-	}
+	// reconcilerBuilder := reconciler.NewReconcilerBuilder(ctx, r.Client, resource, r.Config)
+	// reconciler, err := reconcilerBuilder.Build()
+	// if err != nil {
+	// 	// TODO (user): handle error
+	// 	return ctrl.Result{}, nil
+	// }
 
-	result := reconciler.DoReconcile()
+	// result := reconciler.DoReconcile()
 
-	resource.Status = result.Status.OrElse(resource.Status)
+	// resource.Status = result.Status.OrElse(resource.Status)
 
-	err = r.Client.Status().Update(ctx, resource)
-	if err != nil {
-		log.Error(err, "failed to update AnyApplication status")
-		return ctrl.Result{}, err
-	}
+	// err = r.Client.Status().Update(ctx, resource)
+	// if err != nil {
+	// 	log.Error(err, "failed to update AnyApplication status")
+	// 	return ctrl.Result{}, err
+	// }
 
 	log.Info("AnyApplicaitonResource status synced")
 

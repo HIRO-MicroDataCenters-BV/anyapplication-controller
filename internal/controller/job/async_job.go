@@ -1,37 +1,32 @@
 package job
 
-import "github.com/samber/mo"
+import (
+	v1 "hiro.io/anyapplication/api/v1"
+)
 
 type AsyncJobType int
 
 const (
 	AsyncJobTypeUnknown AsyncJobType = iota
-	AsyncJobTypeFetch
+	AsyncJobTypeRelocate
+	AsyncJobTypeOwnershipTransfer
+	AsyncJobTypeUndeploy
 )
 
-type AsyncJobState int
-
-const (
-	AsyncJobStateUnknown AsyncJobState = iota
-	AsyncJobStateNew
-	AsyncJobStateExecuting
-	AsyncJobStateCompleted
-)
-
-type AsyncJobStatus int
-
-const (
-	AsyncJobStatusUnknown AsyncJobStatus = iota
-	AsyncJobStatusSuccess
-	AsyncJobStatusFailure
-	AsyncJobStatusCancelled
-)
+type JobId struct {
+	JobType       AsyncJobType
+	ApplicationId string
+}
 
 type AsyncJob interface {
-	GetJobID() int
+	GetJobID() JobId
 	GetType() AsyncJobType
-	GetState() AsyncJobState
-	GetCompletionStatus() mo.Option[AsyncJobStatus]
-	GetCompletionComment() mo.Option[string]
+	GetStatus() v1.ConditionStatus
 	Run()
+}
+
+type AsyncJobFactory interface {
+	CreateRelocationJob(application *v1.AnyApplication) AsyncJob
+	CreateOnwershipTransferJob(application *v1.AnyApplication) AsyncJob
+	CreateUndeployJob(application *v1.AnyApplication) AsyncJob
 }

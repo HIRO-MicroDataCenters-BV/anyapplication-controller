@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -38,7 +39,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller"
+	"hiro.io/anyapplication/internal/httpapi"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -88,6 +91,9 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	// TODO load the config file
+	applicationConfig := config.ApplicationRuntimeConfig{}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -205,6 +211,7 @@ func main() {
 	if err = (&controller.AnyApplicationReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Config: &applicationConfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AnyApplication")
 		os.Exit(1)
@@ -235,6 +242,18 @@ func main() {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
+	setupLog.Info("starting Application API Server")
+	// TODO make configurable
+	options := httpapi.ApplicationApiOptions{
+		Address: "0.0.0.0:9000",
+	}
+	httpServer := httpapi.NewHttpServer(options)
+
+	go func() {
+		if err := httpServer.Start(); err != nil {
+			log.Fatalf("Http Server start error: %v", err)
+		}
+	}()
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

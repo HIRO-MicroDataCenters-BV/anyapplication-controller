@@ -23,20 +23,25 @@ import (
 // AnyApplicationSpec defines the desired state of AnyApplication.
 type AnyApplicationSpec struct {
 	// Foo is an example field of AnyApplication. Edit anyapplication_types.go to remove/update
-	Application     ApplicationMatcherSpec `json:"application,omitempty"`
-	Zones           int                    `json:"zones,omitempty"`
-	RecoverStrategy RecoverStrategySpec    `json:"recover-strategy,omitempty"`
+	Application       ApplicationMatcherSpec `json:"application" validate:"required"`
+	Zones             int                    `json:"zones"`
+	PlacementStrategy PlacementStrategySpec  `json:"placement-strategy,omitempty"`
+	RecoverStrategy   RecoverStrategySpec    `json:"recover-strategy,omitempty"`
 }
 
 type ApplicationMatcherSpec struct {
-	ResourceSelector []ResourceSelectorSpec `json:"resourceSelector,omitempty"`
+	ResourceSelector *map[string]string `json:"resourceSelector,omitempty"`
+	HelmSelector     *HelmSelectorSpec  `json:"helm,omitempty"`
 }
 
-type ResourceSelectorSpec struct {
-	ApiVersion string `json:"apiVersion,omitempty"`
-	Kind       string `json:"kind,omitempty"`
-	Name       string `json:"name,omitempty"`
-	Namespace  string `json:"namespace,omitempty"`
+type HelmSelectorSpec struct {
+	Repository string `json:"repository"`
+	Chart      string `json:"chart"`
+	Version    string `json:"version"`
+	Values     string `json:"values"`
+}
+type PlacementStrategySpec struct {
+	Strategy PlacementStrategy `json:"strategy"`
 }
 
 type RecoverStrategySpec struct {
@@ -46,24 +51,24 @@ type RecoverStrategySpec struct {
 
 // AnyApplicationStatus defines the observed state of AnyApplication.
 type AnyApplicationStatus struct {
-	State      string            `json:"state,omitempty"`
-	Placements []PlacementStatus `json:"placements,omitempty"`
-	Owner      string            `json:"owner,omitempty"`
+	State      GlobalState       `json:"state"`
+	Placements []Placement       `json:"placements,omitempty"`
+	Owner      string            `json:"owner"`
 	Conditions []ConditionStatus `json:"conditions,omitempty"`
 }
 
-type PlacementStatus struct {
-	Zone         string   `json:"zone,omitempty"`
+type Placement struct {
+	Zone         string   `json:"zone"`
 	NodeAffinity []string `json:"node-affinity,omitempty"`
 }
 
 type ConditionStatus struct {
-	Type               string      `json:"type,omitempty"`
-	ZoneId             string      `json:"zoneId,omitempty"`
-	Status             string      `json:"status,omitempty"`
-	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
-	Reason             string      `json:"reason,omitempty"`
-	Msg                string      `json:"msg,omitempty"`
+	Type               ApplicationConditionType `json:"type"`
+	ZoneId             string                   `json:"zoneId"`
+	Status             string                   `json:"status"`
+	LastTransitionTime metav1.Time              `json:"lastTransitionTime"`
+	Reason             string                   `json:"reason,omitempty"`
+	Msg                string                   `json:"msg,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -74,7 +79,7 @@ type AnyApplication struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   AnyApplicationSpec   `json:"spec,omitempty"`
+	Spec   AnyApplicationSpec   `json:"spec"`
 	Status AnyApplicationStatus `json:"status,omitempty"`
 }
 
