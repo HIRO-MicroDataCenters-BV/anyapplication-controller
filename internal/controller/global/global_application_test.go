@@ -6,6 +6,7 @@ import (
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/job"
 	"hiro.io/anyapplication/internal/controller/local"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -18,9 +19,10 @@ var _ = Describe("GlobalApplication", func() {
 		localApplication := mo.None[local.LocalApplication]()
 		applicationResource := makeApplication()
 		globalApplication := NewFromLocalApplication(localApplication, applicationResource, runtimeConfig)
-		// TODO job factory
+		jobFactory := job.NewAsyncJobFactory(runtimeConfig)
+
 		It("transit to placement state", func() {
-			status := globalApplication.DeriveNewStatus(EmptyJobConditions(), nil)
+			status := globalApplication.DeriveNewStatus(EmptyJobConditions(), jobFactory)
 			// statusOpt := status.OrElse(v1.AnyApplicationStatus{})
 			Expect(status.IsAbsent()).To(BeTrue())
 		})
