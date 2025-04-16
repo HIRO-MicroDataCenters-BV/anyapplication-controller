@@ -53,7 +53,7 @@ func (re *ResourceEstimator) EstimateFromYAML(renderedYAML string) (ResourceTota
 
 func (re *ResourceEstimator) parseYAMLDocs(yamlText string) ([]*unstructured.Unstructured, error) {
 	docs := strings.Split(yamlText, "\n---")
-	var objects []*unstructured.Unstructured
+	objects := make([]*unstructured.Unstructured, 0, len(docs))
 
 	for _, doc := range docs {
 		trimmed := strings.TrimSpace(doc)

@@ -145,12 +145,13 @@ func nextState(
 	spec := &application.Spec
 	status := &application.Status
 
-	if status.State == v1.NewGlobalState {
+	switch status.State {
+	case v1.NewGlobalState:
 		// if current state is new and current node is owner
 		return nextStateResult{
 			nextState: mo.Some(v1.PlacementGlobalState),
 		}
-	} else if status.State == v1.PlacementGlobalState {
+	case v1.PlacementGlobalState:
 		// if current state is Placement and current node is owner
 
 		if spec.PlacementStrategy.Strategy == v1.PlacementStrategyLocal {
@@ -185,7 +186,7 @@ func nextState(
 			}
 
 		}
-	} else if status.State == v1.OperationalGlobalState {
+	case v1.OperationalGlobalState:
 		if !placementsContainZone(status, config.ZoneId) {
 			condition := mo.None[*v1.ConditionStatus]()
 			job := mo.None[job.AsyncJob]()
@@ -220,13 +221,13 @@ func nextState(
 				}
 			}
 		}
-	} else if status.State == v1.FailureGlobalState {
+	case v1.FailureGlobalState:
 		if !isFailureCondition(application) {
 			return nextStateResult{
 				nextState: mo.Some(v1.OperationalGlobalState),
 			}
 		}
-	} else if status.State == v1.RelocationGlobalState {
+	case v1.RelocationGlobalState:
 		condition, ok := getCondition(status, v1.RelocationConditionType, config.ZoneId)
 		if !ok {
 			relocationJob := jobFactory.CreateRelocationJob(application)
@@ -253,17 +254,17 @@ func nextState(
 				conditionsToAdd: mo.Some(&condition),
 			}
 		}
-
-	} else if status.State == v1.OwnershipTransferGlobalState {
+	case v1.OwnershipTransferGlobalState:
 		if placementsContainZone(status, config.ZoneId) {
 			condition, found := getCondition(status, v1.LocalConditionType, config.ZoneId)
 			conditionToRemove := mo.None[*v1.ConditionStatus]()
 			if found {
 				if condition.Status == string(v1.OwnershipTransferSuccess) {
 					conditionToRemove = mo.Some(condition)
-				} else {
-					// TODO failure case
 				}
+				// else {
+				// 	// TODO failure case
+				// }
 			}
 			return nextStateResult{
 				nextState:          mo.Some(v1.OperationalGlobalState),
@@ -271,11 +272,11 @@ func nextState(
 				jobsToRemove:       mo.Some(job.AsyncJobTypeOwnershipTransfer),
 			}
 		} else {
-			condition, found := getCondition(status, v1.LocalConditionType, config.ZoneId)
+			/* condition */ _, found := getCondition(status, v1.LocalConditionType, config.ZoneId)
 
-			if condition.Status == string(v1.OwnershipTransferFailure) {
-				// TODO failure case
-			}
+			// if condition.Status == string(v1.OwnershipTransferFailure) {
+			// 	// TODO failure case
+			// }
 			var conditionToAdd mo.Option[*v1.ConditionStatus]
 			transferJob := mo.None[job.AsyncJob]()
 			if !found {
@@ -290,8 +291,8 @@ func nextState(
 				jobsToAdd:       transferJob,
 			}
 		}
+	default:
 	}
-
 	return nextStateResult{}
 }
 
@@ -374,6 +375,7 @@ func addOrUpdateCondition(status *v1.AnyApplicationStatus, condition *v1.Conditi
 
 func removeCondition(status *v1.AnyApplicationStatus, toRemove *v1.ConditionStatus) {
 	status.Conditions = lo.Filter(status.Conditions, func(existing v1.ConditionStatus, _ int) bool {
-		return !(existing.Type == toRemove.Type && existing.ZoneId == toRemove.ZoneId)
+		equal := existing.Type == toRemove.Type && existing.ZoneId == toRemove.ZoneId
+		return !equal
 	})
 }
