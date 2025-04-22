@@ -68,8 +68,9 @@ func (s OwnershipTransferStatus) MarshalJSON() ([]byte, error) {
 type PlacementStatus string
 
 const (
-	PlacementStatusDone    OwnershipTransferStatus = "Done"
-	PlacementStatusFailure OwnershipTransferStatus = "Failure"
+	PlacementStatusInProgress PlacementStatus = "InProgress"
+	PlacementStatusDone       PlacementStatus = "Done"
+	PlacementStatusFailure    PlacementStatus = "Failure"
 )
 
 func (s *PlacementStatus) UnmarshalJSON(data []byte) error {

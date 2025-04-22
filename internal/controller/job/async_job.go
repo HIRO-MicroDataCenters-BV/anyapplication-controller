@@ -12,6 +12,7 @@ const (
 	AsyncJobTypeUnknown AsyncJobType = iota
 	AsyncJobTypeRelocate
 	AsyncJobTypeOwnershipTransfer
+	AsyncJobTypeLocalPlacement
 	AsyncJobTypeUndeploy
 )
 
@@ -36,4 +37,5 @@ type AsyncJobFactory interface {
 	CreateRelocationJob(application *v1.AnyApplication) AsyncJob
 	CreateOnwershipTransferJob(application *v1.AnyApplication) AsyncJob
 	CreateUndeployJob(application *v1.AnyApplication) AsyncJob
+	CreateLocalPlacementJob(application *v1.AnyApplication) AsyncJob
 }

@@ -2,21 +2,23 @@ package job
 
 import (
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type OwnershipTransferJob struct {
 	application   *v1.AnyApplication
 	runtimeConfig *config.ApplicationRuntimeConfig
 	status        v1.OwnershipTransferStatus
+	clock         clock.Clock
 }
 
-func NewOwnershipTransferJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig) OwnershipTransferJob {
+func NewOwnershipTransferJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) OwnershipTransferJob {
 	return OwnershipTransferJob{
 		application:   application,
 		runtimeConfig: runtimeConfig,
 		status:        v1.OwnershipTransferPulling,
+		clock:         clock,
 	}
 }
 
@@ -37,6 +39,6 @@ func (job OwnershipTransferJob) GetStatus() v1.ConditionStatus {
 		Type:               v1.OwnershipTransferConditionType,
 		ZoneId:             job.runtimeConfig.ZoneId,
 		Status:             string(job.status),
-		LastTransitionTime: metav1.Now(),
+		LastTransitionTime: job.clock.NowTime(),
 	}
 }
