@@ -1,6 +1,7 @@
 package global
 
 import (
+	"github.com/argoproj/gitops-engine/pkg/health"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/mo"
@@ -15,6 +16,7 @@ import (
 // TODO job start/ stop
 var _ = Describe("GlobalApplication", func() {
 	clock := clock.NewFakeClock()
+
 	Context("When new resource is created", func() {
 		runtimeConfig := &config.ApplicationRuntimeConfig{
 			ZoneId: "zone",
@@ -100,7 +102,7 @@ var _ = Describe("GlobalApplication", func() {
 			Expect(jobs.jobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
 		})
 
-		It("switch to operational once placement is done", func() {
+		It("switch to relocation once placement is done", func() {
 			applicationResource := makeApplication()
 			applicationResource.Status.Owner = "zone"
 			applicationResource.Status.State = v1.PlacementGlobalState
@@ -148,12 +150,6 @@ var _ = Describe("GlobalApplication", func() {
 							Status:             string(v1.RelocationStatusPull),
 							LastTransitionTime: clock.NowTime(),
 						},
-						// {
-						// 	Type:               v1.LocalConditionType,
-						// 	ZoneId:             "zone",
-						// 	Status:             string(health.HealthStatusHealthy),
-						// 	LastTransitionTime: clock.NowTime(),
-						// },
 					},
 				},
 			))
@@ -168,10 +164,10 @@ var _ = Describe("GlobalApplication", func() {
 			Expect(jobs.jobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
 		})
 
-		It("switch to operational once placement is done", func() {
+		It("switch finish operational once relocation is completed ", func() {
 			applicationResource := makeApplication()
 			applicationResource.Status.Owner = "zone"
-			applicationResource.Status.State = v1.PlacementGlobalState
+			applicationResource.Status.State = v1.RelocationGlobalState
 			applicationResource.Status.Placements = []v1.Placement{{Zone: "zone"}}
 			applicationResource.Status.Conditions = []v1.ConditionStatus{
 				{
@@ -180,15 +176,21 @@ var _ = Describe("GlobalApplication", func() {
 					Status:             string(v1.PlacementStatusDone),
 					LastTransitionTime: clock.NowTime(),
 				},
+				{
+					Type:               v1.RelocationConditionType,
+					ZoneId:             "zone",
+					Status:             string(v1.RelocationStatusDone),
+					LastTransitionTime: clock.NowTime(),
+				},
 			}
 			existingJobCondition := FromCondition(&v1.ConditionStatus{
-				Type:               v1.PlacementConditionType,
+				Type:               v1.RelocationConditionType,
 				ZoneId:             "zone",
-				Status:             string(v1.PlacementStatusDone),
+				Status:             string(v1.RelocationStatusDone),
 				LastTransitionTime: clock.NowTime(),
 			})
 
-			localApplication := mo.None[local.LocalApplication]()
+			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig))
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
 
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
@@ -198,7 +200,7 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.RelocationGlobalState,
+					State: v1.OperationalGlobalState,
 					Placements: []v1.Placement{
 						{Zone: "zone"},
 					},
@@ -213,28 +215,72 @@ var _ = Describe("GlobalApplication", func() {
 						{
 							Type:               v1.RelocationConditionType,
 							ZoneId:             "zone",
-							Status:             string(v1.RelocationStatusPull),
+							Status:             string(v1.RelocationStatusDone),
 							LastTransitionTime: clock.NowTime(),
 						},
-						// {
-						// 	Type:               v1.LocalConditionType,
-						// 	ZoneId:             "zone",
-						// 	Status:             string(health.HealthStatusHealthy),
-						// 	LastTransitionTime: clock.NowTime(),
-						// },
+						{
+							Type:               v1.LocalConditionType,
+							ZoneId:             "zone",
+							Status:             string(health.HealthStatusProgressing),
+							LastTransitionTime: clock.NowTime(),
+						},
 					},
 				},
 			))
 
 			jobToAdd := jobs.jobsToAdd.OrEmpty()
 			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
-				Type:               v1.RelocationConditionType,
+				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				Status:             string(v1.RelocationStatusPull),
+				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: clock.NowTime(),
 			}))
 			Expect(jobs.jobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
 		})
+
+		// It("if owner has changed but placements contain current zone then transfer ownership", func() {
+		// 	applicationResource := makeApplication()
+		// 	applicationResource.Status.Owner = "zone"
+		// 	applicationResource.Status.State = v1.OperationalGlobalState
+		// 	applicationResource.Status.Placements = []v1.Placement{{Zone: "otherzone"}}
+		// 	applicationResource.Status.Conditions = []v1.ConditionStatus{}
+		// 	existingJobCondition := EmptyJobConditions()
+
+		// 	localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig))
+		// 	globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
+
+		// 	statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
+
+		// 	status := statusResult.Status.OrEmpty()
+		// 	jobs := statusResult.Jobs
+
+		// 	Expect(status).To(Equal(
+		// 		v1.AnyApplicationStatus{
+		// 			State: v1.OwnershipTransferGlobalState,
+		// 			Placements: []v1.Placement{
+		// 				{Zone: "otherzone"},
+		// 			},
+		// 			Owner: "zone",
+		// 			Conditions: []v1.ConditionStatus{
+		// 				{
+		// 					Type:               v1.OwnershipTransferConditionType,
+		// 					ZoneId:             "zone",
+		// 					Status:             string(v1.OwnershipTransferPulling),
+		// 					LastTransitionTime: clock.NowTime(),
+		// 				},
+		// 			},
+		// 		},
+		// 	))
+
+		// 	jobToAdd := jobs.jobsToAdd.OrEmpty()
+		// 	Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
+		// 		Type:               v1.OwnershipTransferConditionType,
+		// 		ZoneId:             "zone",
+		// 		Status:             string(v1.OwnershipTransferPulling),
+		// 		LastTransitionTime: clock.NowTime(),
+		// 	}))
+		// 	Expect(jobs.jobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
+		// })
 
 	})
 })

@@ -59,3 +59,14 @@ func (l *LocalApplication) GetCondition() v1.ConditionStatus {
 	}
 	return condition
 }
+
+func FakeLocalApplication(
+	config *config.ApplicationRuntimeConfig,
+) LocalApplication {
+	return LocalApplication{
+		bundle:   &ApplicationBundle{},
+		status:   health.HealthStatusProgressing,
+		messages: []string{},
+		config:   config,
+	}
+}

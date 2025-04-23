@@ -33,3 +33,7 @@ func (f AsyncJobFactoryImpl) CreateUndeployJob(application *v1.AnyApplication) A
 func (f AsyncJobFactoryImpl) CreateLocalPlacementJob(application *v1.AnyApplication) AsyncJob {
 	return NewLocalPlacementJob(application, f.config, f.clock)
 }
+
+func (f AsyncJobFactoryImpl) CreateOperationJob(application *v1.AnyApplication) AsyncJob {
+	return NewLocalOperationJob(application, f.config, f.clock)
+}

@@ -15,6 +15,7 @@ const (
 	AsyncJobTypeRelocate
 	AsyncJobTypeOwnershipTransfer
 	AsyncJobTypeLocalPlacement
+	AsyncJobTypeLocalOperation
 	AsyncJobTypeUndeploy
 )
 
@@ -41,4 +42,5 @@ type AsyncJobFactory interface {
 	CreateOnwershipTransferJob(application *v1.AnyApplication) AsyncJob
 	CreateUndeployJob(application *v1.AnyApplication) AsyncJob
 	CreateLocalPlacementJob(application *v1.AnyApplication) AsyncJob
+	CreateOperationJob(application *v1.AnyApplication) AsyncJob
 }

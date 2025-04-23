@@ -85,13 +85,13 @@ func (g *GlobalApplication) DeriveNewStatus(
 
 	// Update loca job conditions
 	stateUpdated = updateJobConditions(current, jobConditions) || stateUpdated
-	fmt.Printf("status updated from job conditions %v\n", stateUpdated)
+	// fmt.Printf("status updated from job conditions %v\n", stateUpdated)
 	// Update global state
-	globalStateUpdated, nextJobs := updateGlobalState(g.application, g.config, jobFactory, g.clock)
-	fmt.Printf("global state updated %v\n", globalStateUpdated)
+	globalStateUpdated, nextJobs := updateGlobalState(g.application, g.config, jobFactory, g.clock, g.locaApplication.IsPresent())
+	// fmt.Printf("global state updated %v\n", globalStateUpdated)
 	stateUpdated = globalStateUpdated || stateUpdated
 
-	fmt.Printf("result status %v\n", current)
+	// fmt.Printf("result status %v\n", current)
 	status := mo.None[v1.AnyApplicationStatus]()
 	if stateUpdated {
 		status = mo.Some(*current)
@@ -117,17 +117,70 @@ func updateGlobalState(
 	config *config.ApplicationRuntimeConfig,
 	jobFactory job.AsyncJobFactory,
 	clock clock.Clock,
+	applicationPresent bool,
 ) (bool, NextJobs) {
 	status := &application.Status
 
-	// Not owner cannot update the state
-	if status.Owner != config.ZoneId {
-		fmt.Printf("owner not equal\n %s %s", status.Owner, config.ZoneId)
+	if status.Owner == config.ZoneId {
+		return globalStateMachine(application, config, jobFactory, clock, applicationPresent)
+	} else if applicationPresent {
+		return localStateMachine(application, config, jobFactory, clock, applicationPresent)
+	} else {
+		// Not owner cannot update the state
 		return false, NextJobs{}
 	}
+}
+
+func globalStateMachine(
+	application *v1.AnyApplication,
+	config *config.ApplicationRuntimeConfig,
+	jobFactory job.AsyncJobFactory,
+	clock clock.Clock,
+	applicationPresent bool,
+) (bool, NextJobs) {
+	status := &application.Status
 
 	stateUpdated := false
-	nextStateResult := nextState(application, config, jobFactory, clock)
+	nextStateResult := nextState(application, config, jobFactory, clock, applicationPresent)
+	maybeNextState, conditionsToAdd, conditionsToRemove := nextStateResult.nextState, nextStateResult.conditionsToAdd, nextStateResult.conditionsToRemove
+	jobs := nextStateResult.jobs
+
+	fmt.Printf("nextStateResult %v \n", nextStateResult)
+
+	conditionsToRemove.ForEach(func(condition *v1.ConditionStatus) {
+		removeCondition(status, condition)
+		stateUpdated = true
+	})
+
+	conditionsToAdd.ForEach(func(condition *v1.ConditionStatus) {
+		addOrUpdateCondition(status, condition)
+		stateUpdated = true
+	})
+
+	nextState := maybeNextState.OrElse(status.State)
+	if status.State != nextState {
+		status.State = nextState
+		stateUpdated = true
+	}
+
+	if jobs.jobsToAdd.IsPresent() || jobs.jobsToRemove.IsPresent() {
+		stateUpdated = true
+	}
+
+	return stateUpdated, jobs
+}
+
+func localStateMachine(
+	application *v1.AnyApplication,
+	config *config.ApplicationRuntimeConfig,
+	jobFactory job.AsyncJobFactory,
+	clock clock.Clock,
+	applicationPresent bool,
+) (bool, NextJobs) {
+	status := &application.Status
+
+	stateUpdated := false
+	nextStateResult := nextState(application, config, jobFactory, clock, applicationPresent)
 	maybeNextState, conditionsToAdd, conditionsToRemove := nextStateResult.nextState, nextStateResult.conditionsToAdd, nextStateResult.conditionsToRemove
 	jobs := nextStateResult.jobs
 

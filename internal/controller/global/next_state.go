@@ -29,6 +29,7 @@ func nextState(
 	config *config.ApplicationRuntimeConfig,
 	jobFactory job.AsyncJobFactory,
 	clock clock.Clock,
+	applicationPresent bool,
 ) nextStateResult {
 	status := &application.Status
 
@@ -36,22 +37,22 @@ func nextState(
 	case v1.NewGlobalState:
 		// if current state is new and current node is owner
 		status.State = v1.PlacementGlobalState
-		return handlePlacementState(application, config, jobFactory, clock)
+		return handlePlacementState(application, config, jobFactory, clock, applicationPresent)
 
 	case v1.PlacementGlobalState:
-		return handlePlacementState(application, config, jobFactory, clock)
+		return handlePlacementState(application, config, jobFactory, clock, applicationPresent)
 
 	case v1.OperationalGlobalState:
-		return handleOperationalState(application, config, jobFactory, clock)
+		return handleOperationalState(application, config, jobFactory, clock, applicationPresent)
 
 	case v1.FailureGlobalState:
-		return handleFailureState(application, config, jobFactory, clock)
+		return handleFailureState(application, config, jobFactory, clock, applicationPresent)
 
 	case v1.RelocationGlobalState:
-		return handleRelocationState(application, config, jobFactory)
+		return handleRelocationState(application, config, jobFactory, clock, applicationPresent)
 
 	case v1.OwnershipTransferGlobalState:
-		return handleOwnershipTransferState(application, config, jobFactory, clock)
+		return handleOwnershipTransferState(application, config, jobFactory, clock, applicationPresent)
 
 	default:
 	}
@@ -63,6 +64,7 @@ func handlePlacementState(
 	config *config.ApplicationRuntimeConfig,
 	jobFactory job.AsyncJobFactory,
 	clock clock.Clock,
+	applicationPresent bool,
 ) nextStateResult {
 	status := &application.Status
 	spec := &application.Spec
@@ -88,15 +90,11 @@ func handlePlacementState(
 			nextState: mo.Some(v1.PlacementGlobalState),
 		}
 	}
-	// Global Placement strategy
-	if !placementsContainZone(status, config.ZoneId) {
-		// Current node is owner but not in the placement list
-		status.State = v1.OwnershipTransferGlobalState
-		return handleOwnershipTransferState(application, config, jobFactory, clock)
-	} else {
-		// Transit to operational state
-		status.State = v1.OperationalGlobalState
-		return handleOperationalState(application, config, jobFactory, clock)
+	if placementsContainZone(status, config.ZoneId) {
+		return handleOperationalState(application, config, jobFactory, clock, applicationPresent)
+	}
+	return nextStateResult{
+		nextState: mo.Some(v1.PlacementGlobalState),
 	}
 }
 
@@ -105,42 +103,31 @@ func handleOperationalState(
 	config *config.ApplicationRuntimeConfig,
 	jobFactory job.AsyncJobFactory,
 	clock clock.Clock,
+	applicationPresent bool,
 ) nextStateResult {
 	status := &application.Status
 
-	if !placementsContainZone(status, config.ZoneId) {
-		condition := mo.None[*v1.ConditionStatus]()
-		job := mo.None[job.AsyncJob]()
-		if !conditionExists(status, v1.PlacementConditionType, config.ZoneId) {
-			transferJob := jobFactory.CreateOnwershipTransferJob(application)
-			cond := transferJob.GetStatus()
-			condition = mo.Some(&cond)
+	if placementsContainZone(status, config.ZoneId) {
+		if !applicationPresent {
+			return handleRelocationState(application, config, jobFactory, clock, applicationPresent)
 		}
-		return nextStateResult{
-			nextState:       mo.Some(v1.OwnershipTransferGlobalState),
-			conditionsToAdd: condition,
-			jobs: NextJobs{
-				jobsToAdd: job,
-			},
-		}
-	} else {
+
+		// TODO if local application present
 		_, foundLocal := getCondition(status, v1.LocalConditionType, config.ZoneId)
 		if !foundLocal {
-
-			relocationJob := jobFactory.CreateRelocationJob(application)
-			relocationCondition := relocationJob.GetStatus()
+			operationJob := jobFactory.CreateOperationJob(application)
+			operationCondition := operationJob.GetStatus()
 			return nextStateResult{
-				nextState:       mo.Some(v1.RelocationGlobalState),
-				conditionsToAdd: mo.Some(&relocationCondition),
+				nextState:       mo.Some(v1.OperationalGlobalState),
+				conditionsToAdd: mo.Some(&operationCondition),
 				jobs: NextJobs{
-					jobsToAdd: mo.Some(relocationJob),
+					jobsToAdd: mo.Some(operationJob),
 				},
 			}
 		}
 
 		if isFailureCondition(application) {
-			status.State = v1.FailureGlobalState
-			return handleFailureState(application, config, jobFactory, clock)
+			return handleFailureState(application, config, jobFactory, clock, applicationPresent)
 		}
 	}
 	return nextStateResult{
@@ -152,6 +139,8 @@ func handleRelocationState(
 	application *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
 	jobFactory job.AsyncJobFactory,
+	clock clock.Clock,
+	applicationPresent bool,
 ) nextStateResult {
 	status := &application.Status
 
@@ -167,20 +156,17 @@ func handleRelocationState(
 			},
 		}
 	}
-	if condition.Status == string(v1.RelocationStatusDone) {
-		return nextStateResult{
-			nextState:          mo.Some(v1.OperationalGlobalState),
-			conditionsToRemove: mo.Some(condition),
-			jobs: NextJobs{
-				jobsToRemove: mo.Some(job.AsyncJobTypeRelocate),
-			},
+	switch condition.Status {
+	case string(v1.RelocationStatusDone):
+		if applicationPresent {
+			return handleOperationalState(application, config, jobFactory, clock, applicationPresent)
 		}
-	}
-	if condition.Status == string(v1.RelocationStatusFailure) {
+
+	case string(v1.RelocationStatusFailure):
 		relocationJob := jobFactory.CreateRelocationJob(application) // Add attempt counter
 		condition := relocationJob.GetStatus()
 		return nextStateResult{
-			nextState:       mo.Some(v1.OperationalGlobalState),
+			nextState:       mo.Some(v1.RelocationGlobalState),
 			conditionsToAdd: mo.Some(&condition),
 			jobs: NextJobs{
 				jobsToAdd: mo.Some(relocationJob),
@@ -197,12 +183,14 @@ func handleFailureState(
 	config *config.ApplicationRuntimeConfig,
 	jobFactory job.AsyncJobFactory,
 	clock clock.Clock,
+	applicationPresent bool,
 ) nextStateResult {
 	if !isFailureCondition(application) {
-		application.Status.State = v1.OperationalGlobalState
-		return handleOperationalState(application, config, jobFactory, clock)
+		return handleOperationalState(application, config, jobFactory, clock, applicationPresent)
 	}
-	return nextStateResult{}
+	return nextStateResult{
+		nextState: mo.Some(v1.FailureGlobalState),
+	}
 }
 
 func handleOwnershipTransferState(
@@ -210,28 +198,30 @@ func handleOwnershipTransferState(
 	config *config.ApplicationRuntimeConfig,
 	jobFactory job.AsyncJobFactory,
 	clock clock.Clock,
+	applicationPresent bool,
 ) nextStateResult {
 	status := &application.Status
 
 	if placementsContainZone(status, config.ZoneId) {
 		condition, found := getCondition(status, v1.LocalConditionType, config.ZoneId)
-		conditionToRemove := mo.None[*v1.ConditionStatus]()
 		if found {
 			if condition.Status == string(v1.OwnershipTransferSuccess) {
-				conditionToRemove = mo.Some(condition)
+				return handleOperationalState(application, config, jobFactory, clock, applicationPresent)
 			}
 			// else {
 			// 	// TODO failure case
 			// }
 		}
 		return nextStateResult{
-			nextState:          mo.Some(v1.OperationalGlobalState),
-			conditionsToRemove: conditionToRemove,
+			nextState: mo.Some(v1.OperationalGlobalState),
 			jobs: NextJobs{
 				jobsToRemove: mo.Some(job.AsyncJobTypeOwnershipTransfer),
 			},
 		}
 	} else {
+		if !applicationPresent {
+
+		}
 		/* condition */ _, found := getCondition(status, v1.LocalConditionType, config.ZoneId)
 
 		// if condition.Status == string(v1.OwnershipTransferFailure) {
@@ -304,6 +294,10 @@ func placementsContainZone(status *v1.AnyApplicationStatus, currentZone string) 
 		return placement.Zone == currentZone
 	})
 	return ok
+}
+
+func iAmOwner(status *v1.AnyApplicationStatus, currentZone string) bool {
+	return status.Owner == currentZone
 }
 
 func isFailureCondition(application *v1.AnyApplication) bool {
