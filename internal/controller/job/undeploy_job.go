@@ -13,8 +13,8 @@ type UndeployJob struct {
 	clock         clock.Clock
 }
 
-func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) UndeployJob {
-	return UndeployJob{
+func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *UndeployJob {
+	return &UndeployJob{
 		status:        v1.RelocationStatusPull,
 		application:   application,
 		runtimeConfig: runtimeConfig,
@@ -22,19 +22,19 @@ func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.Applic
 	}
 }
 
-func (job UndeployJob) Run(context AsyncJobContext) {
+func (job *UndeployJob) Run(context AsyncJobContext) {
 
 }
 
-func (job UndeployJob) GetJobID() JobId {
+func (job *UndeployJob) GetJobID() JobId {
 	return JobId{}
 }
 
-func (job UndeployJob) GetType() AsyncJobType {
+func (job *UndeployJob) GetType() AsyncJobType {
 	return AsyncJobTypeUndeploy
 }
 
-func (job UndeployJob) GetStatus() v1.ConditionStatus {
+func (job *UndeployJob) GetStatus() v1.ConditionStatus {
 	return v1.ConditionStatus{
 		Type:               v1.RelocationConditionType,
 		ZoneId:             job.runtimeConfig.ZoneId,

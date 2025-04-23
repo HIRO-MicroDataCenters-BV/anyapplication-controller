@@ -1,6 +1,8 @@
 package job
 
 import (
+	"context"
+
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/helm"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -24,6 +26,7 @@ type JobId struct {
 type AsyncJobContext interface {
 	GetHelmClient() helm.HelmClient
 	GetKubeClient() client.Client
+	GetGoContext() context.Context
 }
 
 type AsyncJob interface {

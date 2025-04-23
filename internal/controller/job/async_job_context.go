@@ -1,23 +1,30 @@
 package job
 
 import (
+	"context"
+
 	"hiro.io/anyapplication/internal/helm"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type AsyncJobContextImpl struct {
+	helmClient helm.HelmClient
+	kubeClient client.Client
+	ctx        context.Context
 }
 
-func NewAsyncJobContext() AsyncJobContext {
-	return AsyncJobContextImpl{}
+func NewAsyncJobContext(helmClient helm.HelmClient, kubeClient client.Client, ctx context.Context) AsyncJobContext {
+	return AsyncJobContextImpl{helmClient, kubeClient, ctx}
 }
 
-// GetHelmClient implements AsyncJobContext.
 func (a AsyncJobContextImpl) GetHelmClient() helm.HelmClient {
-	panic("unimplemented")
+	return a.helmClient
 }
 
-// GetKubeClient implements AsyncJobContext.
 func (a AsyncJobContextImpl) GetKubeClient() client.Client {
-	panic("unimplemented")
+	return a.kubeClient
+}
+
+func (a AsyncJobContextImpl) GetGoContext() context.Context {
+	return a.ctx
 }
