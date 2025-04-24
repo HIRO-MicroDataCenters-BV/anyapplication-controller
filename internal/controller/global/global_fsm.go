@@ -181,10 +181,10 @@ func (g *GlobalFSM) handleRelocationState() NextStateResult {
 }
 
 func (g *GlobalFSM) handleFailureState() NextStateResult {
-	spec := g.application.Spec
-	if spec.PlacementStrategy.Strategy == v1.PlacementStrategyLocal {
-		// TODO handle local state
-	}
+	// spec := g.application.Spec
+	// if spec.PlacementStrategy.Strategy == v1.PlacementStrategyLocal {
+	// 	// TODO handle local state
+	// }
 
 	return NextStateResult{
 		NextState: mo.Some(v1.FailureGlobalState),

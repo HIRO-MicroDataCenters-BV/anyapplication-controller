@@ -24,6 +24,7 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("transit to placement state", func() {
 			applicationResource := makeApplication()
+			applicationResource.Status.Owner = ""
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
 			jobFactory := job.NewAsyncJobFactory(runtimeConfig, clock)
 
@@ -66,7 +67,6 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("create local placement job", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.Owner = "zone"
 			applicationResource.Status.State = v1.PlacementGlobalState
 
 			localApplication := mo.None[local.LocalApplication]()
@@ -103,7 +103,6 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("switch to relocation once placement is done", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.Owner = "zone"
 			applicationResource.Status.State = v1.PlacementGlobalState
 			applicationResource.Status.Placements = []v1.Placement{{Zone: "zone"}}
 			applicationResource.Status.Conditions = []v1.ConditionStatus{
@@ -165,7 +164,6 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("switch finish operational once relocation is completed ", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.Owner = "zone"
 			applicationResource.Status.State = v1.RelocationGlobalState
 			applicationResource.Status.Placements = []v1.Placement{{Zone: "zone"}}
 			applicationResource.Status.Conditions = []v1.ConditionStatus{
@@ -239,7 +237,6 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("should relocate if placements has changed", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.Owner = "zone"
 			applicationResource.Status.State = v1.OperationalGlobalState
 			applicationResource.Status.Placements = []v1.Placement{{Zone: "zone"}}
 			applicationResource.Status.Conditions = []v1.ConditionStatus{
@@ -296,7 +293,6 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("should undeploy if current zone not in placements anymore", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.Owner = "zone"
 			applicationResource.Status.State = v1.OperationalGlobalState
 			applicationResource.Status.Placements = []v1.Placement{{Zone: "otherzone"}}
 			applicationResource.Status.Conditions = []v1.ConditionStatus{
@@ -376,6 +372,9 @@ func makeApplication() *v1.AnyApplication {
 				Strategy: v1.PlacementStrategyLocal,
 			},
 			RecoverStrategy: v1.RecoverStrategySpec{},
+		},
+		Status: v1.AnyApplicationStatus{
+			Owner: "zone",
 		},
 	}
 

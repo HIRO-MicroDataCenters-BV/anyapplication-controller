@@ -2,7 +2,6 @@ package job
 
 import (
 	"context"
-	"testing"
 
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
@@ -14,11 +13,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
-
-func TestAddOrUpdateStatusCondition(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "AddOrUpdateStatusCondition Suite")
-}
 
 var _ = Describe("AddOrUpdateStatusCondition", func() {
 	var (

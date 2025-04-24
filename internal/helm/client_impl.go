@@ -117,7 +117,7 @@ func DeriveUniqueHelmRepoName(repoURL string) (string, error) {
 // This is post processing step to fix that
 func AddLabelsToManifest(manifest string, newLabels map[string]string) (string, error) {
 	docs := strings.Split(manifest, "---")
-	var output []string
+	output := make([]string, 0, 10)
 
 	for _, doc := range docs {
 		doc = strings.TrimSpace(doc)

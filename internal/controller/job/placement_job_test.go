@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-var _ = Describe("Placement Job", func() {
+var _ = Describe("PlacementJob", func() {
 	var (
 		placementJob  *LocalPlacementJob
 		kubeClient    client.Client
