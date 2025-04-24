@@ -47,18 +47,18 @@ func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
 }
 
 type TemplateArgs struct {
-	releaseName   string
-	repoUrl       string
-	chartName     string
-	namespace     string
-	version       string
+	ReleaseName   string
+	RepoUrl       string
+	ChartName     string
+	Namespace     string
+	Version       string
 	ValuesOptions values.Options
-	labels        map[string]string
+	Labels        map[string]string
 }
 
 func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 
-	repoName, err := DeriveUniqueHelmRepoName(args.repoUrl)
+	repoName, err := DeriveUniqueHelmRepoName(args.RepoUrl)
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to derive unique helm repo name")
 	}
@@ -66,7 +66,7 @@ func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 	// Define a private chart repository
 	chartRepo := repo.Entry{
 		Name:               repoName,
-		URL:                args.repoUrl,
+		URL:                args.RepoUrl,
 		PassCredentialsAll: false,
 	}
 
@@ -76,15 +76,15 @@ func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 	}
 
 	chartSpec := helmclient.ChartSpec{
-		ReleaseName:   args.releaseName,
-		ChartName:     repoName + "/" + args.chartName,
-		Version:       args.version,
-		Namespace:     args.namespace,
+		ReleaseName:   args.ReleaseName,
+		ChartName:     repoName + "/" + args.ChartName,
+		Version:       args.Version,
+		Namespace:     args.Namespace,
 		UpgradeCRDs:   h.options.UpgradeCRDs,
 		Wait:          true,
 		Timeout:       32 * time.Second,
 		ValuesOptions: args.ValuesOptions,
-		Labels:        args.labels,
+		Labels:        args.Labels,
 	}
 
 	options := &helmclient.HelmTemplateOptions{
@@ -97,7 +97,7 @@ func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 		return "", errors.Wrap(err, "Failed to template chart")
 	}
 	manifest := string(chartBytes)
-	return AddLabelsToManifest(manifest, args.labels)
+	return AddLabelsToManifest(manifest, args.Labels)
 }
 
 func DeriveUniqueHelmRepoName(repoURL string) (string, error) {
