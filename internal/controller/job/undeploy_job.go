@@ -15,7 +15,7 @@ type UndeployJob struct {
 
 func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *UndeployJob {
 	return &UndeployJob{
-		status:        v1.RelocationStatusPull,
+		status:        v1.RelocationStatusUndeploy,
 		application:   application,
 		runtimeConfig: runtimeConfig,
 		clock:         clock,

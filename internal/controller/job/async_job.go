@@ -3,8 +3,10 @@ package job
 import (
 	"context"
 
+	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/helm"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -43,4 +45,10 @@ type AsyncJobFactory interface {
 	CreateUndeployJob(application *v1.AnyApplication) AsyncJob
 	CreateLocalPlacementJob(application *v1.AnyApplication) AsyncJob
 	CreateOperationJob(application *v1.AnyApplication) AsyncJob
+}
+
+type AsyncJobs interface {
+	Execute(job AsyncJob)
+	GetCurrent(name types.NamespacedName) mo.Option[AsyncJob]
+	Stop(job AsyncJob)
 }

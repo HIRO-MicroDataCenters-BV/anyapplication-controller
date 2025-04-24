@@ -2,7 +2,6 @@ package global
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
@@ -85,13 +84,12 @@ func (g *GlobalApplication) DeriveNewStatus(
 
 	// Update loca job conditions
 	stateUpdated = updateJobConditions(current, jobConditions) || stateUpdated
-	// fmt.Printf("status updated from job conditions %v\n", stateUpdated)
+
 	// Update global state
-	globalStateUpdated, nextJobs := updateGlobalState(g.application, g.config, jobFactory, g.clock, g.locaApplication.IsPresent())
-	// fmt.Printf("global state updated %v\n", globalStateUpdated)
+	globalStateUpdated, nextJobs := updateGlobalState(g.application, g.config, jobFactory, g.locaApplication.IsPresent())
+
 	stateUpdated = globalStateUpdated || stateUpdated
 
-	// fmt.Printf("result status %v\n", current)
 	status := mo.None[v1.AnyApplicationStatus]()
 	if stateUpdated {
 		status = mo.Some(*current)
@@ -99,6 +97,108 @@ func (g *GlobalApplication) DeriveNewStatus(
 	return StatusResult{
 		status, nextJobs,
 	}
+}
+
+func updateGlobalState(
+	application *v1.AnyApplication,
+	config *config.ApplicationRuntimeConfig,
+	jobFactory job.AsyncJobFactory,
+	applicationPresent bool,
+) (bool, NextJobs) {
+	status := &application.Status
+
+	if status.Owner == config.ZoneId {
+		return globalStateMachine(application, config, jobFactory, applicationPresent)
+	} else if applicationPresent || placementsContainZone(status, config.ZoneId) {
+		return localStateMachine(application, config, jobFactory, applicationPresent)
+	} else {
+		return false, NextJobs{}
+	}
+}
+
+func globalStateMachine(
+	application *v1.AnyApplication,
+	config *config.ApplicationRuntimeConfig,
+	jobFactory job.AsyncJobFactory,
+	applicationPresent bool,
+) (bool, NextJobs) {
+	status := &application.Status
+
+	stateUpdated := false
+
+	fsm := NewGlobalFSM(application, config, jobFactory, applicationPresent)
+	nextStateResult := fsm.NextState()
+
+	maybeNextState, conditionsToAdd, conditionsToRemove := nextStateResult.NextState, nextStateResult.ConditionsToAdd, nextStateResult.ConditionsToRemove
+
+	jobs := nextStateResult.Jobs
+	if jobs.JobsToAdd.IsPresent() || jobs.JobsToRemove.IsPresent() {
+		stateUpdated = true
+	}
+
+	// TODO pick condition from jobs
+	conditionsToRemove.ForEach(func(condition *v1.ConditionStatus) {
+		removeCondition(status, condition)
+		stateUpdated = true
+	})
+
+	// TODO pick condition from jobs
+	conditionsToAdd.ForEach(func(condition *v1.ConditionStatus) {
+		addOrUpdateCondition(status, condition)
+		stateUpdated = true
+	})
+
+	nextState := maybeNextState.OrElse(status.State)
+	if status.State != nextState {
+		status.State = nextState
+		stateUpdated = true
+	}
+
+	return stateUpdated, jobs
+}
+
+func localStateMachine(
+	application *v1.AnyApplication,
+	config *config.ApplicationRuntimeConfig,
+	jobFactory job.AsyncJobFactory,
+	applicationPresent bool,
+) (bool, NextJobs) {
+	status := &application.Status
+
+	stateUpdated := false
+
+	fsm := NewLocalFSM(application, config, jobFactory, applicationPresent)
+	nextStateResult := fsm.NextState()
+
+	conditionsToAdd, conditionsToRemove := nextStateResult.ConditionsToAdd, nextStateResult.ConditionsToRemove
+	jobs := nextStateResult.Jobs
+
+	// TODO pick condition from jobs
+	conditionsToRemove.ForEach(func(condition *v1.ConditionStatus) {
+		removeCondition(status, condition)
+		stateUpdated = true
+	})
+
+	// TODO pick condition from jobs
+	conditionsToAdd.ForEach(func(condition *v1.ConditionStatus) {
+		addOrUpdateCondition(status, condition)
+		stateUpdated = true
+	})
+
+	if jobs.JobsToAdd.IsPresent() || jobs.JobsToRemove.IsPresent() {
+		stateUpdated = true
+	}
+
+	return stateUpdated, jobs
+}
+
+func updateJobConditions(status *v1.AnyApplicationStatus, jobConditions JobApplicationConditions) bool {
+	stateUpdated := false
+	for _, condition := range jobConditions.Conditions {
+		addOrUpdateCondition(status, condition)
+		stateUpdated = true
+	}
+	return stateUpdated
 }
 
 func updateLocalCondition(status *v1.AnyApplicationStatus, condition *v1.ConditionStatus, config *config.ApplicationRuntimeConfig) {
@@ -110,101 +210,4 @@ func updateLocalCondition(status *v1.AnyApplicationStatus, condition *v1.Conditi
 	} else {
 		condition.DeepCopyInto(&found)
 	}
-}
-
-func updateGlobalState(
-	application *v1.AnyApplication,
-	config *config.ApplicationRuntimeConfig,
-	jobFactory job.AsyncJobFactory,
-	clock clock.Clock,
-	applicationPresent bool,
-) (bool, NextJobs) {
-	status := &application.Status
-
-	if status.Owner == config.ZoneId {
-		return globalStateMachine(application, config, jobFactory, clock, applicationPresent)
-	} else if applicationPresent {
-		return localStateMachine(application, config, jobFactory, clock, applicationPresent)
-	} else {
-		// Not owner cannot update the state
-		return false, NextJobs{}
-	}
-}
-
-func globalStateMachine(
-	application *v1.AnyApplication,
-	config *config.ApplicationRuntimeConfig,
-	jobFactory job.AsyncJobFactory,
-	clock clock.Clock,
-	applicationPresent bool,
-) (bool, NextJobs) {
-	status := &application.Status
-
-	stateUpdated := false
-	nextStateResult := nextState(application, config, jobFactory, clock, applicationPresent)
-	maybeNextState, conditionsToAdd, conditionsToRemove := nextStateResult.nextState, nextStateResult.conditionsToAdd, nextStateResult.conditionsToRemove
-	jobs := nextStateResult.jobs
-
-	fmt.Printf("nextStateResult %v \n", nextStateResult)
-
-	conditionsToRemove.ForEach(func(condition *v1.ConditionStatus) {
-		removeCondition(status, condition)
-		stateUpdated = true
-	})
-
-	conditionsToAdd.ForEach(func(condition *v1.ConditionStatus) {
-		addOrUpdateCondition(status, condition)
-		stateUpdated = true
-	})
-
-	nextState := maybeNextState.OrElse(status.State)
-	if status.State != nextState {
-		status.State = nextState
-		stateUpdated = true
-	}
-
-	if jobs.jobsToAdd.IsPresent() || jobs.jobsToRemove.IsPresent() {
-		stateUpdated = true
-	}
-
-	return stateUpdated, jobs
-}
-
-func localStateMachine(
-	application *v1.AnyApplication,
-	config *config.ApplicationRuntimeConfig,
-	jobFactory job.AsyncJobFactory,
-	clock clock.Clock,
-	applicationPresent bool,
-) (bool, NextJobs) {
-	status := &application.Status
-
-	stateUpdated := false
-	nextStateResult := nextState(application, config, jobFactory, clock, applicationPresent)
-	maybeNextState, conditionsToAdd, conditionsToRemove := nextStateResult.nextState, nextStateResult.conditionsToAdd, nextStateResult.conditionsToRemove
-	jobs := nextStateResult.jobs
-
-	fmt.Printf("nextStateResult %v \n", nextStateResult)
-
-	conditionsToRemove.ForEach(func(condition *v1.ConditionStatus) {
-		removeCondition(status, condition)
-		stateUpdated = true
-	})
-
-	conditionsToAdd.ForEach(func(condition *v1.ConditionStatus) {
-		addOrUpdateCondition(status, condition)
-		stateUpdated = true
-	})
-
-	nextState := maybeNextState.OrElse(status.State)
-	if status.State != nextState {
-		status.State = nextState
-		stateUpdated = true
-	}
-
-	if jobs.jobsToAdd.IsPresent() || jobs.jobsToRemove.IsPresent() {
-		stateUpdated = true
-	}
-
-	return stateUpdated, jobs
 }
