@@ -39,7 +39,8 @@ type HelmSelectorSpec struct {
 	Repository string `json:"repository"`
 	Chart      string `json:"chart"`
 	Version    string `json:"version"`
-	Values     string `json:"values"`
+	Namespace  string `json:"namespace"`
+	Values     string `json:"values,omitempty"`
 }
 type PlacementStrategySpec struct {
 	Strategy PlacementStrategy `json:"strategy"`

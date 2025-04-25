@@ -40,6 +40,10 @@ func LoadCurrentState(
 	}), nil
 }
 
+func NewLocalApplicationFromTemplate(template string) (mo.Option[LocalApplication], error) {
+	return mo.None[LocalApplication](), nil
+}
+
 func (l *LocalApplication) GetStatus() health.HealthStatusCode {
 	return l.status
 }

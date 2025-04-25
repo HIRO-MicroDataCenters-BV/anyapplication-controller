@@ -27,7 +27,26 @@ func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.
 func (job *LocalOperationJob) Run(context AsyncJobContext) {
 	// client := context.GetKubeClient()
 	// ctx := context.GetGoContext()
+	job.Success(context)
+}
 
+func (job *LocalOperationJob) Fail(context AsyncJobContext, msg string) {
+	job.msg = msg
+	job.status = health.HealthStatusDegraded
+	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+	if err != nil {
+		job.status = health.HealthStatusDegraded
+		job.msg = "Cannot Update Application Condition. " + err.Error()
+	}
+}
+
+func (job *LocalOperationJob) Success(context AsyncJobContext) {
+	job.status = health.HealthStatusHealthy
+	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+	if err != nil {
+		job.status = health.HealthStatusHealthy
+		job.msg = "Cannot Update Application Condition. " + err.Error()
+	}
 }
 
 func (job *LocalOperationJob) GetJobID() JobId {
