@@ -27,24 +27,24 @@ var _ = Describe("HelmClient", func() {
 
 		It("should template helm chart", func() {
 			args := TemplateArgs{
-				releaseName: "test-release",
-				repoUrl:     "https://helm.nginx.com/stable",
-				chartName:   "nginx-ingress",
-				namespace:   "default",
-				version:     "2.0.1",
+				ReleaseName: "test-release",
+				RepoUrl:     "https://helm.nginx.com/stable",
+				ChartName:   "nginx-ingress",
+				Namespace:   "default",
+				Version:     "2.0.1",
 				ValuesOptions: values.Options{
 					Values: []string{
 						"controller.service.type=LoadBalancer",
 					},
 				},
-				labels: map[string]string{
-					"dcp.hiro.io/managed-by": "dcp",
+				Labels: map[string]string{
+					"dcp.hiro.io/test": "dcp",
 				},
 			}
 
 			actual, err := client.Template(&args)
 
-			// fixture.SaveStringFixture("nginx.yaml", chartString)
+			// fixture.SaveStringFixture("nginx.yaml", actual)
 			expected := fixture.LoadStringFixture("nginx.yaml")
 
 			Expect(actual).To(Equal(expected))

@@ -8,8 +8,12 @@ import (
 
 	helmclient "github.com/mittwald/go-helm-client"
 	"github.com/mittwald/go-helm-client/values"
+	"sigs.k8s.io/yaml"
+
+	"github.com/cockroachdb/errors"
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/repo"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/rest"
 )
 
@@ -43,44 +47,44 @@ func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
 }
 
 type TemplateArgs struct {
-	releaseName   string
-	repoUrl       string
-	chartName     string
-	namespace     string
-	version       string
+	ReleaseName   string
+	RepoUrl       string
+	ChartName     string
+	Namespace     string
+	Version       string
 	ValuesOptions values.Options
-	labels        map[string]string
+	Labels        map[string]string
 }
 
 func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 
-	repoName, err := DeriveUniqueHelmRepoName(args.repoUrl)
+	repoName, err := DeriveUniqueHelmRepoName(args.RepoUrl)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "Failed to derive unique helm repo name")
 	}
 
 	// Define a private chart repository
 	chartRepo := repo.Entry{
 		Name:               repoName,
-		URL:                args.repoUrl,
+		URL:                args.RepoUrl,
 		PassCredentialsAll: false,
 	}
 
 	// Add a chart-repository to the client.
 	if err := h.client.AddOrUpdateChartRepo(chartRepo); err != nil {
-		panic(err)
+		return "", errors.Wrap(err, "Failed to AddOrUpdateChartRepo")
 	}
 
 	chartSpec := helmclient.ChartSpec{
-		ReleaseName:   args.releaseName,
-		ChartName:     repoName + "/" + args.chartName,
-		Version:       args.version,
-		Namespace:     args.namespace,
+		ReleaseName:   args.ReleaseName,
+		ChartName:     repoName + "/" + args.ChartName,
+		Version:       args.Version,
+		Namespace:     args.Namespace,
 		UpgradeCRDs:   h.options.UpgradeCRDs,
 		Wait:          true,
 		Timeout:       32 * time.Second,
 		ValuesOptions: args.ValuesOptions,
-		Labels:        args.labels,
+		Labels:        args.Labels,
 	}
 
 	options := &helmclient.HelmTemplateOptions{
@@ -90,9 +94,10 @@ func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 
 	chartBytes, err := h.client.TemplateChart(&chartSpec, options)
 	if err != nil {
-		panic(err)
+		return "", errors.Wrap(err, "Failed to template chart")
 	}
-	return string(chartBytes), nil
+	manifest := string(chartBytes)
+	return AddLabelsToManifest(manifest, args.Labels)
 }
 
 func DeriveUniqueHelmRepoName(repoURL string) (string, error) {
@@ -106,4 +111,50 @@ func DeriveUniqueHelmRepoName(repoURL string) (string, error) {
 	pathPart := parts[len(parts)-1]
 
 	return domain + "-" + pathPart, nil
+}
+
+// Go Helm Client does not support extra labels
+// This is post processing step to fix that
+func AddLabelsToManifest(manifest string, newLabels map[string]string) (string, error) {
+	docs := strings.Split(manifest, "---")
+	output := make([]string, 0, 10)
+
+	for _, doc := range docs {
+		doc = strings.TrimSpace(doc)
+		if doc == "" {
+			continue
+		}
+
+		var obj unstructured.Unstructured
+		if err := yaml.Unmarshal([]byte(doc), &obj); err != nil {
+			// Keep unparseable docs untouched (e.g. comments or notes)
+			output = append(output, doc)
+			continue
+		}
+		apiVersion := obj.GetAPIVersion()
+		kind := obj.GetKind()
+		if apiVersion == "" && kind == "" {
+			output = append(output, doc)
+			continue
+		}
+		// Merge new labels into existing ones
+		labels := obj.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		for k, v := range newLabels {
+			labels[k] = v
+		}
+		obj.SetLabels(labels)
+
+		// Marshal back to YAML
+		modifiedYAML, err := yaml.Marshal(obj.Object)
+		if err != nil {
+			return "", err
+		}
+
+		output = append(output, string(modifiedYAML))
+	}
+
+	return strings.Join(output, "---\n"), nil
 }

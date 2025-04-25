@@ -28,3 +28,11 @@ type JobApplicationConditions struct {
 func EmptyJobConditions() JobApplicationConditions {
 	return JobApplicationConditions{}
 }
+
+func FromCondition(condition *v1.ConditionStatus) JobApplicationConditions {
+	return JobApplicationConditions{
+		Conditions: []*v1.ConditionStatus{
+			condition,
+		},
+	}
+}

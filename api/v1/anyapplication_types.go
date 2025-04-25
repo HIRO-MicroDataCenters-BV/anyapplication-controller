@@ -18,6 +18,7 @@ package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // AnyApplicationSpec defines the desired state of AnyApplication.
@@ -81,6 +82,13 @@ type AnyApplication struct {
 
 	Spec   AnyApplicationSpec   `json:"spec"`
 	Status AnyApplicationStatus `json:"status,omitempty"`
+}
+
+func (a *AnyApplication) GetNamespacedName() client.ObjectKey {
+	return client.ObjectKey{
+		Namespace: a.Namespace,
+		Name:      a.Name,
+	}
 }
 
 // +kubebuilder:object:root=true

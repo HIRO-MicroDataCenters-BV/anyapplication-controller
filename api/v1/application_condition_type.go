@@ -28,7 +28,7 @@ func (s *ApplicationConditionType) UnmarshalJSON(data []byte) error {
 		*s = ApplicationConditionType(str)
 		return nil
 	default:
-		return errors.New("invalid status value: " + str)
+		return errors.New("invalid ApplicationConditionType: " + str)
 	}
 }
 
@@ -57,7 +57,7 @@ func (s *OwnershipTransferStatus) UnmarshalJSON(data []byte) error {
 		*s = OwnershipTransferStatus(str)
 		return nil
 	default:
-		return errors.New("invalid status value: " + str)
+		return errors.New("invalid OwnershipTransferStatus: " + str)
 	}
 }
 
@@ -68,8 +68,9 @@ func (s OwnershipTransferStatus) MarshalJSON() ([]byte, error) {
 type PlacementStatus string
 
 const (
-	PlacementStatusDone    OwnershipTransferStatus = "Done"
-	PlacementStatusFailure OwnershipTransferStatus = "Failure"
+	PlacementStatusInProgress PlacementStatus = "InProgress"
+	PlacementStatusDone       PlacementStatus = "Done"
+	PlacementStatusFailure    PlacementStatus = "Failure"
 )
 
 func (s *PlacementStatus) UnmarshalJSON(data []byte) error {
@@ -84,7 +85,7 @@ func (s *PlacementStatus) UnmarshalJSON(data []byte) error {
 		*s = PlacementStatus(str)
 		return nil
 	default:
-		return errors.New("invalid status value: " + str)
+		return errors.New("invalid PlacementStatus: " + str)
 	}
 }
 
@@ -114,7 +115,7 @@ func (s *RelocationStatus) UnmarshalJSON(data []byte) error {
 		*s = RelocationStatus(str)
 		return nil
 	default:
-		return errors.New("invalid status value: " + str)
+		return errors.New("invalid RelocationStatus: " + str)
 	}
 }
 
