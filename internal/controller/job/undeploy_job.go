@@ -25,27 +25,17 @@ func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.Applic
 }
 
 func (job *UndeployJob) Run(context AsyncJobContext) {
-	// localApplicationOpt, err := local.LoadCurrentState(
-	// 	context.GetGoContext(),
-	// 	context.GetKubeClient(),
-	// 	&job.application.Spec.Application,
-	// 	job.runtimeConfig,
-	// )
-	// if err != nil {
-	// 	job.Fail(context, err.Error())
-	// 	return
-	// }
+	ctx := context.GetGoContext()
 
-	// if localApplicationOpt.IsPresent() {
-	// 	// localApplication := localApplicationOpt.OrEmpty()
-	// 	// err := localApplication.Undeploy()
-	// 	// if err != nil {
-	// 	// 	job.Fail(context, err.Error())
-	// 	// 	return
-	// 	// }
-	// }
+	syncManager := context.GetSyncManager()
+	err := syncManager.Delete(ctx, job.application)
 
-	job.Success(context)
+	if err != nil {
+		job.Fail(context, err.Error())
+		return
+	} else {
+		job.Success(context)
+	}
 }
 
 func (job *UndeployJob) Fail(context AsyncJobContext, msg string) {

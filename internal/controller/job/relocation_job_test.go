@@ -38,9 +38,10 @@ var _ = Describe("RelocationJob", func() {
 			Spec: v1.AnyApplicationSpec{
 				Application: v1.ApplicationMatcherSpec{
 					HelmSelector: &v1.HelmSelectorSpec{
-						Repository: "test-repo",
-						Chart:      "test-chart",
-						Version:    "1.0.0",
+						Repository: "https://helm.nginx.com/stable",
+						Chart:      "nginx-ingress",
+						Version:    "2.0.1",
+						Namespace:  "nginx",
 					},
 				},
 				Zones: 1,
@@ -82,8 +83,8 @@ var _ = Describe("RelocationJob", func() {
 		))
 	})
 
-	It("should run and apply done status", func() {
-		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO())
+	It("Relocation should run and apply done status", func() {
+		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO(), nil)
 
 		relocationJob.Run(context)
 

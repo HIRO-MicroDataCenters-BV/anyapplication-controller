@@ -41,6 +41,7 @@ func LoadCurrentState(
 }
 
 func NewLocalApplicationFromTemplate(template string) (mo.Option[LocalApplication], error) {
+
 	return mo.None[LocalApplication](), nil
 }
 

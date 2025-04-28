@@ -1,6 +1,7 @@
 package job
 
 import (
+	"github.com/argoproj/gitops-engine/pkg/health"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
@@ -25,38 +26,18 @@ func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.Appl
 }
 
 func (job *RelocationJob) Run(context AsyncJobContext) {
-	// client := context.GetKubeClient()
-	// ctx := context.GetGoContext()
-	// helmClient := context.GetHelmClient()
 
-	// releaseName := job.application.Name
-	// helmSelector := job.application.Spec.Application.HelmSelector
-	// labels := map[string]string{"dcp.hiro.io/managed-by": "dcp"}
-	// values := values.Options{}
-	// template, err := helmClient.Template(&helm.TemplateArgs{
-	// 	ReleaseName:   releaseName,
-	// 	RepoUrl:       helmSelector.Repository,
-	// 	ChartName:     helmSelector.Chart,
-	// 	Namespace:     helmSelector.Namespace,
-	// 	Version:       helmSelector.Version,
-	// 	ValuesOptions: values,
-	// 	Labels:        labels,
-	// })
-	// if err != nil {
-	// 	job.Fail(context, err.Error())
-	// 	return
-	// }
+	syncManager := context.GetSyncManager()
+	ctx := context.GetGoContext()
 
-	// localApplicationOpt, err := local.NewLocalApplicationFromTemplate(template)
-	// if err != nil {
-	// 	job.Fail(context, err.Error())
-	// 	return
-	// }
+	healthStatus, err := syncManager.Sync(ctx, job.application)
 
-	// if localApplicationOpt.IsPresent() {
-
-	// }
-	job.Success(context)
+	if err != nil {
+		job.Fail(context, err.Error())
+		return
+	} else {
+		job.Success(context, healthStatus)
+	}
 }
 
 func (job *RelocationJob) Fail(context AsyncJobContext, msg string) {
@@ -69,7 +50,7 @@ func (job *RelocationJob) Fail(context AsyncJobContext, msg string) {
 	}
 }
 
-func (job *RelocationJob) Success(context AsyncJobContext) {
+func (job *RelocationJob) Success(context AsyncJobContext, status *health.HealthStatus) {
 	job.status = v1.RelocationStatusDone
 	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
 	if err != nil {

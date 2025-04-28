@@ -5,6 +5,7 @@ import (
 
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/helm"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,6 +31,7 @@ type AsyncJobContext interface {
 	GetHelmClient() helm.HelmClient
 	GetKubeClient() client.Client
 	GetGoContext() context.Context
+	GetSyncManager() sync.SyncManager
 }
 
 type AsyncJob interface {

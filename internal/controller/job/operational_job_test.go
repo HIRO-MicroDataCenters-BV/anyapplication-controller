@@ -84,7 +84,7 @@ var _ = Describe("LocalOperationJob", func() {
 	})
 
 	It("should run and apply done status", func() {
-		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO())
+		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO(), nil)
 
 		operationJob.Run(context)
 

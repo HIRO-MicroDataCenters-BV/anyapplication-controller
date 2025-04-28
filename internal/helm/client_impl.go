@@ -18,11 +18,11 @@ import (
 )
 
 type HelmClientOptions struct {
-	KubernetesHost string
-	Debug          bool
-	Linting        bool
-	KubeVersion    *chartutil.KubeVersion
-	UpgradeCRDs    bool
+	RestConfig  *rest.Config
+	Debug       bool
+	Linting     bool
+	KubeVersion *chartutil.KubeVersion
+	UpgradeCRDs bool
 }
 
 type HelmClientImpl struct {
@@ -37,9 +37,7 @@ func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
 			Debug:     options.Debug,
 			Linting:   options.Linting,
 		},
-		RestConfig: &rest.Config{
-			Host: options.KubernetesHost,
-		},
+		RestConfig: options.RestConfig,
 	}
 	client, err := helmclient.NewClientFromRestConf(&opts)
 
