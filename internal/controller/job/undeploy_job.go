@@ -28,7 +28,7 @@ func (job *UndeployJob) Run(context AsyncJobContext) {
 	ctx := context.GetGoContext()
 
 	syncManager := context.GetSyncManager()
-	err := syncManager.Delete(ctx, job.application)
+	_, err := syncManager.Delete(ctx, job.application)
 
 	if err != nil {
 		job.Fail(context, err.Error())

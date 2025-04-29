@@ -30,7 +30,8 @@ func (job *RelocationJob) Run(context AsyncJobContext) {
 	syncManager := context.GetSyncManager()
 	ctx := context.GetGoContext()
 
-	healthStatus, err := syncManager.Sync(ctx, job.application)
+	syncResult, err := syncManager.Sync(ctx, job.application)
+	healthStatus := syncResult.Status
 
 	if err != nil {
 		job.Fail(context, err.Error())

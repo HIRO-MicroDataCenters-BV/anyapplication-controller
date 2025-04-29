@@ -1,11 +1,15 @@
 package sync
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"testing"
-	"time"
 
+	"github.com/argoproj/gitops-engine/pkg/cache"
+	"github.com/argoproj/gitops-engine/pkg/health"
+	"github.com/argoproj/gitops-engine/pkg/utils/kube"
+	"github.com/argoproj/gitops-engine/pkg/utils/kube/kubetest"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -13,11 +17,15 @@ import (
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8sfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/rest"
+	testcore "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	ctrl "sigs.k8s.io/controller-runtime"
+	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestJobs(t *testing.T) {
@@ -35,11 +43,12 @@ func loadKubeConfig() (*rest.Config, error) {
 
 var _ = Describe("SyncManager", func() {
 	var (
-		syncManager SyncManager
-		kubeClient  client.Client
-		helmClient  helm.HelmClient
-		application *v1.AnyApplication
-		scheme      *runtime.Scheme
+		syncManager  SyncManager
+		kubeClient   client.Client
+		helmClient   helm.HelmClient
+		application  *v1.AnyApplication
+		scheme       *runtime.Scheme
+		clusterCache cache.ClusterCache
 	)
 
 	BeforeEach(func() {
@@ -72,77 +81,131 @@ var _ = Describe("SyncManager", func() {
 			},
 		}
 
-		// runtimeConfig = config.ApplicationRuntimeConfig{
-		// 	ZoneId: "zone",
-		// }
+		application = application.DeepCopy()
+	})
 
-		// fakeClock = clock.NewFakeClock()
+	// BeforeEach(func() {
+	// 	config, _ := loadKubeConfig()
 
-		// helmClient = helm.NewFakeHelmClient()
+	// 	mgr, err := ctrl.NewManager(config, ctrl.Options{})
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
 
-		// kubeClient = fake.NewClientBuilder().
-		// 	WithScheme(scheme).
-		// 	WithRuntimeObjects(application).
-		// 	WithStatusSubresource(&v1.AnyApplication{}).
-		// 	Build()
+	// 	kubeClient = mgr.GetClient()
 
-		config, _ := loadKubeConfig()
+	// 	options := helm.HelmClientOptions{
+	// 		RestConfig: config,
+	// 		KubeVersion: &chartutil.KubeVersion{
+	// 			Version: fmt.Sprintf("v%s.%s.0", "1", "23"),
+	// 			Major:   "1",
+	// 			Minor:   "23",
+	// 		},
+	// 	}
+	// 	helmClient, err = helm.NewHelmClient(&options)
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
 
-		// fmt.Println(config)
+	// 	clusterCache = cache.NewClusterCache(config)
+	// 	syncManager = NewSyncManager(kubeClient, helmClient, clusterCache)
+	// })
 
-		mgr, err := ctrl.NewManager(config, ctrl.Options{})
-		if err != nil {
-			panic(err)
-		}
-
-		kubeClient = mgr.GetClient()
-
+	BeforeEach(func() {
 		options := helm.HelmClientOptions{
-			RestConfig: config,
+			RestConfig: &rest.Config{Host: "https://test"},
 			KubeVersion: &chartutil.KubeVersion{
 				Version: fmt.Sprintf("v%s.%s.0", "1", "23"),
 				Major:   "1",
 				Minor:   "23",
 			},
 		}
-		helmClient, err = helm.NewHelmClient(&options)
-		if err != nil {
-			panic(err)
-		}
+		helmClient, _ = helm.NewHelmClient(&options)
 
-		application = application.DeepCopy()
-		syncManager = NewSyncManager(kubeClient, helmClient, config)
+		kubeClient = fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(&v1.AnyApplication{}).
+			Build()
+		clusterCache = newClusterWithOptions([]cache.UpdateSettingsFunc{})
+		syncManager = NewSyncManager(kubeClient, helmClient, clusterCache)
+
 	})
 
 	It("should sync helm release", func() {
-		go syncManager.InvalidateCache()
-		time.Sleep(3 * time.Second)
+		syncResult, err := syncManager.Sync(context.Background(), application)
 
-		// status, err := syncManager.Sync(context.Background(), application)
-
-		// Expect(err).NotTo(HaveOccurred())
-		// fmt.Printf("%s \n", status)
-
-		// status, _ = syncManager.Sync(context.Background(), application)
-		// fmt.Printf("%s \n", status)
-
-		// status, _ = syncManager.Sync(context.Background(), application)
-		// fmt.Printf("%s \n", status)
-
+		Expect(err).NotTo(HaveOccurred())
+		Expect(syncResult.Total).To(Equal(23))
+		Expect(syncResult.Created).To(Equal(23))
+		Expect(syncResult.CreateFailed).To(Equal(0))
+		Expect(syncResult.Updated).To(Equal(0))
+		Expect(syncResult.UpdateFailed).To(Equal(0))
+		Expect(syncResult.Deleted).To(Equal(0))
+		Expect(syncResult.DeleteFailed).To(Equal(0))
+		Expect(syncResult.Status.Status).To(Equal(health.HealthStatusProgressing))
 	})
 
-	// It("should delete helm release", func() {
-	// 	err := syncManager.Delete(context.TODO(), application)
+	It("should delete helm release", func() {
+		_, err := syncManager.Sync(context.Background(), application)
+		Expect(err).NotTo(HaveOccurred())
 
-	// 	Expect(err).NotTo(HaveOccurred())
+		syncResult, err := syncManager.Delete(context.TODO(), application)
 
-	// 	// Expect(syncManager.GetStatus()).To(Equal(v1.ConditionStatus{
-	// 	// 	Type:               v1.RelocationConditionType,
-	// 	// 	ZoneId:             "zone",
-	// 	// 	Status:             string(v1.RelocationStatusPull),
-	// 	// 	LastTransitionTime: fakeClock.NowTime(),
-	// 	// },
-	// 	// ))
-	// })
+		Expect(err).NotTo(HaveOccurred())
+		Expect(syncResult.Total).To(Equal(23))
+		Expect(syncResult.Created).To(Equal(0))
+		Expect(syncResult.CreateFailed).To(Equal(0))
+		Expect(syncResult.Updated).To(Equal(0))
+		Expect(syncResult.UpdateFailed).To(Equal(0))
+		Expect(syncResult.Deleted).To(Equal(23))
+		Expect(syncResult.DeleteFailed).To(Equal(0))
+		Expect(syncResult.Status.Status).To(Equal(health.HealthStatusMissing))
+	})
 
 })
+
+func newClusterWithOptions(opts []cache.UpdateSettingsFunc, objs ...runtime.Object) cache.ClusterCache {
+	client := k8sfake.NewSimpleDynamicClient(scheme.Scheme, objs...)
+	reactor := client.ReactionChain[0]
+	client.PrependReactor("list", "*", func(action testcore.Action) (handled bool, ret runtime.Object, err error) {
+		handled, ret, err = reactor.React(action)
+		if err != nil || !handled {
+			return
+		}
+		// make sure list response have resource version
+		ret.(metav1.ListInterface).SetResourceVersion("123")
+		return
+	})
+
+	apiResources := []kube.APIResourceInfo{{
+		GroupKind:            schema.GroupKind{Group: "", Kind: "Pod"},
+		GroupVersionResource: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"},
+		Meta:                 metav1.APIResource{Namespaced: true},
+	}, {
+		GroupKind:            schema.GroupKind{Group: "apps", Kind: "ReplicaSet"},
+		GroupVersionResource: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"},
+		Meta:                 metav1.APIResource{Namespaced: true},
+	}, {
+		GroupKind:            schema.GroupKind{Group: "apps", Kind: "Deployment"},
+		GroupVersionResource: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+		Meta:                 metav1.APIResource{Namespaced: true},
+	}, {
+		GroupKind:            schema.GroupKind{Group: "apps", Kind: "StatefulSet"},
+		GroupVersionResource: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"},
+		Meta:                 metav1.APIResource{Namespaced: true},
+	}, {
+		GroupKind:            schema.GroupKind{Group: "extensions", Kind: "ReplicaSet"},
+		GroupVersionResource: schema.GroupVersionResource{Group: "extensions", Version: "v1beta1", Resource: "replicasets"},
+		Meta:                 metav1.APIResource{Namespaced: true},
+	}}
+
+	opts = append([]cache.UpdateSettingsFunc{
+		cache.SetKubectl(&kubetest.MockKubectlCmd{APIResources: apiResources, DynamicClient: client}),
+	}, opts...)
+
+	cache := cache.NewClusterCache(
+		&rest.Config{Host: "https://test"},
+		opts...,
+	)
+	return cache
+}

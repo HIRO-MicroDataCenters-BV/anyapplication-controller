@@ -25,6 +25,7 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"github.com/argoproj/gitops-engine/pkg/cache"
 	"helm.sh/helm/v3/pkg/chartutil"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -222,8 +223,9 @@ func main() {
 		setupLog.Error(err, "unable to create helm client")
 		os.Exit(1)
 	}
-
-	syncManager := sync.NewSyncManager(kubeClient, helmClient, config)
+	clusterCache := cache.NewClusterCache(config)
+	clusterCache.Invalidate()
+	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache)
 
 	if err = (&controller.AnyApplicationReconciler{
 		Client:      mgr.GetClient(),
