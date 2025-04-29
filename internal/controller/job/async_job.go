@@ -7,7 +7,6 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/helm"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -24,7 +23,12 @@ const (
 
 type JobId struct {
 	JobType       AsyncJobType
-	ApplicationId string
+	ApplicationId ApplicationId
+}
+
+type ApplicationId struct {
+	Name      string
+	Namespace string
 }
 
 type AsyncJobContext interface {
@@ -39,6 +43,7 @@ type AsyncJob interface {
 	GetType() AsyncJobType
 	GetStatus() v1.ConditionStatus
 	Run(context AsyncJobContext)
+	Stop()
 }
 
 type AsyncJobFactory interface {
@@ -51,6 +56,6 @@ type AsyncJobFactory interface {
 
 type AsyncJobs interface {
 	Execute(job AsyncJob)
-	GetCurrent(name types.NamespacedName) mo.Option[AsyncJob]
-	Stop(job AsyncJob)
+	GetCurrent(id ApplicationId) mo.Option[AsyncJob]
+	Stop(id ApplicationId)
 }

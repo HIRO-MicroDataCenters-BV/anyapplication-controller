@@ -26,6 +26,7 @@ import (
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/job"
 	"hiro.io/anyapplication/internal/controller/sync"
 )
 
@@ -35,6 +36,7 @@ type AnyApplicationReconciler struct {
 	Scheme      *runtime.Scheme
 	Config      *config.ApplicationRuntimeConfig
 	SyncManager sync.SyncManager
+	Jobs        job.AsyncJobs
 }
 
 // +kubebuilder:rbac:groups=dcp.hiro.io,resources=anyapplications,verbs=get;list;watch;create;update;patch;delete

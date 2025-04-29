@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"log"
@@ -43,6 +44,7 @@ import (
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller"
+	"hiro.io/anyapplication/internal/controller/job"
 	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/helm"
 	"hiro.io/anyapplication/internal/httpapi"
@@ -226,12 +228,15 @@ func main() {
 	clusterCache := cache.NewClusterCache(config)
 	clusterCache.Invalidate()
 	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+	jobContext := job.NewAsyncJobContext(helmClient, kubeClient, context.Background(), syncManager)
+	jobs := job.NewJobs(jobContext)
 
 	if err = (&controller.AnyApplicationReconciler{
 		Client:      mgr.GetClient(),
 		Scheme:      mgr.GetScheme(),
 		Config:      &applicationConfig,
 		SyncManager: syncManager,
+		Jobs:        jobs,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AnyApplication")
 		os.Exit(1)

@@ -13,15 +13,25 @@ type RelocationJob struct {
 	status        v1.RelocationStatus
 	clock         clock.Clock
 	msg           string
+	jobId         JobId
 }
 
 func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *RelocationJob {
+	jobId := JobId{
+		JobType: AsyncJobTypeLocalOperation,
+		ApplicationId: ApplicationId{
+			Name:      application.Name,
+			Namespace: application.Namespace,
+		},
+	}
+
 	return &RelocationJob{
 		status:        v1.RelocationStatusPull,
 		application:   application,
 		runtimeConfig: runtimeConfig,
 		clock:         clock,
 		msg:           "",
+		jobId:         jobId,
 	}
 }
 
@@ -61,7 +71,7 @@ func (job *RelocationJob) Success(context AsyncJobContext, status *health.Health
 }
 
 func (job *RelocationJob) GetJobID() JobId {
-	return JobId{}
+	return job.jobId
 }
 
 func (job *RelocationJob) GetType() AsyncJobType {
@@ -77,3 +87,5 @@ func (job *RelocationJob) GetStatus() v1.ConditionStatus {
 		Msg:                job.msg,
 	}
 }
+
+func (job *RelocationJob) Stop() {}

@@ -7,16 +7,18 @@ import (
 
 type JobExecutorActor struct {
 	ID      int
+	context AsyncJobContext
 	JobChan chan AsyncJob
 	Quit    chan bool
 	Current chan AsyncJob
 }
 
-func NewActor(id int) *JobExecutorActor {
+func NewActor(id int, context AsyncJobContext) *JobExecutorActor {
 	return &JobExecutorActor{
 		ID:      id,
 		JobChan: make(chan AsyncJob),
 		Quit:    make(chan bool),
+		context: context,
 	}
 }
 
@@ -28,7 +30,7 @@ func (a *JobExecutorActor) Start() {
 				// Simulate processing
 				time.Sleep(500 * time.Millisecond)
 				_ = fmt.Sprintf("Actor %d processed job", a.ID)
-				job.Run(nil)
+				job.Run(a.context)
 
 			case <-a.Quit:
 				fmt.Printf("Actor %d quitting\n", a.ID)

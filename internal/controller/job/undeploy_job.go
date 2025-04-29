@@ -12,15 +12,25 @@ type UndeployJob struct {
 	status        v1.RelocationStatus
 	clock         clock.Clock
 	msg           string
+	jobId         JobId
 }
 
 func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *UndeployJob {
+	jobId := JobId{
+		JobType: AsyncJobTypeLocalOperation,
+		ApplicationId: ApplicationId{
+			Name:      application.Name,
+			Namespace: application.Namespace,
+		},
+	}
+
 	return &UndeployJob{
 		status:        v1.RelocationStatusUndeploy,
 		application:   application,
 		runtimeConfig: runtimeConfig,
 		clock:         clock,
 		msg:           "",
+		jobId:         jobId,
 	}
 }
 
@@ -58,7 +68,7 @@ func (job *UndeployJob) Success(context AsyncJobContext) {
 }
 
 func (job *UndeployJob) GetJobID() JobId {
-	return JobId{}
+	return job.jobId
 }
 
 func (job *UndeployJob) GetType() AsyncJobType {
@@ -74,3 +84,5 @@ func (job *UndeployJob) GetStatus() v1.ConditionStatus {
 		Msg:                job.msg,
 	}
 }
+
+func (job *UndeployJob) Stop() {}
