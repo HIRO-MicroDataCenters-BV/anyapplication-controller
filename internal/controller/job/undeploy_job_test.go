@@ -75,7 +75,7 @@ var _ = Describe("UndeployJob", func() {
 			Build()
 		application = application.DeepCopy()
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock)
 
 		undeployJob = NewUndeployJob(application, &runtimeConfig, fakeClock)
 	})

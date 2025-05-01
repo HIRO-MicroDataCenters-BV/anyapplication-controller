@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/chartutil"
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/controller/fixture"
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
@@ -36,6 +37,7 @@ func TestJobs(t *testing.T) {
 
 var _ = Describe("SyncManager", func() {
 	var (
+		fakeClock    clock.Clock
 		syncManager  types.SyncManager
 		kubeClient   client.Client
 		helmClient   helm.HelmClient
@@ -45,6 +47,7 @@ var _ = Describe("SyncManager", func() {
 	)
 
 	BeforeEach(func() {
+		fakeClock = clock.NewFakeClock()
 		scheme = runtime.NewScheme()
 		_ = v1.AddToScheme(scheme)
 
@@ -120,7 +123,7 @@ var _ = Describe("SyncManager", func() {
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
 		clusterCache = fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager = NewSyncManager(kubeClient, helmClient, clusterCache)
+		syncManager = NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock)
 
 	})
 

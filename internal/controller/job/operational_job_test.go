@@ -91,7 +91,7 @@ var _ = Describe("LocalOperationJob", func() {
 		application = application.DeepCopy()
 
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+		syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock)
 		jobContext = NewAsyncJobContext(helmClient, kubeClient, context.TODO(), syncManager)
 
 		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock)

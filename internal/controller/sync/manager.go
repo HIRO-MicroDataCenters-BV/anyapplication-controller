@@ -12,8 +12,12 @@ import (
 	"github.com/argoproj/gitops-engine/pkg/utils/kube"
 	"github.com/cockroachdb/errors"
 	"github.com/mittwald/go-helm-client/values"
+	"github.com/samber/mo"
 
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/clock"
+	"hiro.io/anyapplication/internal/controller/global"
+	"hiro.io/anyapplication/internal/controller/local"
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -29,14 +33,21 @@ type syncManager struct {
 	kubeClient   client.Client
 	clusterCache cache.ClusterCache
 	appCache     sync.Map
+	clock        clock.Clock
 }
 
-func NewSyncManager(kubeClient client.Client, helmClient helm.HelmClient, clusterCache cache.ClusterCache) types.SyncManager {
+func NewSyncManager(
+	kubeClient client.Client,
+	helmClient helm.HelmClient,
+	clusterCache cache.ClusterCache,
+	clock clock.Clock,
+) types.SyncManager {
 	return &syncManager{
 		kubeClient:   kubeClient,
 		helmClient:   helmClient,
 		clusterCache: clusterCache,
 		appCache:     sync.Map{},
+		clock:        clock,
 	}
 }
 
@@ -256,7 +267,8 @@ func (m *syncManager) getInstanceId(application *v1.AnyApplication) string {
 }
 
 func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.GlobalApplication, error) {
-
+	// local.NewLocalApplicationFromTemplate()
+	global.NewFromLocalApplication(mo.None[local.LocalApplication](), m.clock, application, nil)
 	return nil, nil
 }
 

@@ -230,7 +230,7 @@ func main() {
 	clock := clock.NewClock()
 	clusterCache := cache.NewClusterCache(config)
 	clusterCache.Invalidate()
-	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, clock)
 	jobContext := job.NewAsyncJobContext(helmClient, kubeClient, context.Background(), syncManager)
 	jobs := job.NewJobs(jobContext)
 	jobFactory := job.NewAsyncJobFactory(&applicationConfig, clock)

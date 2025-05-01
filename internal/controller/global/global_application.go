@@ -51,11 +51,11 @@ func NewFromLocalApplication(
 }
 
 func (g *globalApplication) GetName() string {
-	panic("not implemented")
+	return g.application.Name
 }
 
 func (g *globalApplication) GetNamespace() string {
-	panic("not implemented")
+	return g.application.Namespace
 }
 
 func (g *globalApplication) DeriveNewStatus(
