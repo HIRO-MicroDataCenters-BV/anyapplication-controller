@@ -16,7 +16,6 @@ type LocalOperationJob struct {
 	clock         clock.Clock
 	status        health.HealthStatusCode
 	msg           string
-	interval      time.Duration
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
 	jobId         JobId
@@ -47,7 +46,7 @@ func (job *LocalOperationJob) Run(context AsyncJobContext) {
 	go func() {
 		defer job.wg.Done()
 
-		ticker := time.NewTicker(job.interval)
+		ticker := time.NewTicker(job.runtimeConfig.LocalPollInterval)
 		defer ticker.Stop()
 
 		for {

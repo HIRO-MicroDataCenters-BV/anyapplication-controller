@@ -2,16 +2,22 @@ package job
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	"github.com/argoproj/gitops-engine/pkg/cache"
 	"github.com/argoproj/gitops-engine/pkg/health"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"helm.sh/helm/v3/pkg/chartutil"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -20,11 +26,12 @@ var _ = Describe("LocalOperationJob", func() {
 	var (
 		operationJob  *LocalOperationJob
 		kubeClient    client.Client
-		helmClient    helm.FakeHelmClient
+		helmClient    helm.HelmClient
 		application   *v1.AnyApplication
 		scheme        *runtime.Scheme
-		fakeClock     clock.Clock
+		fakeClock     *clock.FakeClock
 		runtimeConfig config.ApplicationRuntimeConfig
+		jobContext    AsyncJobContext
 	)
 
 	BeforeEach(func() {
@@ -39,9 +46,10 @@ var _ = Describe("LocalOperationJob", func() {
 			Spec: v1.AnyApplicationSpec{
 				Application: v1.ApplicationMatcherSpec{
 					HelmSelector: &v1.HelmSelectorSpec{
-						Repository: "test-repo",
-						Chart:      "test-chart",
-						Version:    "1.0.0",
+						Repository: "https://helm.nginx.com/stable",
+						Chart:      "nginx-ingress",
+						Version:    "2.0.1",
+						Namespace:  "nginx",
 					},
 				},
 				Zones: 1,
@@ -57,12 +65,21 @@ var _ = Describe("LocalOperationJob", func() {
 		}
 
 		runtimeConfig = config.ApplicationRuntimeConfig{
-			ZoneId: "zone",
+			ZoneId:            "zone",
+			LocalPollInterval: 100 * time.Millisecond,
 		}
 
 		fakeClock = clock.NewFakeClock()
 
-		helmClient = helm.NewFakeHelmClient()
+		options := helm.HelmClientOptions{
+			RestConfig: &rest.Config{Host: "https://test"},
+			KubeVersion: &chartutil.KubeVersion{
+				Version: fmt.Sprintf("v%s.%s.0", "1", "23"),
+				Major:   "1",
+				Minor:   "23",
+			},
+		}
+		helmClient, _ = helm.NewHelmClient(&options)
 
 		kubeClient = fake.NewClientBuilder().
 			WithScheme(scheme).
@@ -70,6 +87,11 @@ var _ = Describe("LocalOperationJob", func() {
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
 		application = application.DeepCopy()
+
+		clusterCache := sync.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+		jobContext = NewAsyncJobContext(helmClient, kubeClient, context.TODO(), syncManager)
+
 		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock)
 	})
 
@@ -83,33 +105,75 @@ var _ = Describe("LocalOperationJob", func() {
 		))
 	})
 
-	It("should run and apply done status", func() {
-		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO(), nil)
-
-		operationJob.Run(context)
-
-		result := &v1.AnyApplication{}
-		_ = kubeClient.Get(context.GetGoContext(), client.ObjectKeyFromObject(application), result)
-
-		Expect(result.Status.Conditions).To(Equal(
-			[]v1.ConditionStatus{
-				{
-					Type:               v1.LocalConditionType,
-					ZoneId:             "zone",
-					Status:             string(health.HealthStatusHealthy),
-					LastTransitionTime: fakeClock.NowTime(),
-				},
-			},
-		))
+	It("should sync periodically and report success status", func() {
 
 		Expect(operationJob.GetStatus()).To(Equal(
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				Status:             string(health.HealthStatusHealthy),
+				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
 		))
+
+		operationJob.Run(jobContext)
+
+		Expect(operationJob.GetStatus()).To(Equal(
+			v1.ConditionStatus{
+				Type:               v1.LocalConditionType,
+				ZoneId:             "zone",
+				Status:             string(health.HealthStatusProgressing),
+				LastTransitionTime: fakeClock.NowTime(),
+			},
+		))
+		for i := 1; i <= 3; i++ {
+			time.Sleep(500 * time.Millisecond)
+			Expect(operationJob.GetStatus()).To(Equal(
+				v1.ConditionStatus{
+					Type:               v1.LocalConditionType,
+					ZoneId:             "zone",
+					Status:             string(health.HealthStatusProgressing),
+					LastTransitionTime: fakeClock.NowTime(),
+				},
+			))
+		}
+
+		operationJob.Stop()
+
+	})
+
+	It("should sync periodically and report failure", func() {
+		application.Spec.Application.HelmSelector = &v1.HelmSelectorSpec{
+			Repository: "test-repo",
+			Chart:      "test-chart",
+			Version:    "1.0.0",
+		}
+		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock)
+
+		Expect(operationJob.GetStatus()).To(Equal(
+			v1.ConditionStatus{
+				Type:               v1.LocalConditionType,
+				ZoneId:             "zone",
+				Status:             string(health.HealthStatusProgressing),
+				LastTransitionTime: fakeClock.NowTime(),
+			},
+		))
+
+		operationJob.Run(jobContext)
+
+		time.Sleep(500 * time.Millisecond)
+
+		Expect(operationJob.GetStatus()).To(Equal(
+			v1.ConditionStatus{
+				Type:               v1.LocalConditionType,
+				ZoneId:             "zone",
+				Status:             string(health.HealthStatusDegraded),
+				LastTransitionTime: fakeClock.NowTime(),
+				Msg:                "Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",
+			},
+		))
+
+		operationJob.Stop()
 
 	})
 
