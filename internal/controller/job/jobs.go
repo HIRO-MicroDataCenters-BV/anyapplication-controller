@@ -19,7 +19,7 @@ func NewJobs(context AsyncJobContext) *jobs {
 }
 
 func (j *jobs) StopAll() {
-
+	panic("not implemented")
 }
 
 func (j *jobs) Execute(job AsyncJob) {
@@ -42,7 +42,7 @@ func (j *jobs) GetCurrent(id ApplicationId) mo.Option[AsyncJob] {
 }
 
 func (j *jobs) Stop(id ApplicationId) {
-	job, found := j.jobs.Load(id)
+	job, found := j.jobs.LoadAndDelete(id)
 	if !found {
 		return
 	}

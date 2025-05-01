@@ -2,14 +2,20 @@ package job
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
+	ctrl_sync "hiro.io/anyapplication/internal/controller/sync"
+	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/argoproj/gitops-engine/pkg/cache"
+	"github.com/argoproj/gitops-engine/pkg/health"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -17,11 +23,12 @@ import (
 var _ = Describe("Jobs", func() {
 	var (
 		ctx         context.Context
-		fakeClient  client.Client
+		kubeClient  client.Client
+		helmClient  helm.HelmClient
 		application *v1.AnyApplication
 		scheme      *runtime.Scheme
 		fakeClock   clock.Clock
-		// jobs        AsyncJobs
+		jobs        AsyncJobs
 	)
 
 	BeforeEach(func() {
@@ -63,30 +70,143 @@ var _ = Describe("Jobs", func() {
 			},
 		}
 
-		fakeClient = fake.NewClientBuilder().
+		kubeClient = fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithRuntimeObjects(application).
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
+		helmClient = helm.NewFakeHelmClient()
 
-		// context := NewAsyncJobContext()
-		// jobs = NewJobs(context)
+		clusterCache := ctrl_sync.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		syncManager := ctrl_sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+
+		context := NewAsyncJobContext(helmClient, kubeClient, ctx, syncManager)
+		jobs = NewJobs(context)
 	})
 
-	It("should add a new condition if it does not exist", func() {
-		newCondition := v1.ConditionStatus{
-			Type:   v1.PlacementConditionType,
-			ZoneId: "zone2",
-			Status: string(v1.PlacementStatusDone),
+	It("should run job and get completion status", func() {
+		appId := ApplicationId{
+			Name:      "test",
+			Namespace: "test",
 		}
+		job := newTestJob(appId, AsyncJobTypeLocalOperation, fakeClock, 100*time.Millisecond)
 
-		err := AddOrUpdateStatusCondition(ctx, fakeClient, client.ObjectKeyFromObject(application), newCondition)
-		Expect(err).ToNot(HaveOccurred())
+		jobs.Execute(job)
+		currentJobOpt := jobs.GetCurrent(appId)
 
-		updatedApp := &v1.AnyApplication{}
-		err = fakeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedApp.Status.Conditions).To(ContainElement(newCondition))
+		Expect(currentJobOpt.IsPresent()).To(BeTrue())
+		currentJob := currentJobOpt.OrEmpty()
+
+		Expect(currentJob.GetStatus()).To(Equal(
+			v1.ConditionStatus{
+				Type:               v1.LocalConditionType,
+				ZoneId:             "zone",
+				Status:             string(health.HealthStatusProgressing),
+				LastTransitionTime: fakeClock.NowTime(),
+			},
+		))
+
+		jobs.Stop(appId)
+		currentJobOpt = jobs.GetCurrent(appId)
+		Expect(currentJobOpt.IsPresent()).To(BeFalse())
+		// err := AddOrUpdateStatusCondition(ctx, kubeClient, client.ObjectKeyFromObject(application), newCondition)
+		// Expect(err).ToNot(HaveOccurred())
+
+		// updatedApp := &v1.AnyApplication{}
+		// err = kubeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
+		// Expect(err).ToNot(HaveOccurred())
+		// Expect(updatedApp.Status.Conditions).To(ContainElement(newCondition))
 	})
 
 })
+
+type testJob struct {
+	id       JobId
+	clock    clock.Clock
+	interval time.Duration
+	stopCh   chan struct{}
+	wg       sync.WaitGroup
+	status   health.HealthStatusCode
+}
+
+func newTestJob(applicationId ApplicationId, jobType AsyncJobType, clock clock.Clock, interval time.Duration) AsyncJob {
+	return &testJob{
+		clock: clock,
+		id: JobId{
+			JobType:       jobType,
+			ApplicationId: applicationId,
+		},
+		stopCh:   make(chan struct{}),
+		status:   health.HealthStatusProgressing,
+		interval: interval,
+	}
+}
+
+func (j *testJob) GetJobID() JobId {
+	return j.id
+}
+func (j *testJob) GetType() AsyncJobType {
+	return j.id.JobType
+}
+func (j *testJob) GetStatus() v1.ConditionStatus {
+	return v1.ConditionStatus{
+		Type:               v1.LocalConditionType,
+		ZoneId:             "zone",
+		Status:             string(j.status),
+		LastTransitionTime: j.clock.NowTime(),
+	}
+}
+func (j *testJob) Run(context AsyncJobContext) {
+	j.wg.Add(1)
+
+	go func() {
+		defer j.wg.Done()
+
+		ticker := time.NewTicker(j.interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				j.runInner(context)
+			case <-j.stopCh:
+				return
+			}
+		}
+	}()
+	// if err != nil {
+	// 	job.Fail(context, err.Error())
+	// 	return
+	// } else {
+	// 	job.Success(context, healthStatus)
+	// }
+
+}
+
+func (j *testJob) runInner(context AsyncJobContext) {
+	j.status = health.HealthStatusProgressing
+}
+
+func (job *testJob) Stop() {
+	close(job.stopCh)
+	job.wg.Wait()
+}
+
+// func (job *testJob) Fail(context AsyncJobContext, msg string) {
+// 	job.msg = msg
+// 	job.status = health.HealthStatusDegraded
+// 	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+// 	if err != nil {
+// 		job.status = health.HealthStatusDegraded
+// 		job.msg = "Cannot Update Application Condition. " + err.Error()
+// 	}
+// }
+
+// func (job *testJob) Success(context AsyncJobContext, status *health.HealthStatus) {
+// 	job.status = status.Status
+// 	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+// 	if err != nil {
+// 		job.status = health.HealthStatusDegraded
+// 		job.msg = "Cannot Update Application Condition. " + err.Error()
+// 	}
+// }
