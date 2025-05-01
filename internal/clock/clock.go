@@ -32,3 +32,7 @@ func (c *FakeClock) NowTime() metav1.Time {
 func (c *FakeClock) SetNow(nowMillis int64) {
 	c.nowMillis = nowMillis
 }
+
+func (c *FakeClock) Add(millis int64) {
+	c.nowMillis += millis
+}
