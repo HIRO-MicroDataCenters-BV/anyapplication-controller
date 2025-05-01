@@ -3,11 +3,13 @@ package job
 import (
 	"context"
 
+	"github.com/argoproj/gitops-engine/pkg/cache"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -24,6 +26,7 @@ var _ = Describe("UndeployJob", func() {
 		scheme        *runtime.Scheme
 		fakeClock     clock.Clock
 		runtimeConfig config.ApplicationRuntimeConfig
+		syncManager   sync.SyncManager
 	)
 
 	BeforeEach(func() {
@@ -69,6 +72,9 @@ var _ = Describe("UndeployJob", func() {
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
 		application = application.DeepCopy()
+		clusterCache := sync.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+
 		undeployJob = NewUndeployJob(application, &runtimeConfig, fakeClock)
 	})
 
@@ -83,7 +89,7 @@ var _ = Describe("UndeployJob", func() {
 	})
 
 	It("should run and apply done status", func() {
-		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO(), nil)
+		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO(), syncManager)
 
 		undeployJob.Run(context)
 
