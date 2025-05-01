@@ -109,13 +109,6 @@ var _ = Describe("Jobs", func() {
 		jobs.Stop(appId)
 		currentJobOpt = jobs.GetCurrent(appId)
 		Expect(currentJobOpt.IsPresent()).To(BeFalse())
-		// err := AddOrUpdateStatusCondition(ctx, kubeClient, client.ObjectKeyFromObject(application), newCondition)
-		// Expect(err).ToNot(HaveOccurred())
-
-		// updatedApp := &v1.AnyApplication{}
-		// err = kubeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
-		// Expect(err).ToNot(HaveOccurred())
-		// Expect(updatedApp.Status.Conditions).To(ContainElement(newCondition))
 	})
 
 })
@@ -168,22 +161,16 @@ func (j *testJob) Run(context AsyncJobContext) {
 		for {
 			select {
 			case <-ticker.C:
-				j.runInner(context)
+				j.runInner()
 			case <-j.stopCh:
 				return
 			}
 		}
 	}()
-	// if err != nil {
-	// 	job.Fail(context, err.Error())
-	// 	return
-	// } else {
-	// 	job.Success(context, healthStatus)
-	// }
 
 }
 
-func (j *testJob) runInner(context AsyncJobContext) {
+func (j *testJob) runInner() {
 	j.status = health.HealthStatusProgressing
 }
 
@@ -191,22 +178,3 @@ func (job *testJob) Stop() {
 	close(job.stopCh)
 	job.wg.Wait()
 }
-
-// func (job *testJob) Fail(context AsyncJobContext, msg string) {
-// 	job.msg = msg
-// 	job.status = health.HealthStatusDegraded
-// 	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
-// 	if err != nil {
-// 		job.status = health.HealthStatusDegraded
-// 		job.msg = "Cannot Update Application Condition. " + err.Error()
-// 	}
-// }
-
-// func (job *testJob) Success(context AsyncJobContext, status *health.HealthStatus) {
-// 	job.status = status.Status
-// 	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
-// 	if err != nil {
-// 		job.status = health.HealthStatusDegraded
-// 		job.msg = "Cannot Update Application Condition. " + err.Error()
-// 	}
-// }

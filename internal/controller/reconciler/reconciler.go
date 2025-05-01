@@ -9,25 +9,23 @@ import (
 
 type ReconcilerResult struct {
 	Status mo.Option[v1.AnyApplicationStatus]
-	Action *job.AsyncJob
+	Job    job.AsyncJob
 }
 
 type Reconciler struct {
-	globalApplication global.GlobalApplication
-	currentJob        *job.AsyncJob
+	jobFactory job.AsyncJobFactory
+	jobs       job.AsyncJobs
 }
 
-func NewReconciler(globalApplication global.GlobalApplication, currentJob *job.AsyncJob) Reconciler {
+func NewReconciler(jobs job.AsyncJobs, jobFactory job.AsyncJobFactory) Reconciler {
 	return Reconciler{
-		globalApplication: globalApplication,
-		currentJob:        currentJob,
+		jobs:       jobs,
+		jobFactory: jobFactory,
 	}
 }
 
-func (r *Reconciler) DoReconcile() ReconcilerResult {
-	return ReconcilerResult{
-		Status: mo.Some(v1.AnyApplicationStatus{
-			Conditions: []v1.ConditionStatus{},
-		}),
-	}
+func (r *Reconciler) DoReconcile(globalApplication global.GlobalApplication, currentJob job.AsyncJob) global.StatusResult {
+	jobConditions := global.EmptyJobConditions()
+	statusResult := globalApplication.DeriveNewStatus(jobConditions, r.jobFactory)
+	return statusResult
 }

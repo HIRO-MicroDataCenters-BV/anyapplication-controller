@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"testing"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
@@ -16,8 +15,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -27,13 +24,13 @@ func TestJobs(t *testing.T) {
 	RunSpecs(t, "Sync Suite")
 }
 
-func loadKubeConfig() (*rest.Config, error) {
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig := filepath.Join(home, ".kube", "config")
-		return clientcmd.BuildConfigFromFlags("", kubeconfig)
-	}
-	return rest.InClusterConfig()
-}
+// func loadKubeConfig() (*rest.Config, error) {
+// 	if home := homedir.HomeDir(); home != "" {
+// 		kubeconfig := filepath.Join(home, ".kube", "config")
+// 		return clientcmd.BuildConfigFromFlags("", kubeconfig)
+// 	}
+// 	return rest.InClusterConfig()
+// }
 
 var _ = Describe("SyncManager", func() {
 	var (
