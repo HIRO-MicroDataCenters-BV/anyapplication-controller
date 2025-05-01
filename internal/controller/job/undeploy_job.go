@@ -4,6 +4,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/types"
 )
 
 type UndeployJob struct {
@@ -12,13 +13,13 @@ type UndeployJob struct {
 	status        v1.RelocationStatus
 	clock         clock.Clock
 	msg           string
-	jobId         JobId
+	jobId         types.JobId
 }
 
 func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *UndeployJob {
-	jobId := JobId{
-		JobType: AsyncJobTypeLocalOperation,
-		ApplicationId: ApplicationId{
+	jobId := types.JobId{
+		JobType: types.AsyncJobTypeLocalOperation,
+		ApplicationId: types.ApplicationId{
 			Name:      application.Name,
 			Namespace: application.Namespace,
 		},
@@ -34,7 +35,7 @@ func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.Applic
 	}
 }
 
-func (job *UndeployJob) Run(context AsyncJobContext) {
+func (job *UndeployJob) Run(context types.AsyncJobContext) {
 	ctx := context.GetGoContext()
 
 	syncManager := context.GetSyncManager()
@@ -48,7 +49,7 @@ func (job *UndeployJob) Run(context AsyncJobContext) {
 	}
 }
 
-func (job *UndeployJob) Fail(context AsyncJobContext, msg string) {
+func (job *UndeployJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = v1.RelocationStatusFailure
 	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
@@ -58,7 +59,7 @@ func (job *UndeployJob) Fail(context AsyncJobContext, msg string) {
 	}
 }
 
-func (job *UndeployJob) Success(context AsyncJobContext) {
+func (job *UndeployJob) Success(context types.AsyncJobContext) {
 	job.status = v1.RelocationStatusDone
 	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
 	if err != nil {
@@ -67,12 +68,12 @@ func (job *UndeployJob) Success(context AsyncJobContext) {
 	}
 }
 
-func (job *UndeployJob) GetJobID() JobId {
+func (job *UndeployJob) GetJobID() types.JobId {
 	return job.jobId
 }
 
-func (job *UndeployJob) GetType() AsyncJobType {
-	return AsyncJobTypeUndeploy
+func (job *UndeployJob) GetType() types.AsyncJobType {
+	return types.AsyncJobTypeUndeploy
 }
 
 func (job *UndeployJob) GetStatus() v1.ConditionStatus {

@@ -14,6 +14,7 @@ import (
 	"github.com/mittwald/go-helm-client/values"
 
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,7 +31,7 @@ type syncManager struct {
 	appCache     sync.Map
 }
 
-func NewSyncManager(kubeClient client.Client, helmClient helm.HelmClient, clusterCache cache.ClusterCache) SyncManager {
+func NewSyncManager(kubeClient client.Client, helmClient helm.HelmClient, clusterCache cache.ClusterCache) types.SyncManager {
 	return &syncManager{
 		kubeClient:   kubeClient,
 		helmClient:   helmClient,
@@ -44,10 +45,10 @@ func (m *syncManager) InvalidateCache() error {
 	return nil
 }
 
-func (m *syncManager) Sync(ctx context.Context, application *v1.AnyApplication) (SyncResult, error) {
+func (m *syncManager) Sync(ctx context.Context, application *v1.AnyApplication) (types.SyncResult, error) {
 	app, err := m.getOrRenderApp(application)
 	if err != nil {
-		return SyncResult{}, err
+		return types.SyncResult{}, err
 	}
 	return m.sync(ctx, app)
 }
@@ -102,11 +103,11 @@ func (m *syncManager) render(application *v1.AnyApplication) ([]*unstructured.Un
 	return objs, nil
 }
 
-func (m *syncManager) sync(ctx context.Context, app *cachedApp) (SyncResult, error) {
+func (m *syncManager) sync(ctx context.Context, app *cachedApp) (types.SyncResult, error) {
 	code := health.HealthStatusHealthy
 	msg := ""
 
-	syncResult := SyncResult{}
+	syncResult := types.SyncResult{}
 	diffConfig, err := m.newDiffConfig()
 	if err != nil {
 		return syncResult, errors.Wrap(err, "Failed to build diff Config")
@@ -188,9 +189,9 @@ func (m *syncManager) newDiffConfig() (argodiff.DiffConfig, error) {
 		Build()
 }
 
-func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication) (SyncResult, error) {
+func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication) (types.SyncResult, error) {
 	instanceId := m.getInstanceId(application)
-	syncResult := SyncResult{}
+	syncResult := types.SyncResult{}
 	app, err := m.getOrRenderApp(application)
 	if err != nil {
 		return syncResult, err
@@ -252,6 +253,11 @@ func (m *syncManager) getInstanceId(application *v1.AnyApplication) string {
 	releaseName := application.Name
 	helmSelector := application.Spec.Application.HelmSelector
 	return fmt.Sprintf("%s-%s-%s", helmSelector.Chart, helmSelector.Version, releaseName)
+}
+
+func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.GlobalApplication, error) {
+
+	return nil, nil
 }
 
 func getFullName(obj *unstructured.Unstructured) string {

@@ -4,6 +4,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/types"
 )
 
 type OwnershipTransferJob struct {
@@ -11,13 +12,13 @@ type OwnershipTransferJob struct {
 	runtimeConfig *config.ApplicationRuntimeConfig
 	status        v1.OwnershipTransferStatus
 	clock         clock.Clock
-	jobId         JobId
+	jobId         types.JobId
 }
 
 func NewOwnershipTransferJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *OwnershipTransferJob {
-	jobId := JobId{
-		JobType: AsyncJobTypeLocalOperation,
-		ApplicationId: ApplicationId{
+	jobId := types.JobId{
+		JobType: types.AsyncJobTypeLocalOperation,
+		ApplicationId: types.ApplicationId{
 			Name:      application.Name,
 			Namespace: application.Namespace,
 		},
@@ -32,16 +33,16 @@ func NewOwnershipTransferJob(application *v1.AnyApplication, runtimeConfig *conf
 	}
 }
 
-func (job *OwnershipTransferJob) Run(context AsyncJobContext) {
+func (job *OwnershipTransferJob) Run(context types.AsyncJobContext) {
 
 }
 
-func (job *OwnershipTransferJob) GetJobID() JobId {
+func (job *OwnershipTransferJob) GetJobID() types.JobId {
 	return job.jobId
 }
 
-func (job *OwnershipTransferJob) GetType() AsyncJobType {
-	return AsyncJobTypeOwnershipTransfer
+func (job *OwnershipTransferJob) GetType() types.AsyncJobType {
+	return types.AsyncJobTypeOwnershipTransfer
 }
 
 func (job *OwnershipTransferJob) GetStatus() v1.ConditionStatus {

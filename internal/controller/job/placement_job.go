@@ -4,6 +4,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/types"
 )
 
 type LocalPlacementJob struct {
@@ -12,13 +13,13 @@ type LocalPlacementJob struct {
 	clock         clock.Clock
 	status        v1.PlacementStatus
 	msg           string
-	jobId         JobId
+	jobId         types.JobId
 }
 
 func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *LocalPlacementJob {
-	jobId := JobId{
-		JobType: AsyncJobTypeLocalOperation,
-		ApplicationId: ApplicationId{
+	jobId := types.JobId{
+		JobType: types.AsyncJobTypeLocalOperation,
+		ApplicationId: types.ApplicationId{
 			Name:      application.Name,
 			Namespace: application.Namespace,
 		},
@@ -33,7 +34,7 @@ func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.
 	}
 }
 
-func (job *LocalPlacementJob) Run(context AsyncJobContext) {
+func (job *LocalPlacementJob) Run(context types.AsyncJobContext) {
 	client := context.GetKubeClient()
 	ctx := context.GetGoContext()
 
@@ -46,12 +47,12 @@ func (job *LocalPlacementJob) Run(context AsyncJobContext) {
 	}
 }
 
-func (job *LocalPlacementJob) GetJobID() JobId {
+func (job *LocalPlacementJob) GetJobID() types.JobId {
 	return job.jobId
 }
 
-func (job *LocalPlacementJob) GetType() AsyncJobType {
-	return AsyncJobTypeLocalPlacement
+func (job *LocalPlacementJob) GetType() types.AsyncJobType {
+	return types.AsyncJobTypeLocalPlacement
 }
 
 func (job *LocalPlacementJob) GetStatus() v1.ConditionStatus {

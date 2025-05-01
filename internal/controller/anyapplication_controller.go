@@ -26,9 +26,8 @@ import (
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
-	"hiro.io/anyapplication/internal/controller/job"
 	"hiro.io/anyapplication/internal/controller/reconciler"
-	"hiro.io/anyapplication/internal/controller/sync"
+	"hiro.io/anyapplication/internal/controller/types"
 )
 
 // AnyApplicationReconciler reconciles a AnyApplication object
@@ -36,8 +35,8 @@ type AnyApplicationReconciler struct {
 	client.Client
 	Scheme      *runtime.Scheme
 	Config      *config.ApplicationRuntimeConfig
-	SyncManager sync.SyncManager
-	Jobs        job.AsyncJobs
+	SyncManager types.SyncManager
+	Jobs        types.AsyncJobs
 	Reconciler  reconciler.Reconciler
 }
 

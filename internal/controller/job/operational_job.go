@@ -8,6 +8,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/types"
 )
 
 type LocalOperationJob struct {
@@ -18,13 +19,13 @@ type LocalOperationJob struct {
 	msg           string
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
-	jobId         JobId
+	jobId         types.JobId
 }
 
 func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *LocalOperationJob {
-	jobId := JobId{
-		JobType: AsyncJobTypeLocalOperation,
-		ApplicationId: ApplicationId{
+	jobId := types.JobId{
+		JobType: types.AsyncJobTypeLocalOperation,
+		ApplicationId: types.ApplicationId{
 			Name:      application.Name,
 			Namespace: application.Namespace,
 		},
@@ -40,7 +41,7 @@ func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.
 	}
 }
 
-func (job *LocalOperationJob) Run(context AsyncJobContext) {
+func (job *LocalOperationJob) Run(context types.AsyncJobContext) {
 	job.wg.Add(1)
 
 	go func() {
@@ -60,7 +61,7 @@ func (job *LocalOperationJob) Run(context AsyncJobContext) {
 	}()
 }
 
-func (job *LocalOperationJob) runInner(context AsyncJobContext) {
+func (job *LocalOperationJob) runInner(context types.AsyncJobContext) {
 	syncManager := context.GetSyncManager()
 
 	syncResult, err := syncManager.Sync(context.GetGoContext(), job.application)
@@ -79,7 +80,7 @@ func (job *LocalOperationJob) Stop() {
 	job.wg.Wait()
 }
 
-func (job *LocalOperationJob) Fail(context AsyncJobContext, msg string) {
+func (job *LocalOperationJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = health.HealthStatusDegraded
 	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
@@ -89,7 +90,7 @@ func (job *LocalOperationJob) Fail(context AsyncJobContext, msg string) {
 	}
 }
 
-func (job *LocalOperationJob) Success(context AsyncJobContext, status *health.HealthStatus) {
+func (job *LocalOperationJob) Success(context types.AsyncJobContext, status *health.HealthStatus) {
 	job.status = status.Status
 	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
 	if err != nil {
@@ -98,12 +99,12 @@ func (job *LocalOperationJob) Success(context AsyncJobContext, status *health.He
 	}
 }
 
-func (job *LocalOperationJob) GetJobID() JobId {
+func (job *LocalOperationJob) GetJobID() types.JobId {
 	return job.jobId
 }
 
-func (job *LocalOperationJob) GetType() AsyncJobType {
-	return AsyncJobTypeLocalOperation
+func (job *LocalOperationJob) GetType() types.AsyncJobType {
+	return types.AsyncJobTypeLocalOperation
 }
 
 func (job *LocalOperationJob) GetStatus() v1.ConditionStatus {

@@ -3,20 +3,22 @@ package job
 import (
 	"fmt"
 	"time"
+
+	"hiro.io/anyapplication/internal/controller/types"
 )
 
 type JobExecutorActor struct {
 	ID      int
-	context AsyncJobContext
-	JobChan chan AsyncJob
+	context types.AsyncJobContext
+	JobChan chan types.AsyncJob
 	Quit    chan bool
-	Current chan AsyncJob
+	Current chan types.AsyncJob
 }
 
-func NewActor(id int, context AsyncJobContext) *JobExecutorActor {
+func NewActor(id int, context types.AsyncJobContext) *JobExecutorActor {
 	return &JobExecutorActor{
 		ID:      id,
-		JobChan: make(chan AsyncJob),
+		JobChan: make(chan types.AsyncJob),
 		Quit:    make(chan bool),
 		context: context,
 	}

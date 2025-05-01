@@ -10,6 +10,7 @@ import (
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/job"
 	"hiro.io/anyapplication/internal/controller/local"
+	"hiro.io/anyapplication/internal/controller/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -20,7 +21,7 @@ var _ = Describe("Local Application FSM", func() {
 		jobFactory        job.AsyncJobFactoryImpl
 		application       v1.AnyApplication
 		localApplication  mo.Option[local.LocalApplication]
-		globalApplication GlobalApplication
+		globalApplication types.GlobalApplication
 	)
 
 	BeforeEach(func() {
@@ -61,20 +62,20 @@ var _ = Describe("Local Application FSM", func() {
 	})
 
 	It("should not react on new application", func() {
-		statusResult := globalApplication.DeriveNewStatus(EmptyJobConditions(), jobFactory)
+		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 
 		status := statusResult.Status.OrEmpty()
 		jobs := statusResult.Jobs
 		Expect(status).To(Equal(v1.AnyApplicationStatus{}))
 
-		Expect(jobs.JobsToAdd).To(Equal(mo.None[job.AsyncJob]()))
-		Expect(jobs.JobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
+		Expect(jobs.JobsToAdd).To(Equal(mo.None[types.AsyncJob]()))
+		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 	})
 
 	It("should create start relocation once placement is done", func() {
 		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
 
-		statusResult := globalApplication.DeriveNewStatus(EmptyJobConditions(), jobFactory)
+		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 
 		status := statusResult.Status.OrEmpty()
 		jobs := statusResult.Jobs
@@ -102,7 +103,7 @@ var _ = Describe("Local Application FSM", func() {
 			LastTransitionTime: fakeClock.NowTime(),
 		}))
 
-		Expect(jobs.JobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
+		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 	})
 
 	It("should create operational job once relocation is done", func() {
@@ -117,7 +118,7 @@ var _ = Describe("Local Application FSM", func() {
 		}
 		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig)
-		statusResult := globalApplication.DeriveNewStatus(EmptyJobConditions(), jobFactory)
+		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 
 		status := statusResult.Status.OrEmpty()
 		jobs := statusResult.Jobs
@@ -151,7 +152,7 @@ var _ = Describe("Local Application FSM", func() {
 			LastTransitionTime: fakeClock.NowTime(),
 		}))
 
-		Expect(jobs.JobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
+		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 	})
 
 	It("should undeploy the application when placement has changed", func() {
@@ -166,7 +167,7 @@ var _ = Describe("Local Application FSM", func() {
 		}
 		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig)
-		statusResult := globalApplication.DeriveNewStatus(EmptyJobConditions(), jobFactory)
+		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 
 		status := statusResult.Status.OrEmpty()
 		jobs := statusResult.Jobs
@@ -194,7 +195,7 @@ var _ = Describe("Local Application FSM", func() {
 			LastTransitionTime: fakeClock.NowTime(),
 		}))
 
-		Expect(jobs.JobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
+		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 
 	})
 

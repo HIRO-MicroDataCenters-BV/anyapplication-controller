@@ -11,6 +11,8 @@ import (
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/chartutil"
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/controller/fixture"
+	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,7 +36,7 @@ func TestJobs(t *testing.T) {
 
 var _ = Describe("SyncManager", func() {
 	var (
-		syncManager  SyncManager
+		syncManager  types.SyncManager
 		kubeClient   client.Client
 		helmClient   helm.HelmClient
 		application  *v1.AnyApplication
@@ -117,7 +119,7 @@ var _ = Describe("SyncManager", func() {
 			WithScheme(scheme).
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
-		clusterCache = NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		clusterCache = fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
 		syncManager = NewSyncManager(kubeClient, helmClient, clusterCache)
 
 	})

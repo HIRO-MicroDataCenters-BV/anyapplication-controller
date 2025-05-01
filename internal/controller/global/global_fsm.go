@@ -6,20 +6,20 @@ import (
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
-	"hiro.io/anyapplication/internal/controller/job"
+	"hiro.io/anyapplication/internal/controller/types"
 )
 
 type GlobalFSM struct {
 	application        *v1.AnyApplication
 	config             *config.ApplicationRuntimeConfig
-	jobFactory         job.AsyncJobFactory
+	jobFactory         types.AsyncJobFactory
 	applicationPresent bool
 }
 
 func NewGlobalFSM(
 	application *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
-	jobFactory job.AsyncJobFactory,
+	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
 ) GlobalFSM {
 	return GlobalFSM{
@@ -27,7 +27,7 @@ func NewGlobalFSM(
 	}
 }
 
-func (g *GlobalFSM) NextState() NextStateResult {
+func (g *GlobalFSM) NextState() types.NextStateResult {
 	status := g.application.Status
 
 	if !placementExists(&status) {
@@ -40,7 +40,7 @@ func (g *GlobalFSM) NextState() NextStateResult {
 	}
 }
 
-func (g *GlobalFSM) handlePlacementState() NextStateResult {
+func (g *GlobalFSM) handlePlacementState() types.NextStateResult {
 	status := g.application.Status
 	spec := g.application.Spec
 
@@ -50,32 +50,32 @@ func (g *GlobalFSM) handlePlacementState() NextStateResult {
 			placementJob := g.jobFactory.CreateLocalPlacementJob(g.application)
 			condition := placementJob.GetStatus()
 
-			return NextStateResult{
+			return types.NextStateResult{
 				NextState:       mo.Some(v1.PlacementGlobalState),
 				ConditionsToAdd: mo.Some(&condition),
-				Jobs: NextJobs{
+				Jobs: types.NextJobs{
 					JobsToAdd: mo.Some(placementJob),
 				},
 			}
 		} else {
 			if condition.Status == string(v1.PlacementStatusFailure) {
-				return NextStateResult{
+				return types.NextStateResult{
 					NextState: mo.Some(v1.FailureGlobalState),
 				}
 			} else {
-				return NextStateResult{
+				return types.NextStateResult{
 					NextState: mo.Some(v1.PlacementGlobalState),
 				}
 			}
 		}
 	}
 
-	return NextStateResult{
+	return types.NextStateResult{
 		NextState: mo.Some(v1.PlacementGlobalState),
 	}
 }
 
-func (g *GlobalFSM) handleOperationalState() NextStateResult {
+func (g *GlobalFSM) handleOperationalState() types.NextStateResult {
 	status := g.application.Status
 
 	if isFailureCondition(g.application) {
@@ -89,10 +89,10 @@ func (g *GlobalFSM) handleOperationalState() NextStateResult {
 			operationJob := g.jobFactory.CreateOperationJob(g.application)
 			condition := operationJob.GetStatus()
 
-			return NextStateResult{
+			return types.NextStateResult{
 				NextState:       mo.Some(v1.OperationalGlobalState),
 				ConditionsToAdd: mo.Some(&condition),
-				Jobs: NextJobs{
+				Jobs: types.NextJobs{
 					JobsToAdd: mo.Some(operationJob),
 				},
 			}
@@ -104,7 +104,7 @@ func (g *GlobalFSM) handleOperationalState() NextStateResult {
 
 		condition, found := getCondition(&status, v1.RelocationConditionType, g.config.ZoneId)
 		relocationCondition := mo.EmptyableToOption(condition)
-		relocationJob := mo.None[job.AsyncJob]()
+		relocationJob := mo.None[types.AsyncJob]()
 		if !found {
 			undeployJob := g.jobFactory.CreateUndeployJob(g.application)
 			cond := undeployJob.GetStatus()
@@ -113,21 +113,21 @@ func (g *GlobalFSM) handleOperationalState() NextStateResult {
 			relocationJob = mo.Some(undeployJob)
 		}
 
-		return NextStateResult{
+		return types.NextStateResult{
 			NextState:          mo.Some(v1.OperationalGlobalState),
 			ConditionsToAdd:    relocationCondition,
 			ConditionsToRemove: mo.EmptyableToOption(operationCondition),
-			Jobs:               NextJobs{JobsToAdd: relocationJob},
+			Jobs:               types.NextJobs{JobsToAdd: relocationJob},
 		}
 
 	}
 
-	return NextStateResult{
+	return types.NextStateResult{
 		NextState: mo.Some(v1.OperationalGlobalState),
 	}
 
 }
-func (g *GlobalFSM) handleRelocationState() NextStateResult {
+func (g *GlobalFSM) handleRelocationState() types.NextStateResult {
 	status := g.application.Status
 
 	localRelocationCondition, found := getCondition(&status, v1.RelocationConditionType, g.config.ZoneId)
@@ -135,10 +135,10 @@ func (g *GlobalFSM) handleRelocationState() NextStateResult {
 		relocationJob := g.jobFactory.CreateRelocationJob(g.application)
 		condition := relocationJob.GetStatus()
 
-		return NextStateResult{
+		return types.NextStateResult{
 			NextState:       mo.Some(v1.RelocationGlobalState),
 			ConditionsToAdd: mo.Some(&condition),
-			Jobs: NextJobs{
+			Jobs: types.NextJobs{
 				JobsToAdd: mo.Some(relocationJob),
 			},
 		}
@@ -149,10 +149,10 @@ func (g *GlobalFSM) handleRelocationState() NextStateResult {
 			operationJob := g.jobFactory.CreateOperationJob(g.application)
 			condition := operationJob.GetStatus()
 
-			return NextStateResult{
+			return types.NextStateResult{
 				NextState:       mo.Some(v1.OperationalGlobalState),
 				ConditionsToAdd: mo.Some(&condition),
-				Jobs: NextJobs{
+				Jobs: types.NextJobs{
 					JobsToAdd: mo.Some(operationJob),
 				},
 			}
@@ -161,16 +161,16 @@ func (g *GlobalFSM) handleRelocationState() NextStateResult {
 			relocationJob := g.jobFactory.CreateRelocationJob(g.application)
 			condition := relocationJob.GetStatus()
 
-			return NextStateResult{
+			return types.NextStateResult{
 				NextState:       mo.Some(v1.RelocationGlobalState),
 				ConditionsToAdd: mo.Some(&condition),
-				Jobs: NextJobs{
+				Jobs: types.NextJobs{
 					JobsToAdd: mo.Some(relocationJob),
 				},
 			}
 
 		case string(v1.RelocationStatusPull), string(v1.RelocationStatusUndeploy):
-			return NextStateResult{
+			return types.NextStateResult{
 				NextState: mo.Some(v1.RelocationGlobalState),
 			}
 		default:
@@ -180,13 +180,13 @@ func (g *GlobalFSM) handleRelocationState() NextStateResult {
 
 }
 
-func (g *GlobalFSM) handleFailureState() NextStateResult {
+func (g *GlobalFSM) handleFailureState() types.NextStateResult {
 	// spec := g.application.Spec
 	// if spec.PlacementStrategy.Strategy == v1.PlacementStrategyLocal {
 	// 	// TODO handle local state
 	// }
 
-	return NextStateResult{
+	return types.NextStateResult{
 		NextState: mo.Some(v1.FailureGlobalState),
 	}
 }

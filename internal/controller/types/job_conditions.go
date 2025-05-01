@@ -1,13 +1,8 @@
-package global
+package types
 
 import (
 	v1 "hiro.io/anyapplication/api/v1"
 )
-
-type JobId struct {
-	Type   v1.ApplicationConditionType
-	ZoneId string
-}
 
 type JobApplicationConditions struct {
 	Conditions []*v1.ConditionStatus

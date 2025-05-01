@@ -3,8 +3,7 @@ package reconciler
 import (
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
-	"hiro.io/anyapplication/internal/controller/global"
-	"hiro.io/anyapplication/internal/controller/job"
+	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/moutils"
 )
 
@@ -13,31 +12,31 @@ type ReconcilerResult struct {
 }
 
 type Reconciler struct {
-	jobFactory job.AsyncJobFactory
-	jobs       job.AsyncJobs
+	jobFactory types.AsyncJobFactory
+	jobs       types.AsyncJobs
 }
 
-func NewReconciler(jobs job.AsyncJobs, jobFactory job.AsyncJobFactory) Reconciler {
+func NewReconciler(jobs types.AsyncJobs, jobFactory types.AsyncJobFactory) Reconciler {
 	return Reconciler{
 		jobs:       jobs,
 		jobFactory: jobFactory,
 	}
 }
 
-func (r *Reconciler) DoReconcile(globalApplication *global.GlobalApplication) ReconcilerResult {
-	applicationId := job.ApplicationId{
+func (r *Reconciler) DoReconcile(globalApplication types.GlobalApplication) ReconcilerResult {
+	applicationId := types.ApplicationId{
 		Name:      globalApplication.GetName(),
 		Namespace: globalApplication.GetNamespace(),
 	}
 	jobConditions := moutils.
-		Map(r.jobs.GetCurrent(applicationId), func(j job.AsyncJob) global.JobApplicationConditions {
+		Map(r.jobs.GetCurrent(applicationId), func(j types.AsyncJob) types.JobApplicationConditions {
 			condition := j.GetStatus()
-			return global.FromCondition(&condition)
+			return types.FromCondition(&condition)
 		}).
-		OrElse(global.EmptyJobConditions())
+		OrElse(types.EmptyJobConditions())
 
 	statusResult := globalApplication.DeriveNewStatus(jobConditions, r.jobFactory)
-	statusResult.Jobs.JobsToAdd.ForEach(func(newJob job.AsyncJob) {
+	statusResult.Jobs.JobsToAdd.ForEach(func(newJob types.AsyncJob) {
 		r.jobs.Execute(newJob)
 	})
 
