@@ -13,18 +13,6 @@ type JobApplicationConditions struct {
 	Conditions []*v1.ConditionStatus
 }
 
-// func (j *JobApplicationConditions) GetJobCondition(zoneId string, conditionType v1.ApplicationConditionType) mo.Option[*v1.ConditionStatus] {
-// 	jobId := JobId{
-// 		Type:   conditionType,
-// 		ZoneId: zoneId,
-// 	}
-// 	return mo.EmptyableToOption(j.JobConditions[jobId])
-// }
-
-// func (j *JobApplicationConditions) Iterate() {
-
-// }
-
 func EmptyJobConditions() JobApplicationConditions {
 	return JobApplicationConditions{}
 }

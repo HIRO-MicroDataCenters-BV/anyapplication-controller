@@ -42,9 +42,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller"
 	"hiro.io/anyapplication/internal/controller/job"
+	"hiro.io/anyapplication/internal/controller/reconciler"
 	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/helm"
 	"hiro.io/anyapplication/internal/httpapi"
@@ -225,11 +227,15 @@ func main() {
 		setupLog.Error(err, "unable to create helm client")
 		os.Exit(1)
 	}
+	clock := clock.NewClock()
 	clusterCache := cache.NewClusterCache(config)
 	clusterCache.Invalidate()
 	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache)
 	jobContext := job.NewAsyncJobContext(helmClient, kubeClient, context.Background(), syncManager)
 	jobs := job.NewJobs(jobContext)
+	jobFactory := job.NewAsyncJobFactory(&applicationConfig, clock)
+
+	reconciler := reconciler.NewReconciler(jobs, jobFactory)
 
 	if err = (&controller.AnyApplicationReconciler{
 		Client:      mgr.GetClient(),
@@ -237,6 +243,7 @@ func main() {
 		Config:      &applicationConfig,
 		SyncManager: syncManager,
 		Jobs:        jobs,
+		Reconciler:  reconciler,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AnyApplication")
 		os.Exit(1)

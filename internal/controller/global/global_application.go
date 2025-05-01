@@ -56,6 +56,14 @@ func NewFromLocalApplication(
 	}
 }
 
+func (g *GlobalApplication) GetName() string {
+	panic("not implemented")
+}
+
+func (g *GlobalApplication) GetNamespace() string {
+	panic("not implemented")
+}
+
 type StatusResult struct {
 	Status mo.Option[v1.AnyApplicationStatus]
 	Jobs   NextJobs
