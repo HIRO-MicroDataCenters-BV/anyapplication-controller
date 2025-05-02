@@ -18,9 +18,12 @@ package controller
 
 import (
 	"context"
+	"time"
 
+	"github.com/argoproj/gitops-engine/pkg/cache"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"helm.sh/helm/v3/pkg/chartutil"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -28,10 +31,25 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/clock"
+	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/job"
+	recon "hiro.io/anyapplication/internal/controller/reconciler"
+	"hiro.io/anyapplication/internal/controller/sync"
+	ctrltypes "hiro.io/anyapplication/internal/controller/types"
+	"hiro.io/anyapplication/internal/helm"
 )
 
 var _ = Describe("AnyApplication Controller", func() {
+	var (
+		runtimeConfig config.ApplicationRuntimeConfig
+		jobs          ctrltypes.AsyncJobs
+		syncManager   ctrltypes.SyncManager
+		reconciler    recon.Reconciler
+	)
+
 	Context("When reconciling a resource", func() {
+
 		const resourceName = "test-resource"
 
 		ctx := context.Background()
@@ -44,7 +62,34 @@ var _ = Describe("AnyApplication Controller", func() {
 
 		BeforeEach(func() {
 			By("creating the custom resource for the Kind AnyApplication")
-			err := k8sClient.Get(ctx, typeNamespacedName, anyapplication)
+
+			runtimeConfig = config.ApplicationRuntimeConfig{
+				ZoneId:            "zone",
+				LocalPollInterval: time.Duration(60000),
+			}
+
+			helmClient, err := helm.NewHelmClient(&helm.HelmClientOptions{
+				RestConfig:  cfg,
+				Debug:       false,
+				Linting:     true,
+				KubeVersion: &chartutil.DefaultCapabilities.KubeVersion,
+				UpgradeCRDs: true,
+			})
+			if err != nil {
+				panic("error " + err.Error())
+			}
+
+			clock := clock.NewClock()
+			clusterCache := cache.NewClusterCache(cfg)
+			clusterCache.Invalidate()
+			syncManager = sync.NewSyncManager(k8sClient, helmClient, clusterCache, clock, &runtimeConfig)
+			jobContext := job.NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+			jobs = job.NewJobs(jobContext)
+			jobFactory := job.NewAsyncJobFactory(&runtimeConfig, clock)
+
+			reconciler = recon.NewReconciler(jobs, jobFactory)
+
+			err = k8sClient.Get(ctx, typeNamespacedName, anyapplication)
 			if err != nil && errors.IsNotFound(err) {
 				resource := &dcpv1.AnyApplication{
 					ObjectMeta: metav1.ObjectMeta{
@@ -52,8 +97,15 @@ var _ = Describe("AnyApplication Controller", func() {
 						Namespace: "default",
 					},
 					Spec: dcpv1.AnyApplicationSpec{
-						Application: dcpv1.ApplicationMatcherSpec{},
-						Zones:       1,
+						Application: dcpv1.ApplicationMatcherSpec{
+							HelmSelector: &dcpv1.HelmSelectorSpec{
+								Repository: "https://helm.nginx.com/stable",
+								Chart:      "nginx-ingress",
+								Version:    "2.0.1",
+								Namespace:  "nginx",
+							},
+						},
+						Zones: 1,
 						PlacementStrategy: dcpv1.PlacementStrategySpec{
 							Strategy: dcpv1.PlacementStrategyLocal,
 						},
@@ -77,11 +129,16 @@ var _ = Describe("AnyApplication Controller", func() {
 			By("Cleanup the specific resource instance AnyApplication")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
+
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &AnyApplicationReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:      k8sClient,
+				Scheme:      k8sClient.Scheme(),
+				Config:      &runtimeConfig,
+				SyncManager: syncManager,
+				Jobs:        jobs,
+				Reconciler:  reconciler,
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
