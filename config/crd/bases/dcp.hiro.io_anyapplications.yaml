@@ -47,6 +47,8 @@ spec:
                     properties:
                       chart:
                         type: string
+                      namespace:
+                        type: string
                       repository:
                         type: string
                       values:
@@ -55,8 +57,8 @@ spec:
                         type: string
                     required:
                     - chart
+                    - namespace
                     - repository
-                    - values
                     - version
                     type: object
                   resourceSelector:

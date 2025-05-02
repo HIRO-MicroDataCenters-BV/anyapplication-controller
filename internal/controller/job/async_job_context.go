@@ -3,18 +3,20 @@ package job
 import (
 	"context"
 
+	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/helm"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type AsyncJobContextImpl struct {
-	helmClient helm.HelmClient
-	kubeClient client.Client
-	ctx        context.Context
+	helmClient  helm.HelmClient
+	kubeClient  client.Client
+	ctx         context.Context
+	syncManager sync.SyncManager
 }
 
-func NewAsyncJobContext(helmClient helm.HelmClient, kubeClient client.Client, ctx context.Context) AsyncJobContext {
-	return AsyncJobContextImpl{helmClient, kubeClient, ctx}
+func NewAsyncJobContext(helmClient helm.HelmClient, kubeClient client.Client, ctx context.Context, syncManager sync.SyncManager) AsyncJobContext {
+	return AsyncJobContextImpl{helmClient, kubeClient, ctx, syncManager}
 }
 
 func (a AsyncJobContextImpl) GetHelmClient() helm.HelmClient {
@@ -27,4 +29,8 @@ func (a AsyncJobContextImpl) GetKubeClient() client.Client {
 
 func (a AsyncJobContextImpl) GetGoContext() context.Context {
 	return a.ctx
+}
+
+func (a AsyncJobContextImpl) GetSyncManager() sync.SyncManager {
+	return a.syncManager
 }

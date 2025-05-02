@@ -6,13 +6,16 @@ import (
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/chartutil"
 	"hiro.io/anyapplication/internal/controller/fixture"
+	"k8s.io/client-go/rest"
 )
 
 var _ = Describe("HelmClient", func() {
 	Context("When reconciling a resource", func() {
 
 		options := &HelmClientOptions{
-			KubernetesHost: "https://localhost:6443",
+			RestConfig: &rest.Config{
+				Host: "https://localhost:6443",
+			},
 			KubeVersion: &chartutil.KubeVersion{
 				Version: "v1.23.10",
 				Major:   "1",

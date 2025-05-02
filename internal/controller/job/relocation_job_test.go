@@ -3,11 +3,13 @@ package job
 import (
 	"context"
 
+	"github.com/argoproj/gitops-engine/pkg/cache"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -15,15 +17,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-var _ = Describe("PlacementJob", func() {
+var _ = Describe("RelocationJob", func() {
 	var (
-		placementJob  *LocalPlacementJob
+		relocationJob *RelocationJob
 		kubeClient    client.Client
 		helmClient    helm.FakeHelmClient
 		application   *v1.AnyApplication
 		scheme        *runtime.Scheme
 		fakeClock     clock.Clock
 		runtimeConfig config.ApplicationRuntimeConfig
+		syncManager   sync.SyncManager
 	)
 
 	BeforeEach(func() {
@@ -38,9 +41,10 @@ var _ = Describe("PlacementJob", func() {
 			Spec: v1.AnyApplicationSpec{
 				Application: v1.ApplicationMatcherSpec{
 					HelmSelector: &v1.HelmSelectorSpec{
-						Repository: "test-repo",
-						Chart:      "test-chart",
-						Version:    "1.0.0",
+						Repository: "https://helm.nginx.com/stable",
+						Chart:      "nginx-ingress",
+						Version:    "2.0.1",
+						Namespace:  "nginx",
 					},
 				},
 				Zones: 1,
@@ -69,23 +73,26 @@ var _ = Describe("PlacementJob", func() {
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
 		application = application.DeepCopy()
-		placementJob = NewLocalPlacementJob(application, &runtimeConfig, fakeClock)
+		clusterCache := sync.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+
+		relocationJob = NewRelocationJob(application, &runtimeConfig, fakeClock)
 	})
 
 	It("should return initial status", func() {
-		Expect(placementJob.GetStatus()).To(Equal(v1.ConditionStatus{
-			Type:               v1.PlacementConditionType,
+		Expect(relocationJob.GetStatus()).To(Equal(v1.ConditionStatus{
+			Type:               v1.RelocationConditionType,
 			ZoneId:             "zone",
-			Status:             string(v1.PlacementStatusInProgress),
+			Status:             string(v1.RelocationStatusPull),
 			LastTransitionTime: fakeClock.NowTime(),
 		},
 		))
 	})
 
-	It("should run and apply done status", func() {
-		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO(), nil)
+	It("Relocation should run and apply done status", func() {
+		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO(), syncManager)
 
-		placementJob.Run(context)
+		relocationJob.Run(context)
 
 		result := &v1.AnyApplication{}
 		_ = kubeClient.Get(context.GetGoContext(), client.ObjectKeyFromObject(application), result)
@@ -93,19 +100,19 @@ var _ = Describe("PlacementJob", func() {
 		Expect(result.Status.Conditions).To(Equal(
 			[]v1.ConditionStatus{
 				{
-					Type:               v1.PlacementConditionType,
+					Type:               v1.RelocationConditionType,
 					ZoneId:             "zone",
-					Status:             string(v1.PlacementStatusDone),
+					Status:             string(v1.RelocationStatusDone),
 					LastTransitionTime: fakeClock.NowTime(),
 				},
 			},
 		))
 
-		Expect(placementJob.GetStatus()).To(Equal(
+		Expect(relocationJob.GetStatus()).To(Equal(
 			v1.ConditionStatus{
-				Type:               v1.PlacementConditionType,
+				Type:               v1.RelocationConditionType,
 				ZoneId:             "zone",
-				Status:             string(v1.PlacementStatusDone),
+				Status:             string(v1.RelocationStatusDone),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
 		))

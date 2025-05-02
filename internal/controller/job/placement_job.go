@@ -12,14 +12,24 @@ type LocalPlacementJob struct {
 	clock         clock.Clock
 	status        v1.PlacementStatus
 	msg           string
+	jobId         JobId
 }
 
 func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *LocalPlacementJob {
+	jobId := JobId{
+		JobType: AsyncJobTypeLocalOperation,
+		ApplicationId: ApplicationId{
+			Name:      application.Name,
+			Namespace: application.Namespace,
+		},
+	}
+
 	return &LocalPlacementJob{
 		application:   application,
 		runtimeConfig: runtimeConfig,
 		clock:         clock,
 		status:        v1.PlacementStatusInProgress,
+		jobId:         jobId,
 	}
 }
 
@@ -37,7 +47,7 @@ func (job *LocalPlacementJob) Run(context AsyncJobContext) {
 }
 
 func (job *LocalPlacementJob) GetJobID() JobId {
-	return JobId{}
+	return job.jobId
 }
 
 func (job *LocalPlacementJob) GetType() AsyncJobType {
@@ -53,3 +63,5 @@ func (job *LocalPlacementJob) GetStatus() v1.ConditionStatus {
 		Msg:                job.msg,
 	}
 }
+
+func (job *LocalPlacementJob) Stop() {}

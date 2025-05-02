@@ -1,38 +1,54 @@
 package job
 
 import (
+	"sync"
+
 	"github.com/samber/mo"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 type jobs struct {
-	// Actors []*JobExecutorActor
+	jobs    sync.Map
+	context AsyncJobContext
 }
 
-func NewJobs() *jobs {
-	// actors := make([]*JobExecutorActor, numActors)
-	// for i := 0; i < numActors; i++ {
-	// 	actor := NewActor(i + 1)
-	// 	actor.Start()
-	// 	actors[i] = actor
-	// }
-	// return &jobs{Actors: actors}
-	return &jobs{}
+func NewJobs(context AsyncJobContext) *jobs {
+	return &jobs{
+		context: context,
+		jobs:    sync.Map{},
+	}
 }
 
-func (d *jobs) StopAll() {
-	// for _, actor := range d.Actors {
-	// 	actor.Stop()
-	// }
+func (j *jobs) StopAll() {
+	panic("not implemented")
 }
 
-func (d *jobs) Execute(job AsyncJob) {
-
+func (j *jobs) Execute(job AsyncJob) {
+	jobId := job.GetJobID()
+	id := jobId.ApplicationId
+	j.jobs.Store(id, job)
+	go job.Run(j.context)
 }
 
-func (d *jobs) GetCurrent(name types.NamespacedName) mo.Option[AsyncJob] {
-	return mo.None[AsyncJob]()
+func (j *jobs) GetCurrent(id ApplicationId) mo.Option[AsyncJob] {
+	job, found := j.jobs.Load(id)
+	if !found {
+		return mo.None[AsyncJob]()
+	}
+	asyncJob, ok := job.(AsyncJob)
+	if !ok {
+		panic("Unexpected type")
+	}
+	return mo.Some(asyncJob)
 }
 
-func (d *jobs) Stop(job AsyncJob) {
+func (j *jobs) Stop(id ApplicationId) {
+	job, found := j.jobs.LoadAndDelete(id)
+	if !found {
+		return
+	}
+	asyncJob, ok := job.(AsyncJob)
+	if !ok {
+		panic("Unexpected type")
+	}
+	asyncJob.Stop()
 }

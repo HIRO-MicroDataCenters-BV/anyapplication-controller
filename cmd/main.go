@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"log"
@@ -25,6 +26,8 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"github.com/argoproj/gitops-engine/pkg/cache"
+	"helm.sh/helm/v3/pkg/chartutil"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,6 +44,9 @@ import (
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller"
+	"hiro.io/anyapplication/internal/controller/job"
+	"hiro.io/anyapplication/internal/controller/sync"
+	"hiro.io/anyapplication/internal/helm"
 	"hiro.io/anyapplication/internal/httpapi"
 	// +kubebuilder:scaffold:imports
 )
@@ -183,8 +189,8 @@ func main() {
 			config.GetCertificate = metricsCertWatcher.GetCertificate
 		})
 	}
-
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	config := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
@@ -207,11 +213,30 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+	kubeClient := mgr.GetClient()
+	helmClient, err := helm.NewHelmClient(&helm.HelmClientOptions{
+		RestConfig:  config,
+		Debug:       false,
+		Linting:     true,
+		KubeVersion: &chartutil.DefaultCapabilities.KubeVersion,
+		UpgradeCRDs: true,
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create helm client")
+		os.Exit(1)
+	}
+	clusterCache := cache.NewClusterCache(config)
+	clusterCache.Invalidate()
+	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+	jobContext := job.NewAsyncJobContext(helmClient, kubeClient, context.Background(), syncManager)
+	jobs := job.NewJobs(jobContext)
 
 	if err = (&controller.AnyApplicationReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Config: &applicationConfig,
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		Config:      &applicationConfig,
+		SyncManager: syncManager,
+		Jobs:        jobs,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AnyApplication")
 		os.Exit(1)
