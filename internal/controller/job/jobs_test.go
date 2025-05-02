@@ -7,6 +7,7 @@ import (
 
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
+	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/fixture"
 	ctrl_sync "hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/controller/types"
@@ -24,13 +25,14 @@ import (
 
 var _ = Describe("Jobs", func() {
 	var (
-		ctx         context.Context
-		kubeClient  client.Client
-		helmClient  helm.HelmClient
-		application *v1.AnyApplication
-		scheme      *runtime.Scheme
-		fakeClock   clock.Clock
-		jobs        types.AsyncJobs
+		ctx           context.Context
+		kubeClient    client.Client
+		helmClient    helm.HelmClient
+		application   *v1.AnyApplication
+		scheme        *runtime.Scheme
+		fakeClock     clock.Clock
+		jobs          types.AsyncJobs
+		runtimeConfig config.ApplicationRuntimeConfig
 	)
 
 	BeforeEach(func() {
@@ -71,6 +73,10 @@ var _ = Describe("Jobs", func() {
 				},
 			},
 		}
+		runtimeConfig = config.ApplicationRuntimeConfig{
+			ZoneId:            "zone",
+			LocalPollInterval: 100 * time.Millisecond,
+		}
 
 		kubeClient = fake.NewClientBuilder().
 			WithScheme(scheme).
@@ -80,7 +86,7 @@ var _ = Describe("Jobs", func() {
 		helmClient = helm.NewFakeHelmClient()
 
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager := ctrl_sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock)
+		syncManager := ctrl_sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig)
 
 		context := NewAsyncJobContext(helmClient, kubeClient, ctx, syncManager)
 		jobs = NewJobs(context)

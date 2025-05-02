@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
 	"github.com/argoproj/gitops-engine/pkg/health"
@@ -12,6 +13,7 @@ import (
 	"helm.sh/helm/v3/pkg/chartutil"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
+	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/fixture"
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
@@ -37,19 +39,25 @@ func TestJobs(t *testing.T) {
 
 var _ = Describe("SyncManager", func() {
 	var (
-		fakeClock    clock.Clock
-		syncManager  types.SyncManager
-		kubeClient   client.Client
-		helmClient   helm.HelmClient
-		application  *v1.AnyApplication
-		scheme       *runtime.Scheme
-		clusterCache cache.ClusterCache
+		fakeClock     clock.Clock
+		syncManager   types.SyncManager
+		kubeClient    client.Client
+		helmClient    helm.HelmClient
+		application   *v1.AnyApplication
+		scheme        *runtime.Scheme
+		clusterCache  cache.ClusterCache
+		runtimeConfig config.ApplicationRuntimeConfig
 	)
 
 	BeforeEach(func() {
 		fakeClock = clock.NewFakeClock()
 		scheme = runtime.NewScheme()
 		_ = v1.AddToScheme(scheme)
+
+		runtimeConfig = config.ApplicationRuntimeConfig{
+			ZoneId:            "zone",
+			LocalPollInterval: 100 * time.Millisecond,
+		}
 
 		application = &v1.AnyApplication{
 			ObjectMeta: metav1.ObjectMeta{
@@ -123,7 +131,7 @@ var _ = Describe("SyncManager", func() {
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
 		clusterCache = fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager = NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock)
+		syncManager = NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig)
 
 	})
 

@@ -12,10 +12,12 @@ import (
 	"github.com/argoproj/gitops-engine/pkg/utils/kube"
 	"github.com/cockroachdb/errors"
 	"github.com/mittwald/go-helm-client/values"
+	"github.com/samber/lo"
 	"github.com/samber/mo"
 
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
+	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/global"
 	"hiro.io/anyapplication/internal/controller/local"
 	"hiro.io/anyapplication/internal/controller/types"
@@ -34,6 +36,7 @@ type syncManager struct {
 	clusterCache cache.ClusterCache
 	appCache     sync.Map
 	clock        clock.Clock
+	config       *config.ApplicationRuntimeConfig
 }
 
 func NewSyncManager(
@@ -41,6 +44,7 @@ func NewSyncManager(
 	helmClient helm.HelmClient,
 	clusterCache cache.ClusterCache,
 	clock clock.Clock,
+	config *config.ApplicationRuntimeConfig,
 ) types.SyncManager {
 	return &syncManager{
 		kubeClient:   kubeClient,
@@ -48,6 +52,7 @@ func NewSyncManager(
 		clusterCache: clusterCache,
 		appCache:     sync.Map{},
 		clock:        clock,
+		config:       config,
 	}
 }
 
@@ -201,7 +206,6 @@ func (m *syncManager) newDiffConfig() (argodiff.DiffConfig, error) {
 }
 
 func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication) (types.SyncResult, error) {
-	instanceId := m.getInstanceId(application)
 	syncResult := types.SyncResult{}
 	app, err := m.getOrRenderApp(application)
 	if err != nil {
@@ -226,15 +230,10 @@ func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication
 		}
 	}
 
-	remainingResources := m.clusterCache.FindResources(application.Spec.Application.HelmSelector.Namespace, func(r *cache.Resource) bool {
-		labels := r.Resource.GetLabels()
-		return labels["dcp.hiro.io/instance-id"] == instanceId
-	})
-
+	remainingResources := m.findApplicationResources(application)
 	syncResult.Total += len(remainingResources)
 
-	for _, resource := range remainingResources {
-		obj := resource.Resource
+	for _, obj := range remainingResources {
 		fullName := getFullName(obj)
 		fmt.Printf("Deleting: %s\n", fullName)
 
@@ -267,9 +266,19 @@ func (m *syncManager) getInstanceId(application *v1.AnyApplication) string {
 }
 
 func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.GlobalApplication, error) {
-	// local.NewLocalApplicationFromTemplate()
-	global.NewFromLocalApplication(mo.None[local.LocalApplication](), m.clock, application, nil)
-	return nil, nil
+	localApplication := mo.None[local.LocalApplication]()
+	globalApplication := global.NewFromLocalApplication(localApplication, m.clock, application, m.config)
+	return globalApplication, nil
+}
+
+func (m *syncManager) findApplicationResources(application *v1.AnyApplication) []*unstructured.Unstructured {
+	instanceId := m.getInstanceId(application)
+	cachedResources := m.clusterCache.FindResources(application.Spec.Application.HelmSelector.Namespace, func(r *cache.Resource) bool {
+		labels := r.Resource.GetLabels()
+		return labels["dcp.hiro.io/instance-id"] == instanceId
+	})
+	resources := lo.Values(cachedResources)
+	return lo.Map(resources, func(r *cache.Resource, index int) *unstructured.Unstructured { return r.Resource })
 }
 
 func getFullName(obj *unstructured.Unstructured) string {

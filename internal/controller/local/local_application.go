@@ -8,6 +8,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -41,6 +42,11 @@ func LoadCurrentState(
 }
 
 func NewLocalApplicationFromTemplate(template string) (mo.Option[LocalApplication], error) {
+
+	return mo.None[LocalApplication](), nil
+}
+
+func NewFromUnstructured(items []*unstructured.Unstructured) (mo.Option[LocalApplication], error) {
 
 	return mo.None[LocalApplication](), nil
 }

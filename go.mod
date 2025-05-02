@@ -20,10 +20,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.20.4
 )
 
-replace (
-	// Pinned because argocd is used as a library
-	github.com/cyphar/filepath-securejoin => github.com/cyphar/filepath-securejoin v0.3.6
-)
+// Pinned because argocd is used as a library
+replace github.com/cyphar/filepath-securejoin => github.com/cyphar/filepath-securejoin v0.3.6
 
 require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect

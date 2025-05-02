@@ -76,7 +76,7 @@ var _ = Describe("RelocationJob", func() {
 			Build()
 		application = application.DeepCopy()
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock)
+		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig)
 
 		relocationJob = NewRelocationJob(application, &runtimeConfig, fakeClock)
 	})

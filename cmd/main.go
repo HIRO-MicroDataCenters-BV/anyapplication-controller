@@ -23,6 +23,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -92,6 +93,7 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -101,7 +103,10 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	// TODO load the config file
-	applicationConfig := config.ApplicationRuntimeConfig{}
+	applicationConfig := config.ApplicationRuntimeConfig{
+		ZoneId:            "zone",
+		LocalPollInterval: time.Duration(60000),
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -230,7 +235,7 @@ func main() {
 	clock := clock.NewClock()
 	clusterCache := cache.NewClusterCache(config)
 	clusterCache.Invalidate()
-	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, clock)
+	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, clock, &applicationConfig)
 	jobContext := job.NewAsyncJobContext(helmClient, kubeClient, context.Background(), syncManager)
 	jobs := job.NewJobs(jobContext)
 	jobFactory := job.NewAsyncJobFactory(&applicationConfig, clock)

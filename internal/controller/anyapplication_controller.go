@@ -63,21 +63,21 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	// globalApplication, err := r.SyncManager.LoadApplication(resource)
-	// if err != nil {
-	// 	log.Error(err, "failed to update AnyApplication status")
-	// 	return ctrl.Result{}, err
-	// }
+	globalApplication, err := r.SyncManager.LoadApplication(resource)
+	if err != nil {
+		log.Error(err, "failed to update AnyApplication status")
+		return ctrl.Result{}, err
+	}
 
-	// result := r.Reconciler.DoReconcile(globalApplication)
+	result := r.Reconciler.DoReconcile(globalApplication)
 
-	// resource.Status = result.Status.OrElse(resource.Status)
+	resource.Status = result.Status.OrElse(resource.Status)
 
-	// err = r.Client.Status().Update(ctx, resource)
-	// if err != nil {
-	// 	log.Error(err, "failed to update AnyApplication status")
-	// 	return ctrl.Result{}, err
-	// }
+	err = r.Client.Status().Update(ctx, resource)
+	if err != nil {
+		log.Error(err, "failed to update AnyApplication status")
+		return ctrl.Result{}, err
+	}
 
 	log.Info("AnyApplicaitonResource status synced")
 
