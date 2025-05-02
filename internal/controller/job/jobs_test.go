@@ -84,6 +84,7 @@ var _ = Describe("Jobs", func() {
 
 		context := NewAsyncJobContext(helmClient, kubeClient, ctx, syncManager)
 		jobs = NewJobs(context)
+
 	})
 
 	It("should run job and get completion status", func() {

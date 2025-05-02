@@ -7,8 +7,8 @@ toolchain go1.24.2
 godebug default=go1.24
 
 require (
-	github.com/argoproj/gitops-engine v0.7.1-0.20250328191959-6d3cf122b03f
 	github.com/argoproj/argo-cd/v2 v2.14.11
+	github.com/argoproj/gitops-engine v0.7.1-0.20250328191959-6d3cf122b03f
 	github.com/cockroachdb/errors v1.11.3
 	github.com/mittwald/go-helm-client v0.12.16
 	github.com/onsi/ginkgo/v2 v2.22.0
@@ -16,7 +16,13 @@ require (
 	helm.sh/helm/v3 v3.16.4
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3
+	k8s.io/kubectl v0.32.2
 	sigs.k8s.io/controller-runtime v0.20.4
+)
+
+replace (
+	// Pinned because argocd is used as a library
+	github.com/cyphar/filepath-securejoin => github.com/cyphar/filepath-securejoin v0.3.6
 )
 
 require (
@@ -32,7 +38,6 @@ require (
 	github.com/Masterminds/squirrel v1.5.4 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.5 // indirect
-	github.com/argoproj/argo-cd/v2 v2.14.11 // indirect
 	github.com/argoproj/pkg v0.13.7-0.20230626144333-d56162821bd1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.7.1 // indirect
 	github.com/bombsimon/logrusr/v2 v2.0.1 // indirect
@@ -75,7 +80,6 @@ require (
 	github.com/google/go-github/v66 v66.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/gosuri/uitable v0.0.4 // indirect
@@ -146,7 +150,6 @@ require (
 	k8s.io/component-helpers v0.32.2 // indirect
 	k8s.io/controller-manager v0.32.3 // indirect
 	k8s.io/kube-aggregator v0.32.2 // indirect
-	k8s.io/kubectl v0.32.2 // indirect
 	k8s.io/kubernetes v1.32.2 // indirect
 	oras.land/oras-go v1.2.5 // indirect
 	oras.land/oras-go/v2 v2.5.0 // indirect
@@ -193,7 +196,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/pkg/errors v0.9.1
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.21.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
