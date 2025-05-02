@@ -21,6 +21,7 @@ require (
 )
 
 replace (
+	// Pinned because argocd is used as a library
 	github.com/cyphar/filepath-securejoin => github.com/cyphar/filepath-securejoin v0.3.6
 )
 
