@@ -20,6 +20,10 @@ require (
 	sigs.k8s.io/controller-runtime v0.20.4
 )
 
+replace (
+	github.com/cyphar/filepath-securejoin => github.com/cyphar/filepath-securejoin v0.3.6
+)
+
 require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	dario.cat/mergo v1.0.1 // indirect
