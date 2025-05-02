@@ -8,8 +8,7 @@ import (
 )
 
 func TestApplicationBundle(t *testing.T) {
-	bundle := fixture.LoadJSONFixture[ApplicationBundle](t, "application_bundle.json")
-	expected := bundle.CleanResources()
+	expected := fixture.LoadJSONFixture[ApplicationBundle](t, "application_bundle.json")
 	serialized, _ := expected.Serialize()
 	// _ = fixture.SaveStringFixture("application_bundle_clean.json", serialized)
 	// raw := fixture.LoadStringFixture(t, "application_bundle_clean.json")

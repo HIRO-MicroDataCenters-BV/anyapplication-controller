@@ -1,9 +1,6 @@
 package global
 
 import (
-	"context"
-
-	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
@@ -12,7 +9,6 @@ import (
 	"hiro.io/anyapplication/internal/controller/local"
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/moutils"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type globalApplication struct {
@@ -22,19 +18,19 @@ type globalApplication struct {
 	clock           clock.Clock
 }
 
-func LoadCurrentState(
-	ctx context.Context,
-	clock clock.Clock,
-	client client.Client,
-	application *v1.AnyApplication,
-	config *config.ApplicationRuntimeConfig,
-) (types.GlobalApplication, error) {
-	localApplication, err := local.LoadCurrentState(ctx, client, &application.Spec.Application, config)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to load local application")
-	}
-	return NewFromLocalApplication(localApplication, clock, application, config), nil
-}
+// func LoadCurrentState(
+// 	ctx context.Context,
+// 	clock clock.Clock,
+// 	client client.Client,
+// 	application *v1.AnyApplication,
+// 	config *config.ApplicationRuntimeConfig,
+// ) (types.GlobalApplication, error) {
+// 	localApplication, err := local.LoadCurrentState(ctx, client, &application.Spec.Application, config)
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "Failed to load local application")
+// 	}
+// 	return NewFromLocalApplication(localApplication, clock, application, config), nil
+// }
 
 func NewFromLocalApplication(
 	localApplication mo.Option[local.LocalApplication],

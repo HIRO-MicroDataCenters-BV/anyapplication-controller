@@ -13,7 +13,6 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/mittwald/go-helm-client/values"
 	"github.com/samber/lo"
-	"github.com/samber/mo"
 
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
@@ -266,7 +265,11 @@ func (m *syncManager) getInstanceId(application *v1.AnyApplication) string {
 }
 
 func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.GlobalApplication, error) {
-	localApplication := mo.None[local.LocalApplication]()
+	resources := m.findApplicationResources(application)
+	localApplication, err := local.NewFromUnstructured(resources, m.config)
+	if err != nil {
+		return nil, errors.Wrap(err, "Fail to create local application")
+	}
 	globalApplication := global.NewFromLocalApplication(localApplication, m.clock, application, m.config)
 	return globalApplication, nil
 }
