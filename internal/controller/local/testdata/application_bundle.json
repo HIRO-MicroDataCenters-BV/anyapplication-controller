@@ -1,7 +1,5 @@
 {
-    "Services": {
-        "apiVersion": "v1",
-        "items": [
+    "resources": [
             {
                 "apiVersion": "v1",
                 "kind": "Service",
@@ -115,16 +113,7 @@
                 "status": {
                     "loadBalancer": {}
                 }
-            }
-        ],
-        "kind": "ServiceList",
-        "metadata": {
-            "resourceVersion": "91263"
-        }
-    },
-    "Deployments": {
-        "apiVersion": "apps/v1",
-        "items": [
+            },
             {
                 "apiVersion": "apps/v1",
                 "kind": "Deployment",
@@ -540,50 +529,5 @@
                     "updatedReplicas": 2
                 }
             }
-        ],
-        "kind": "DeploymentList",
-        "metadata": {
-            "resourceVersion": "91263"
-        }
-    },
-    "StatefulSets": {
-        "apiVersion": "apps/v1",
-        "items": [],
-        "kind": "StatefulSetList",
-        "metadata": {
-            "resourceVersion": "91263"
-        }
-    },
-    "Jobs": {
-        "apiVersion": "batch/v1",
-        "items": [],
-        "kind": "JobList",
-        "metadata": {
-            "resourceVersion": "91263"
-        }
-    },
-    "DaemonSets": {
-        "apiVersion": "apps/v1",
-        "items": [],
-        "kind": "DaemonSetList",
-        "metadata": {
-            "resourceVersion": "91263"
-        }
-    },
-    "Secrets": {
-        "apiVersion": "v1",
-        "items": [],
-        "kind": "SecretList",
-        "metadata": {
-            "resourceVersion": "91263"
-        }
-    },
-    "ConfigMaps": {
-        "apiVersion": "v1",
-        "items": [],
-        "kind": "ConfigMapList",
-        "metadata": {
-            "resourceVersion": "91263"
-        }
-    }
+        ]
 }

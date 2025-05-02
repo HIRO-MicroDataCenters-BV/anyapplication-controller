@@ -10,119 +10,13 @@ import (
 
 type ApplicationBundle struct {
 	resources []*unstructured.Unstructured
-	// Services     *unstructured.UnstructuredList
-	// Deployments  *unstructured.UnstructuredList
-	// StatefulSets *unstructured.UnstructuredList
-	// Jobs         *unstructured.UnstructuredList
-	// DaemonSets   *unstructured.UnstructuredList
-	// Secrets      *unstructured.UnstructuredList
-	// ConfigMaps   *unstructured.UnstructuredList
 }
-
-// func LoadApplicationBundle(ctx context.Context, client client.Client, applicationSpec *v1.ApplicationMatcherSpec) (ApplicationBundle, error) {
-// 	serviceList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
-// 		Group:   "",
-// 		Kind:    "ServiceList",
-// 		Version: "v1",
-// 	})
-// 	if err != nil {
-// 		log.Println("Error loading Service:", err)
-// 		return ApplicationBundle{}, err
-// 	}
-
-// 	deploymentsList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
-// 		Group:   "apps",
-// 		Kind:    "DeploymentList",
-// 		Version: "v1",
-// 	})
-// 	if err != nil {
-// 		log.Println("Error loading Deployment:", err)
-// 		return ApplicationBundle{}, err
-// 	}
-
-// 	statefulsetList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
-// 		Group:   "apps",
-// 		Kind:    "StatefulSetList",
-// 		Version: "v1",
-// 	})
-// 	if err != nil {
-// 		log.Println("Error loading StatefulSet:", err)
-// 		return ApplicationBundle{}, err
-// 	}
-
-// 	jobsList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
-// 		Group:   "batch",
-// 		Kind:    "JobList",
-// 		Version: "v1",
-// 	})
-// 	if err != nil {
-// 		log.Println("Error loading Jobs:", err)
-// 		return ApplicationBundle{}, err
-// 	}
-
-// 	daemonsetList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
-// 		Group:   "apps",
-// 		Kind:    "DaemonSetList",
-// 		Version: "v1",
-// 	})
-// 	if err != nil {
-// 		log.Println("Error loading DaemonSets:", err)
-// 		return ApplicationBundle{}, err
-// 	}
-
-// 	secretList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
-// 		Group:   "",
-// 		Kind:    "SecretList",
-// 		Version: "v1",
-// 	})
-// 	if err != nil {
-// 		log.Println("Error loading Secrets:", err)
-// 		return ApplicationBundle{}, err
-// 	}
-
-// 	configMapList, err := loadResource(ctx, client, applicationSpec, schema.GroupVersionKind{
-// 		Group:   "",
-// 		Kind:    "ConfigMapList",
-// 		Version: "v1",
-// 	})
-// 	if err != nil {
-// 		log.Println("Error loading ConfigMap:", err)
-// 		return ApplicationBundle{}, err
-// 	}
-
-// 	return ApplicationBundle{
-// 		Deployments:  &deploymentsList,
-// 		StatefulSets: &statefulsetList,
-// 		Jobs:         &jobsList,
-// 		DaemonSets:   &daemonsetList,
-// 		Services:     &serviceList,
-// 		Secrets:      &secretList,
-// 		ConfigMaps:   &configMapList,
-// 	}, nil
-// }
 
 func LoadApplicationBundle(resources []*unstructured.Unstructured) (ApplicationBundle, error) {
 	return ApplicationBundle{
 		resources: resources,
 	}, nil
 }
-
-// func loadResource(
-// 	ctx context.Context,
-// 	k8sClient client.Client,
-// 	applicationSpec *v1.ApplicationMatcherSpec,
-// 	kind schema.GroupVersionKind,
-// ) (unstructured.UnstructuredList, error) {
-// 	resources := unstructured.UnstructuredList{}
-// 	resources.SetGroupVersionKind(kind)
-// 	opts := []client.ListOption{
-// 		// client.InNamespace(namespace),
-// 		client.MatchingLabels(*applicationSpec.ResourceSelector),
-// 	}
-// 	err := k8sClient.List(ctx, &resources, opts...)
-
-// 	return resources, err
-// }
 
 func Deserialize(data string) (ApplicationBundle, error) {
 	var bundle ApplicationBundle
@@ -133,13 +27,44 @@ func Deserialize(data string) (ApplicationBundle, error) {
 	return bundle, nil
 }
 
-func (bundle *ApplicationBundle) Serialize() (string, error) {
+// UnmarshalJSON provides custom unmarshaling for ApplicationBundle.
+func (bundle *ApplicationBundle) UnmarshalJSON(data []byte) error {
+	type Alias ApplicationBundle
+	aux := &struct {
+		Resources []unstructured.Unstructured `json:"resources"`
+		*Alias
+	}{
+		Alias: (*Alias)(bundle),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	bundle.resources = Map(aux.Resources, func(r unstructured.Unstructured) *unstructured.Unstructured {
+		return &r
+	})
+	return nil
+}
 
+func (bundle *ApplicationBundle) Serialize() (string, error) {
 	jsonData, err := json.Marshal(bundle)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return string(jsonData), nil
+}
+
+// MarshalJSON provides custom marshaling for ApplicationBundle.
+func (bundle ApplicationBundle) MarshalJSON() ([]byte, error) {
+	type Alias ApplicationBundle
+	return json.Marshal(&struct {
+		Resources []unstructured.Unstructured `json:"resources"`
+		*Alias
+	}{
+		Resources: Map(bundle.resources, func(r *unstructured.Unstructured) unstructured.Unstructured {
+			return *r
+		}),
+		Alias: (*Alias)(&bundle),
+	})
 }
 
 func Map[T any, R any](slice []T, f func(T) R) []R {
