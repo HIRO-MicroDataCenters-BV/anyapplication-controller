@@ -72,12 +72,7 @@ var _ = Describe("GlobalApplication", func() {
 
 			localApplication := mo.None[local.LocalApplication]()
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
-			existingJobCondition := types.FromCondition(v1.ConditionStatus{
-				Type:               v1.PlacementConditionType,
-				ZoneId:             "zone",
-				Status:             string(v1.PlacementStatusInProgress),
-				LastTransitionTime: clock.NowTime(),
-			})
+			existingJobCondition := types.EmptyJobConditions()
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 
 			status := statusResult.Status.OrEmpty()
@@ -98,7 +93,14 @@ var _ = Describe("GlobalApplication", func() {
 				},
 			))
 
-			Expect(jobs.JobsToAdd).To(Equal(mo.None[types.AsyncJob]()))
+			jobToAdd := jobs.JobsToAdd.OrEmpty()
+			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
+				Type:               v1.PlacementConditionType,
+				ZoneId:             "zone",
+				Status:             string(v1.PlacementStatusInProgress),
+				LastTransitionTime: clock.NowTime(),
+			}))
+
 			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 		})
 
@@ -119,7 +121,7 @@ var _ = Describe("GlobalApplication", func() {
 				ZoneId:             "zone",
 				Status:             string(v1.PlacementStatusDone),
 				LastTransitionTime: clock.NowTime(),
-			})
+			}, types.AsyncJobTypeRelocate)
 
 			localApplication := mo.None[local.LocalApplication]()
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
@@ -163,7 +165,7 @@ var _ = Describe("GlobalApplication", func() {
 			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 		})
 
-		It("switch finish operational once relocation is completed ", func() {
+		It("switch to operational once relocation is completed ", func() {
 			applicationResource := makeApplication()
 			applicationResource.Status.State = v1.RelocationGlobalState
 			applicationResource.Status.Placements = []v1.Placement{{Zone: "zone"}}
@@ -186,7 +188,7 @@ var _ = Describe("GlobalApplication", func() {
 				ZoneId:             "zone",
 				Status:             string(v1.RelocationStatusDone),
 				LastTransitionTime: clock.NowTime(),
-			})
+			}, types.AsyncJobTypeRelocate)
 
 			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig))
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)

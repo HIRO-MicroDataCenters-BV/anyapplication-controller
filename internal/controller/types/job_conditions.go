@@ -14,9 +14,10 @@ func EmptyJobConditions() JobApplicationCondition {
 	return JobApplicationCondition{}
 }
 
-func FromCondition(condition v1.ConditionStatus) JobApplicationCondition {
+func FromCondition(condition v1.ConditionStatus, jobType AsyncJobType) JobApplicationCondition {
 	return JobApplicationCondition{
 		condition: mo.Some(condition),
+		jobType:   jobType,
 	}
 }
 

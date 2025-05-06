@@ -32,7 +32,7 @@ func (r *Reconciler) DoReconcile(globalApplication types.GlobalApplication) Reco
 	jobConditions := moutils.
 		Map(r.jobs.GetCurrent(applicationId), func(j types.AsyncJob) types.JobApplicationCondition {
 			condition := j.GetStatus()
-			return types.FromCondition(condition)
+			return types.FromCondition(condition, j.GetType())
 		}).
 		OrElse(types.EmptyJobConditions())
 
