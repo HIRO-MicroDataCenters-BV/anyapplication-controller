@@ -8,6 +8,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
 )
 
@@ -83,16 +84,16 @@ func (job *LocalOperationJob) Stop() {
 func (job *LocalOperationJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = health.HealthStatusDegraded
-	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+	err := status.AddOrUpdateCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
 	if err != nil {
 		job.status = health.HealthStatusDegraded
 		job.msg = "Cannot Update Application Condition. " + err.Error()
 	}
 }
 
-func (job *LocalOperationJob) Success(context types.AsyncJobContext, status *health.HealthStatus) {
-	job.status = status.Status
-	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+func (job *LocalOperationJob) Success(context types.AsyncJobContext, healthStatus *health.HealthStatus) {
+	job.status = healthStatus.Status
+	err := status.AddOrUpdateCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
 	if err != nil {
 		job.status = health.HealthStatusDegraded
 		job.msg = "Cannot Update Application Condition. " + err.Error()

@@ -4,6 +4,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
 )
 
@@ -40,7 +41,17 @@ func (job *LocalPlacementJob) Run(context types.AsyncJobContext) {
 
 	job.status = v1.PlacementStatusDone
 
-	err := AddOrUpdateStatusCondition(ctx, client, job.application.GetNamespacedName(), job.GetStatus())
+	err := status.UpdateStatus(ctx, client, job.application.GetNamespacedName(), func(applicationStatus *v1.AnyApplicationStatus) bool {
+		applicationStatus.Placements = []v1.Placement{
+			{
+				Zone: job.runtimeConfig.ZoneId,
+			},
+		}
+		condition := job.GetStatus()
+		status.AddOrUpdate(applicationStatus, &condition)
+		return true
+	})
+
 	if err != nil {
 		job.status = v1.PlacementStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
