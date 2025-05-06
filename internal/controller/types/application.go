@@ -25,5 +25,5 @@ type StatusResult struct {
 type GlobalApplication interface {
 	GetName() string
 	GetNamespace() string
-	DeriveNewStatus(jobConditions JobApplicationConditions, jobFactory AsyncJobFactory) StatusResult
+	DeriveNewStatus(jobConditions JobApplicationCondition, jobFactory AsyncJobFactory) StatusResult
 }

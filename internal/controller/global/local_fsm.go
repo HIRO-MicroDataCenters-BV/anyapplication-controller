@@ -12,6 +12,7 @@ type LocalFSM struct {
 	config             *config.ApplicationRuntimeConfig
 	jobFactory         types.AsyncJobFactory
 	applicationPresent bool
+	runningJobType     mo.Option[types.AsyncJobType]
 }
 
 func NewLocalFSM(
@@ -19,9 +20,10 @@ func NewLocalFSM(
 	config *config.ApplicationRuntimeConfig,
 	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
+	runningJobType mo.Option[types.AsyncJobType],
 ) LocalFSM {
 	return LocalFSM{
-		application, config, jobFactory, applicationPresent,
+		application, config, jobFactory, applicationPresent, runningJobType,
 	}
 }
 
@@ -42,12 +44,13 @@ func (g *LocalFSM) NextState() types.NextStateResult {
 func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 	status := g.application.Status
 
-	operationCondition, _ := getCondition(&status, v1.LocalConditionType, g.config.ZoneId)
+	operationCondition, _ := getCondition(status.Conditions, v1.LocalConditionType, g.config.ZoneId)
 
-	undeployCondition, found := getCondition(&status, v1.RelocationConditionType, g.config.ZoneId)
+	undeployCondition, found := getCondition(status.Conditions, v1.RelocationConditionType, g.config.ZoneId)
 	undeployConditionOpt := mo.EmptyableToOption(undeployCondition)
 	undeployJobOpt := mo.None[types.AsyncJob]()
-	if !found {
+
+	if !found || !g.isRunning(types.AsyncJobTypeRelocate) {
 		undeployJob := g.jobFactory.CreateUndeployJob(g.application)
 		undeployCondition := undeployJob.GetStatus()
 
@@ -65,8 +68,8 @@ func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 func (g *LocalFSM) handleOperation() types.NextStateResult {
 	status := g.application.Status
 
-	_, found := getCondition(&status, v1.LocalConditionType, g.config.ZoneId)
-	if !found {
+	_, found := getCondition(status.Conditions, v1.LocalConditionType, g.config.ZoneId)
+	if !found || !g.isRunning(types.AsyncJobTypeLocalOperation) {
 
 		if !g.applicationPresent {
 			relocationJob := g.jobFactory.CreateRelocationJob(g.application)
@@ -91,4 +94,8 @@ func (g *LocalFSM) handleOperation() types.NextStateResult {
 	} else {
 		return types.NextStateResult{}
 	}
+}
+
+func (g *LocalFSM) isRunning(jobType types.AsyncJobType) bool {
+	return g.runningJobType.OrEmpty() == jobType
 }

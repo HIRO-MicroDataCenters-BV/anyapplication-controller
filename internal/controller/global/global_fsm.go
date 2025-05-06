@@ -14,6 +14,7 @@ type GlobalFSM struct {
 	config             *config.ApplicationRuntimeConfig
 	jobFactory         types.AsyncJobFactory
 	applicationPresent bool
+	runningJobType     mo.Option[types.AsyncJobType]
 }
 
 func NewGlobalFSM(
@@ -21,9 +22,10 @@ func NewGlobalFSM(
 	config *config.ApplicationRuntimeConfig,
 	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
+	runningJobType mo.Option[types.AsyncJobType],
 ) GlobalFSM {
 	return GlobalFSM{
-		application, config, jobFactory, applicationPresent,
+		application, config, jobFactory, applicationPresent, runningJobType,
 	}
 }
 
@@ -45,8 +47,8 @@ func (g *GlobalFSM) handlePlacementState() types.NextStateResult {
 	spec := g.application.Spec
 
 	if spec.PlacementStrategy.Strategy == v1.PlacementStrategyLocal {
-		condition, found := getCondition(&status, v1.PlacementConditionType, g.config.ZoneId)
-		if !found {
+		condition, found := getCondition(status.Conditions, v1.PlacementConditionType, g.config.ZoneId)
+		if !found || !g.isRunning(types.AsyncJobTypeLocalPlacement) {
 			placementJob := g.jobFactory.CreateLocalPlacementJob(g.application)
 			condition := placementJob.GetStatus()
 
@@ -75,6 +77,10 @@ func (g *GlobalFSM) handlePlacementState() types.NextStateResult {
 	}
 }
 
+func (g *GlobalFSM) isRunning(jobType types.AsyncJobType) bool {
+	return g.runningJobType.OrEmpty() == jobType
+}
+
 func (g *GlobalFSM) handleOperationalState() types.NextStateResult {
 	status := g.application.Status
 
@@ -83,9 +89,9 @@ func (g *GlobalFSM) handleOperationalState() types.NextStateResult {
 	}
 
 	if placementsContainZone(&status, g.config.ZoneId) {
-		_, found := getCondition(&status, v1.LocalConditionType, g.config.ZoneId)
+		_, found := getCondition(status.Conditions, v1.LocalConditionType, g.config.ZoneId)
 
-		if !found {
+		if !found || !g.isRunning(types.AsyncJobTypeLocalOperation) {
 			operationJob := g.jobFactory.CreateOperationJob(g.application)
 			condition := operationJob.GetStatus()
 
@@ -100,9 +106,9 @@ func (g *GlobalFSM) handleOperationalState() types.NextStateResult {
 	}
 	if !placementsContainZone(&status, g.config.ZoneId) && g.applicationPresent {
 		// Undeploy application
-		operationCondition, _ := getCondition(&status, v1.LocalConditionType, g.config.ZoneId)
+		operationCondition, _ := getCondition(status.Conditions, v1.LocalConditionType, g.config.ZoneId)
 
-		condition, found := getCondition(&status, v1.RelocationConditionType, g.config.ZoneId)
+		condition, found := getCondition(status.Conditions, v1.RelocationConditionType, g.config.ZoneId)
 		relocationCondition := mo.EmptyableToOption(condition)
 		relocationJob := mo.None[types.AsyncJob]()
 		if !found {
@@ -130,8 +136,8 @@ func (g *GlobalFSM) handleOperationalState() types.NextStateResult {
 func (g *GlobalFSM) handleRelocationState() types.NextStateResult {
 	status := g.application.Status
 
-	localRelocationCondition, found := getCondition(&status, v1.RelocationConditionType, g.config.ZoneId)
-	if !found {
+	localRelocationCondition, found := getCondition(status.Conditions, v1.RelocationConditionType, g.config.ZoneId)
+	if !found || !g.isRunning(types.AsyncJobTypeRelocate) {
 		relocationJob := g.jobFactory.CreateRelocationJob(g.application)
 		condition := relocationJob.GetStatus()
 
@@ -207,8 +213,8 @@ func conditionExists(status *v1.AnyApplicationStatus, conditionType v1.Applicati
 	return ok
 }
 
-func getCondition(status *v1.AnyApplicationStatus, conditionType v1.ApplicationConditionType, zoneId string) (*v1.ConditionStatus, bool) {
-	condition, ok := lo.Find(status.Conditions, func(condition v1.ConditionStatus) bool {
+func getCondition(conditions []v1.ConditionStatus, conditionType v1.ApplicationConditionType, zoneId string) (*v1.ConditionStatus, bool) {
+	condition, ok := lo.Find(conditions, func(condition v1.ConditionStatus) bool {
 		return condition.Type == conditionType && condition.ZoneId == zoneId
 	})
 	return &condition, ok

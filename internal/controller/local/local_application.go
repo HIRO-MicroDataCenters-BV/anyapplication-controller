@@ -16,28 +16,6 @@ type LocalApplication struct {
 	messages []string
 }
 
-// func LoadCurrentState(
-// 	ctx context.Context,
-// 	client client.Client,
-// 	applicationSpec *v1.ApplicationMatcherSpec,
-// 	config *config.ApplicationRuntimeConfig,
-// ) (mo.Option[LocalApplication], error) {
-// 	bundle, err := LoadApplicationBundle(ctx, client, applicationSpec)
-// 	if err != nil {
-// 		return mo.None[LocalApplication](), err
-// 	}
-// 	status, messages, err := bundle.DetermineState()
-// 	if err != nil {
-// 		return mo.None[LocalApplication](), err
-// 	}
-// 	return mo.Some(LocalApplication{
-// 		bundle:   &bundle,
-// 		status:   status,
-// 		messages: messages,
-// 		config:   config,
-// 	}), nil
-// }
-
 func NewFromUnstructured(resources []*unstructured.Unstructured, config *config.ApplicationRuntimeConfig) (mo.Option[LocalApplication], error) {
 	if len(resources) == 0 {
 		return mo.None[LocalApplication](), nil

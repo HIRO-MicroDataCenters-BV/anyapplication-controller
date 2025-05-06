@@ -72,7 +72,7 @@ var _ = Describe("GlobalApplication", func() {
 
 			localApplication := mo.None[local.LocalApplication]()
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
-			existingJobCondition := types.FromCondition(&v1.ConditionStatus{
+			existingJobCondition := types.FromCondition(v1.ConditionStatus{
 				Type:               v1.PlacementConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.PlacementStatusInProgress),
@@ -114,7 +114,7 @@ var _ = Describe("GlobalApplication", func() {
 					LastTransitionTime: clock.NowTime(),
 				},
 			}
-			existingJobCondition := types.FromCondition(&v1.ConditionStatus{
+			existingJobCondition := types.FromCondition(v1.ConditionStatus{
 				Type:               v1.PlacementConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.PlacementStatusDone),
@@ -181,7 +181,7 @@ var _ = Describe("GlobalApplication", func() {
 					LastTransitionTime: clock.NowTime(),
 				},
 			}
-			existingJobCondition := types.FromCondition(&v1.ConditionStatus{
+			existingJobCondition := types.FromCondition(v1.ConditionStatus{
 				Type:               v1.RelocationConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.RelocationStatusDone),
