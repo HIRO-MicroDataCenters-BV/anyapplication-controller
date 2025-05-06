@@ -8,7 +8,8 @@ import (
 )
 
 type ReconcilerResult struct {
-	Status mo.Option[v1.AnyApplicationStatus]
+	Status    mo.Option[v1.AnyApplicationStatus]
+	JobsToAdd mo.Option[types.AsyncJob]
 }
 
 type Reconciler struct {
@@ -29,19 +30,17 @@ func (r *Reconciler) DoReconcile(globalApplication types.GlobalApplication) Reco
 		Namespace: globalApplication.GetNamespace(),
 	}
 	jobConditions := moutils.
-		Map(r.jobs.GetCurrent(applicationId), func(j types.AsyncJob) types.JobApplicationConditions {
+		Map(r.jobs.GetCurrent(applicationId), func(j types.AsyncJob) types.JobApplicationCondition {
 			condition := j.GetStatus()
-			return types.FromCondition(&condition)
+			return types.FromCondition(condition)
 		}).
 		OrElse(types.EmptyJobConditions())
 
 	statusResult := globalApplication.DeriveNewStatus(jobConditions, r.jobFactory)
-	statusResult.Jobs.JobsToAdd.ForEach(func(newJob types.AsyncJob) {
-		r.jobs.Execute(newJob)
-	})
 
 	reconcilerResult := ReconcilerResult{
-		Status: statusResult.Status,
+		Status:    statusResult.Status,
+		JobsToAdd: statusResult.Jobs.JobsToAdd,
 	}
 	return reconcilerResult
 }

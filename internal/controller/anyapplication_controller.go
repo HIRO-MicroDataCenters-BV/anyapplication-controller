@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -27,8 +28,11 @@ import (
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/reconciler"
+	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
 )
+
+const anyApplicationFinalizerName = "anyapplication.finalizers.hiro.com"
 
 // AnyApplicationReconciler reconciles a AnyApplication object
 type AnyApplicationReconciler struct {
@@ -63,23 +67,60 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	if !resource.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The resource is being deleted
+		if containsString(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName) {
+			// Perform cleanup logic here
+			applicationId := types.ApplicationId{
+				Name:      resource.Name,
+				Namespace: resource.Namespace,
+			}
+			r.Jobs.Stop(applicationId)
+			if _, err := r.SyncManager.Delete(ctx, resource); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			// Remove finalizer and update
+			resource.ObjectMeta.Finalizers = removeString(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName)
+			if err := r.Update(ctx, resource); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+
+		return ctrl.Result{}, nil
+	}
+
+	if !containsString(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName) {
+		resource.ObjectMeta.Finalizers = append(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName)
+		if err := r.Update(ctx, resource); err != nil {
+			return ctrl.Result{}, err
+		}
+		// Requeue after updating the finalizer
+		return ctrl.Result{Requeue: true}, nil
+	}
+
 	globalApplication, err := r.SyncManager.LoadApplication(resource)
 	if err != nil {
-		log.Error(err, "failed to update AnyApplication status")
+		log.Error(err, "failed to load application state")
 		return ctrl.Result{}, err
 	}
 
 	result := r.Reconciler.DoReconcile(globalApplication)
 
-	resource.Status = result.Status.OrElse(resource.Status)
-
-	err = r.Client.Status().Update(ctx, resource)
-	if err != nil {
-		log.Error(err, "failed to update AnyApplication status")
-		return ctrl.Result{}, err
+	log.Info("reconciler result", "result", result)
+	if result.Status.IsPresent() {
+		status.UpdateStatus(ctx, r.Client, req.NamespacedName, func(applicationStatus *dcpv1.AnyApplicationStatus) bool {
+			*applicationStatus = result.Status.OrEmpty()
+			return true
+		})
 	}
-
-	log.Info("AnyApplicaitonResource status synced")
+	// Run job only after status update
+	result.JobsToAdd.ForEach(func(newJob types.AsyncJob) {
+		applicationId := newJob.GetJobID().ApplicationId
+		r.Jobs.Stop(applicationId)
+		fmt.Printf("Starting new job %v\n", newJob.GetJobID())
+		r.Jobs.Execute(newJob)
+	})
 
 	return ctrl.Result{}, nil
 }
@@ -90,4 +131,23 @@ func (r *AnyApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&dcpv1.AnyApplication{}).
 		Named("anyapplication").
 		Complete(r)
+}
+
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+func removeString(slice []string, s string) []string {
+	var result []string
+	for _, item := range slice {
+		if item != s {
+			result = append(result, item)
+		}
+	}
+	return result
 }
