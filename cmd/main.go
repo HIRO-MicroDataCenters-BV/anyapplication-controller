@@ -105,7 +105,7 @@ func main() {
 	// TODO load the config file
 	applicationConfig := config.ApplicationRuntimeConfig{
 		ZoneId:            "zone",
-		LocalPollInterval: time.Duration(60000),
+		LocalPollInterval: time.Duration(10 * time.Second),
 	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
@@ -222,10 +222,14 @@ func main() {
 	}
 	kubeClient := mgr.GetClient()
 	helmClient, err := helm.NewHelmClient(&helm.HelmClientOptions{
-		RestConfig:  config,
-		Debug:       false,
-		Linting:     true,
-		KubeVersion: &chartutil.DefaultCapabilities.KubeVersion,
+		RestConfig: config,
+		Debug:      false,
+		Linting:    true,
+		KubeVersion: &chartutil.KubeVersion{
+			Version: "v1.23.10",
+			Major:   "1",
+			Minor:   "23",
+		},
 		UpgradeCRDs: true,
 	})
 	if err != nil {
