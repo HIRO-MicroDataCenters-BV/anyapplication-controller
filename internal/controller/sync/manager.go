@@ -237,6 +237,7 @@ func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication
 		fmt.Printf("Deleting: %s\n", fullName)
 
 		err := m.kubeClient.Delete(ctx, obj)
+		// m.clusterCache.DeleteResource(obj)
 		if err != nil {
 			syncResult.DeleteFailed += 1
 		} else {
@@ -244,7 +245,7 @@ func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication
 			fmt.Printf("Deleted: %s\n", fullName)
 		}
 	}
-
+	m.clusterCache.Invalidate()
 	status := health.HealthStatus{
 		Status:  health.HealthStatusMissing,
 		Message: "",
