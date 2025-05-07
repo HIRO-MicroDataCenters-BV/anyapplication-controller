@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -67,12 +66,12 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	if !resource.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !resource.DeletionTimestamp.IsZero() {
 		// The resource is being deleted
 		return r.resourceCleanup(ctx, resource)
 	}
 
-	if !containsString(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName) {
+	if !containsString(resource.Finalizers, anyApplicationFinalizerName) {
 		return r.addFinalizer(ctx, resource)
 	}
 
@@ -86,16 +85,20 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	log.Info("reconciler result", "result", result)
 	if result.Status.IsPresent() {
-		status.UpdateStatus(ctx, r.Client, req.NamespacedName, func(applicationStatus *dcpv1.AnyApplicationStatus) bool {
+		err = status.UpdateStatus(ctx, r.Client, req.NamespacedName, func(applicationStatus *dcpv1.AnyApplicationStatus) bool {
 			*applicationStatus = result.Status.OrEmpty()
 			return true
 		})
+		if err != nil {
+			log.Error(err, "failed to update status")
+			return ctrl.Result{}, err // TODO maybe requeue
+		}
 	}
 	// Run job only after status update
 	result.JobsToAdd.ForEach(func(newJob types.AsyncJob) {
 		applicationId := newJob.GetJobID().ApplicationId
 		r.Jobs.Stop(applicationId)
-		fmt.Printf("Starting new job %v\n", newJob.GetJobID())
+		log.Info("Starting job", newJob.GetJobID())
 		r.Jobs.Execute(newJob)
 	})
 
@@ -103,7 +106,7 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 func (r *AnyApplicationReconciler) addFinalizer(ctx context.Context, resource *dcpv1.AnyApplication) (ctrl.Result, error) {
-	resource.ObjectMeta.Finalizers = append(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName)
+	resource.Finalizers = append(resource.Finalizers, anyApplicationFinalizerName)
 	if err := r.Update(ctx, resource); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -112,7 +115,7 @@ func (r *AnyApplicationReconciler) addFinalizer(ctx context.Context, resource *d
 }
 
 func (r *AnyApplicationReconciler) resourceCleanup(ctx context.Context, resource *dcpv1.AnyApplication) (ctrl.Result, error) {
-	if containsString(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName) {
+	if containsString(resource.Finalizers, anyApplicationFinalizerName) {
 		// Perform cleanup logic here
 		applicationId := types.ApplicationId{
 			Name:      resource.Name,
@@ -124,7 +127,7 @@ func (r *AnyApplicationReconciler) resourceCleanup(ctx context.Context, resource
 		}
 
 		// Remove finalizer and update
-		resource.ObjectMeta.Finalizers = removeString(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName)
+		resource.Finalizers = removeString(resource.Finalizers, anyApplicationFinalizerName)
 		if err := r.Update(ctx, resource); err != nil {
 			return ctrl.Result{}, err
 		}

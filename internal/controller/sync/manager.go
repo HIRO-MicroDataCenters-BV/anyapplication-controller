@@ -149,13 +149,7 @@ func (m *syncManager) sync(ctx context.Context, app *cachedApp) (*types.SyncResu
 
 	m.addAndLogResults(resourceSyncResults, syncResult)
 
-	status, err := m.getAggregatedStatus(app)
-	if err != nil {
-		m.log.Error(err, "Failed to get aggregated status")
-		return syncResult, errors.Wrap(err, "Failed to get aggregated status")
-	}
-
-	syncResult.Status = status
+	syncResult.Status = m.getAggregatedStatus(app)
 	return syncResult, nil
 }
 
@@ -164,10 +158,10 @@ func (m *syncManager) addAndLogResults(resourceSyncResults []common.ResourceSync
 		syncResult.AddResult(&resourceSyncResult)
 
 		m.log.V(1).Info("Resource synced",
-			"resourceKey", string(resourceSyncResult.ResourceKey.String()),
-			"Version", string(resourceSyncResult.Version),
+			"resourceKey", resourceSyncResult.ResourceKey.String(),
+			"Version", resourceSyncResult.Version,
 			"Status", string(resourceSyncResult.Status),
-			"Message", string(resourceSyncResult.Message),
+			"Message", resourceSyncResult.Message,
 			"HookType", string(resourceSyncResult.HookType),
 			"HookPhase", string(resourceSyncResult.HookPhase),
 			"SyncPhase", string(resourceSyncResult.SyncPhase),
@@ -175,7 +169,7 @@ func (m *syncManager) addAndLogResults(resourceSyncResults []common.ResourceSync
 	}
 }
 
-func (m *syncManager) getAggregatedStatus(app *cachedApp) (*health.HealthStatus, error) {
+func (m *syncManager) getAggregatedStatus(app *cachedApp) *health.HealthStatus {
 	statusCounts := 0
 	code := health.HealthStatusHealthy
 	msg := ""
@@ -221,7 +215,7 @@ func (m *syncManager) getAggregatedStatus(app *cachedApp) (*health.HealthStatus,
 		Status:  code,
 		Message: msg,
 	}
-	return &status, nil
+	return &status
 }
 
 func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication) (*types.DeleteResult, error) {
