@@ -1,0 +1,19 @@
+---
+apiVersion: dcp.hiro.io/v1
+kind: AnyApplication
+metadata:
+  name: standard-workload
+  namespace: default
+spec:
+  application: 
+    helm:
+      repository: https://glaciation-heu.github.io/standard-workload/helm-charts
+      chart: standard-workload
+      version: 0.1.0
+      namespace: default
+  zones: 1
+  placement-strategy: 
+    strategy: Local
+  recover-strategy:
+    tolerance: 1
+    max-retries: 3

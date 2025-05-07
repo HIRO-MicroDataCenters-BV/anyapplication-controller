@@ -21,14 +21,17 @@ import (
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
+	"github.com/argoproj/gitops-engine/pkg/engine"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/chartutil"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
@@ -80,9 +83,26 @@ var _ = Describe("AnyApplication Controller", func() {
 			}
 
 			clock := clock.NewClock()
-			clusterCache := cache.NewClusterCache(cfg)
-			clusterCache.Invalidate()
-			syncManager = sync.NewSyncManager(k8sClient, helmClient, clusterCache, clock, &runtimeConfig)
+
+			log := textlogger.NewLogger(textlogger.NewConfig())
+			clusterCache := cache.NewClusterCache(cfg,
+				cache.SetLogr(log),
+				cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
+
+					managedByMark := un.GetLabels()["dcp.hiro.io/managed-by"]
+					info = &ctrltypes.ResourceInfo{ManagedByMark: un.GetLabels()["dcp.hiro.io/managed-by"]}
+					// cache resources that has that mark to improve performance
+					cacheManifest = managedByMark != ""
+					return
+				}),
+			)
+			gitOpsEngine := engine.NewEngine(cfg, clusterCache, engine.WithLogr(log))
+			_, err = gitOpsEngine.Run()
+			if err != nil {
+				panic("error " + err.Error())
+			}
+
+			syncManager = sync.NewSyncManager(k8sClient, helmClient, clusterCache, clock, &runtimeConfig, gitOpsEngine)
 			jobContext := job.NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
 			jobs = job.NewJobs(jobContext)
 			jobFactory := job.NewAsyncJobFactory(&runtimeConfig, clock)

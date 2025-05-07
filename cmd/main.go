@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -28,9 +27,13 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	"github.com/argoproj/gitops-engine/pkg/cache"
+	"github.com/argoproj/gitops-engine/pkg/engine"
+	"github.com/go-logr/logr"
 	"helm.sh/helm/v3/pkg/chartutil"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/klog/v2/textlogger"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -49,8 +52,8 @@ import (
 	"hiro.io/anyapplication/internal/controller/job"
 	"hiro.io/anyapplication/internal/controller/reconciler"
 	"hiro.io/anyapplication/internal/controller/sync"
+	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
-	"hiro.io/anyapplication/internal/httpapi"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -76,6 +79,7 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
+	var zoneId string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -91,6 +95,7 @@ func main() {
 		"The directory that contains the metrics server certificate.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
+	flag.StringVar(&zoneId, "zone-id", "zone", "Zone identifier.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 
@@ -100,11 +105,12 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	logger := zap.New(zap.UseFlagOptions(&opts))
+	ctrl.SetLogger(logger)
 
 	// TODO load the config file
 	applicationConfig := config.ApplicationRuntimeConfig{
-		ZoneId:            "zone",
+		ZoneId:            zoneId,
 		LocalPollInterval: time.Duration(10 * time.Second),
 	}
 
@@ -138,19 +144,14 @@ func main() {
 			filepath.Join(webhookCertPath, webhookCertName),
 			filepath.Join(webhookCertPath, webhookCertKey),
 		)
-		if err != nil {
-			setupLog.Error(err, "Failed to initialize webhook certificate watcher")
-			os.Exit(1)
-		}
+		failIfError(err, setupLog, "Failed to initialize webhook certificate watcher")
 
 		webhookTLSOpts = append(webhookTLSOpts, func(config *tls.Config) {
 			config.GetCertificate = webhookCertWatcher.GetCertificate
 		})
 	}
 
-	webhookServer := webhook.NewServer(webhook.Options{
-		TLSOpts: webhookTLSOpts,
-	})
+	webhookServer := webhook.NewServer(webhook.Options{TLSOpts: webhookTLSOpts})
 
 	// Metrics endpoint is enabled in 'config/default/kustomization.yaml'. The Metrics options configure the server.
 	// More info:
@@ -187,6 +188,7 @@ func main() {
 			filepath.Join(metricsCertPath, metricsCertName),
 			filepath.Join(metricsCertPath, metricsCertKey),
 		)
+
 		if err != nil {
 			setupLog.Error(err, "to initialize metrics certificate watcher", "error", err)
 			os.Exit(1)
@@ -216,10 +218,8 @@ func main() {
 		// after the manager stops then its usage might be unsafe.
 		// LeaderElectionReleaseOnCancel: true,
 	})
-	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
-	}
+	failIfError(err, setupLog, "unable to start manager")
+
 	kubeClient := mgr.GetClient()
 	helmClient, err := helm.NewHelmClient(&helm.HelmClientOptions{
 		RestConfig: config,
@@ -232,14 +232,25 @@ func main() {
 		},
 		UpgradeCRDs: true,
 	})
-	if err != nil {
-		setupLog.Error(err, "unable to create helm client")
-		os.Exit(1)
-	}
+	failIfError(err, setupLog, "unable to create helm client")
+
+	log := textlogger.NewLogger(textlogger.NewConfig())
 	clock := clock.NewClock()
-	clusterCache := cache.NewClusterCache(config)
-	clusterCache.Invalidate()
-	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, clock, &applicationConfig)
+
+	clusterCache := cache.NewClusterCache(config,
+		cache.SetLogr(log),
+		cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
+			managedByMark := un.GetLabels()["dcp.hiro.io/managed-by"]
+			info = &types.ResourceInfo{ManagedByMark: un.GetLabels()["dcp.hiro.io/managed-by"]}
+			cacheManifest = managedByMark != ""
+			return
+		}),
+	)
+	gitOpsEngine := engine.NewEngine(config, clusterCache, engine.WithLogr(log))
+	stopFunc, err := gitOpsEngine.Run()
+	failIfError(err, setupLog, "unable to start gitops engine")
+
+	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, clock, &applicationConfig, gitOpsEngine)
 	jobContext := job.NewAsyncJobContext(helmClient, kubeClient, context.Background(), syncManager)
 	jobs := job.NewJobs(jobContext)
 	jobFactory := job.NewAsyncJobFactory(&applicationConfig, clock)
@@ -261,44 +272,37 @@ func main() {
 
 	if metricsCertWatcher != nil {
 		setupLog.Info("Adding metrics certificate watcher to manager")
-		if err := mgr.Add(metricsCertWatcher); err != nil {
-			setupLog.Error(err, "unable to add metrics certificate watcher to manager")
-			os.Exit(1)
-		}
+		failIfError(mgr.Add(metricsCertWatcher), setupLog, "unable to add metrics certificate watcher to manager")
 	}
 
 	if webhookCertWatcher != nil {
 		setupLog.Info("Adding webhook certificate watcher to manager")
-		if err := mgr.Add(webhookCertWatcher); err != nil {
-			setupLog.Error(err, "unable to add webhook certificate watcher to manager")
-			os.Exit(1)
-		}
+		failIfError(mgr.Add(webhookCertWatcher), setupLog, "unable to add webhook certificate watcher to manager")
 	}
 
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
-	}
+	failIfError(mgr.AddHealthzCheck("healthz", healthz.Ping), setupLog, "unable to set up health check")
+	failIfError(mgr.AddReadyzCheck("readyz", healthz.Ping), setupLog, "unable to set up ready check")
 	setupLog.Info("starting Application API Server")
-	// TODO make configurable
-	options := httpapi.ApplicationApiOptions{
-		Address: "0.0.0.0:9000",
-	}
-	httpServer := httpapi.NewHttpServer(options)
 
-	go func() {
-		if err := httpServer.Start(); err != nil {
-			log.Fatalf("Http Server start error: %v", err)
-		}
-	}()
+	// TODO enable this when the API server is implemented
+	// options := httpapi.ApplicationApiOptions{
+	// 	Address: "0.0.0.0:9000",
+	// }
+	// httpServer := httpapi.NewHttpServer(options)
+	// go func() {
+	// 	if err := httpServer.Start(); err != nil {
+	// 		log.Fatalf("Http Server start error: %v", err)
+	// 	}
+	// }()
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
+	failIfError(mgr.Start(ctrl.SetupSignalHandler()), setupLog, "problem running manager")
+	stopFunc()
+}
+
+func failIfError(err error, log logr.Logger, msg string) {
+	if err != nil {
+		log.Error(err, "Fatal error")
 		os.Exit(1)
 	}
 }

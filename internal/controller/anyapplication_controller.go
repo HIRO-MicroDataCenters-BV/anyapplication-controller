@@ -69,34 +69,11 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if !resource.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The resource is being deleted
-		if containsString(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName) {
-			// Perform cleanup logic here
-			applicationId := types.ApplicationId{
-				Name:      resource.Name,
-				Namespace: resource.Namespace,
-			}
-			r.Jobs.Stop(applicationId)
-			if _, err := r.SyncManager.Delete(ctx, resource); err != nil {
-				return ctrl.Result{}, err
-			}
-
-			// Remove finalizer and update
-			resource.ObjectMeta.Finalizers = removeString(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName)
-			if err := r.Update(ctx, resource); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-
-		return ctrl.Result{}, nil
+		return r.resourceCleanup(ctx, resource)
 	}
 
 	if !containsString(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName) {
-		resource.ObjectMeta.Finalizers = append(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName)
-		if err := r.Update(ctx, resource); err != nil {
-			return ctrl.Result{}, err
-		}
-		// Requeue after updating the finalizer
-		return ctrl.Result{Requeue: true}, nil
+		return r.addFinalizer(ctx, resource)
 	}
 
 	globalApplication, err := r.SyncManager.LoadApplication(resource)
@@ -121,6 +98,37 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		fmt.Printf("Starting new job %v\n", newJob.GetJobID())
 		r.Jobs.Execute(newJob)
 	})
+
+	return ctrl.Result{}, nil
+}
+
+func (r *AnyApplicationReconciler) addFinalizer(ctx context.Context, resource *dcpv1.AnyApplication) (ctrl.Result, error) {
+	resource.ObjectMeta.Finalizers = append(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName)
+	if err := r.Update(ctx, resource); err != nil {
+		return ctrl.Result{}, err
+	}
+	// Requeue after updating the finalizer
+	return ctrl.Result{Requeue: true}, nil
+}
+
+func (r *AnyApplicationReconciler) resourceCleanup(ctx context.Context, resource *dcpv1.AnyApplication) (ctrl.Result, error) {
+	if containsString(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName) {
+		// Perform cleanup logic here
+		applicationId := types.ApplicationId{
+			Name:      resource.Name,
+			Namespace: resource.Namespace,
+		}
+		r.Jobs.Stop(applicationId)
+		if _, err := r.SyncManager.Delete(ctx, resource); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		// Remove finalizer and update
+		resource.ObjectMeta.Finalizers = removeString(resource.ObjectMeta.Finalizers, anyApplicationFinalizerName)
+		if err := r.Update(ctx, resource); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	return ctrl.Result{}, nil
 }

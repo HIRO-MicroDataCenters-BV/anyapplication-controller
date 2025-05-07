@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"sync"
 
-	argodiff "github.com/argoproj/argo-cd/v2/util/argo/diff"
-	"github.com/argoproj/argo-cd/v2/util/argo/normalizers"
 	"github.com/argoproj/gitops-engine/pkg/cache"
+	"github.com/argoproj/gitops-engine/pkg/engine"
 	"github.com/argoproj/gitops-engine/pkg/health"
+	gitops_sync "github.com/argoproj/gitops-engine/pkg/sync"
 	"github.com/argoproj/gitops-engine/pkg/utils/kube"
 	"github.com/cockroachdb/errors"
+	"github.com/go-logr/logr"
 	"github.com/mittwald/go-helm-client/values"
 	"github.com/samber/lo"
-
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
@@ -23,10 +23,14 @@ import (
 	"hiro.io/anyapplication/internal/helm"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type cachedApp struct {
-	resources []*unstructured.Unstructured
+	resources  []*unstructured.Unstructured
+	revision   string
+	instanceId string
+	namespace  string
 }
 
 type syncManager struct {
@@ -36,6 +40,8 @@ type syncManager struct {
 	appCache     sync.Map
 	clock        clock.Clock
 	config       *config.ApplicationRuntimeConfig
+	gitOpsEngine engine.GitOpsEngine
+	log          logr.Logger
 }
 
 func NewSyncManager(
@@ -44,7 +50,11 @@ func NewSyncManager(
 	clusterCache cache.ClusterCache,
 	clock clock.Clock,
 	config *config.ApplicationRuntimeConfig,
+	gitOpsEngine engine.GitOpsEngine,
+
 ) types.SyncManager {
+	log := logf.Log.WithName("SyncManager")
+
 	return &syncManager{
 		kubeClient:   kubeClient,
 		helmClient:   helmClient,
@@ -52,12 +62,9 @@ func NewSyncManager(
 		appCache:     sync.Map{},
 		clock:        clock,
 		config:       config,
+		gitOpsEngine: gitOpsEngine,
+		log:          log,
 	}
-}
-
-func (m *syncManager) InvalidateCache() error {
-	m.clusterCache.Invalidate()
-	return nil
 }
 
 func (m *syncManager) Sync(ctx context.Context, application *v1.AnyApplication) (types.SyncResult, error) {
@@ -70,23 +77,23 @@ func (m *syncManager) Sync(ctx context.Context, application *v1.AnyApplication) 
 
 func (m *syncManager) getOrRenderApp(application *v1.AnyApplication) (*cachedApp, error) {
 	appKey := m.getCacheKey(application)
-	app, found := m.appCache.Load(appKey)
+	existing, found := m.appCache.Load(appKey)
 	if !found {
-		resources, err := m.render(application)
+		app, err := m.render(application)
 		if err != nil {
 			return nil, errors.Wrap(err, "Fail to render application")
 		}
-		app = cachedApp{resources}
 		m.appCache.Store(appKey, app)
+		existing = app
 	}
-	cachedApp, ok := app.(cachedApp)
+	cached, ok := existing.(*cachedApp)
 	if !ok {
-		return nil, errors.New("failed to assert app as cachedApp")
+		return nil, errors.New("type assertion to *cachedApp failed")
 	}
-	return &cachedApp, nil
+	return cached, nil
 }
 
-func (m *syncManager) render(application *v1.AnyApplication) ([]*unstructured.Unstructured, error) {
+func (m *syncManager) render(application *v1.AnyApplication) (*cachedApp, error) {
 	releaseName := application.Name
 	helmSelector := application.Spec.Application.HelmSelector
 	instanceId := m.getInstanceId(application)
@@ -114,8 +121,13 @@ func (m *syncManager) render(application *v1.AnyApplication) ([]*unstructured.Un
 	if err != nil {
 		return nil, errors.Wrap(err, "Fail to split YAML")
 	}
-
-	return objs, nil
+	app := cachedApp{
+		resources:  objs,
+		revision:   helmSelector.Version,
+		instanceId: instanceId,
+		namespace:  helmSelector.Namespace,
+	}
+	return &app, nil
 }
 
 func (m *syncManager) sync(ctx context.Context, app *cachedApp) (types.SyncResult, error) {
@@ -123,59 +135,56 @@ func (m *syncManager) sync(ctx context.Context, app *cachedApp) (types.SyncResul
 	msg := ""
 
 	syncResult := types.SyncResult{}
-	diffConfig, err := m.newDiffConfig()
+	prune := true
+
+	resourceSyncResults, err := m.gitOpsEngine.Sync(ctx, app.resources, func(r *cache.Resource) bool {
+		if r.Resource == nil {
+			return false
+		}
+		return r.Resource.GetLabels()["dcp.hiro.io/instance-id"] == app.instanceId
+	}, app.revision, app.namespace, gitops_sync.WithPrune(prune), gitops_sync.WithLogr(m.log))
 	if err != nil {
-		return syncResult, errors.Wrap(err, "Failed to build diff Config")
+		m.log.Error(err, "Failed to synchronize cluster state")
+		return syncResult, errors.Wrap(err, "Failed to synchronize cluster state")
 	}
+
+	for _, resourceSyncResult := range resourceSyncResults {
+
+		m.log.V(1).Info("Resource synced",
+			"resourceKey", string(resourceSyncResult.ResourceKey.String()),
+			"Version", string(resourceSyncResult.Version),
+			"Status", string(resourceSyncResult.Status),
+			"Message", string(resourceSyncResult.Message),
+			"HookType", string(resourceSyncResult.HookType),
+			"HookPhase", string(resourceSyncResult.HookPhase),
+			"SyncPhase", string(resourceSyncResult.SyncPhase),
+		)
+	}
+
 	for _, obj := range app.resources {
 		fullName := getFullName(obj)
 		resourceKey := kube.GetResourceKey(obj)
-		syncResult.Total += 1
+		// 	syncResult.Total += 1
 
 		// Get live object from cache
-		live, err := m.clusterCache.GetManagedLiveObjs([]*unstructured.Unstructured{obj}, func(r *cache.Resource) bool { return true })
-		created := false
-		if err != nil || live[resourceKey] == nil {
-			if err := m.kubeClient.Create(ctx, obj); err != nil {
-				fmt.Printf("%s Create failed: %v\n", fullName, err)
-				syncResult.CreateFailed += 1
-			} else {
-				fmt.Printf("%s Created successfully. \n", fullName)
-				syncResult.Created += 1
-				created = true
+		live, err := m.clusterCache.GetManagedLiveObjs([]*unstructured.Unstructured{obj}, func(r *cache.Resource) bool {
+			if r.Resource == nil {
+				return false
 			}
-		}
-		liveObj := live[resourceKey]
-
-		if !created {
-			// Diff live vs desired
-			result, err := argodiff.StateDiff(liveObj, obj, diffConfig)
-			if err != nil {
-				fmt.Printf("%s Diff failed: %v\n", fullName, err)
-				continue
-			}
-
-			if result.Modified {
-				fmt.Printf("%s Out of sync. Updating...\n", fullName)
-				if liveObj != nil {
-					obj.SetResourceVersion(liveObj.GetResourceVersion())
-				}
-
-				if err := m.kubeClient.Update(ctx, obj); err != nil {
-					syncResult.UpdateFailed += 1
-					fmt.Printf("%s Update failed: %v\n", fullName, err)
-				} else {
-					syncResult.Updated += 1
-					fmt.Printf("%s Updated successfully.\n", fullName)
-				}
-			} else {
-				fmt.Printf("%s Already in sync.\n", fullName)
-			}
-		}
-
-		h, err := health.GetResourceHealth(obj, nil)
+			return r.Resource.GetLabels()["dcp.hiro.io/instance-id"] == app.instanceId
+		})
 		if err != nil {
-			fmt.Printf("%s check health failed: %v\n", fullName, err)
+			m.log.Error(err, "GetManagedLiveObjs failed", "Resource", fullName)
+		}
+
+		liveObj := live[resourceKey]
+		if liveObj == nil {
+			continue
+		}
+
+		h, err := health.GetResourceHealth(liveObj, nil)
+		if err != nil {
+			m.log.Error(err, "GetResourceHealth failed", "Resource", fullName)
 			continue
 		}
 		if h != nil {
@@ -194,16 +203,6 @@ func (m *syncManager) sync(ctx context.Context, app *cachedApp) (types.SyncResul
 	return syncResult, nil
 }
 
-func (m *syncManager) newDiffConfig() (argodiff.DiffConfig, error) {
-	ignoreNormalizerOpts := normalizers.IgnoreNormalizerOpts{}
-	ignoreAggregatedRoles := true
-
-	return argodiff.NewDiffConfigBuilder().
-		WithNoCache().
-		WithDiffSettings(nil, nil, ignoreAggregatedRoles, ignoreNormalizerOpts).
-		Build()
-}
-
 func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication) (types.SyncResult, error) {
 	syncResult := types.SyncResult{}
 	app, err := m.getOrRenderApp(application)
@@ -214,7 +213,7 @@ func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication
 
 	for _, obj := range app.resources {
 		fullName := getFullName(obj)
-		fmt.Printf("Deleting: %s\n", fullName)
+		m.log.V(1).Info("Deleting resource", "Resource", fullName)
 
 		live, err := m.clusterCache.GetManagedLiveObjs([]*unstructured.Unstructured{obj}, func(r *cache.Resource) bool { return true })
 		if err == nil && live != nil {
@@ -224,7 +223,7 @@ func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication
 				syncResult.DeleteFailed += 1
 			} else {
 				syncResult.Deleted += 1
-				fmt.Printf("Deleted: %s\n", fullName)
+				m.log.V(1).Info("Deleted", "Resource", fullName)
 			}
 		}
 	}
@@ -234,18 +233,16 @@ func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication
 
 	for _, obj := range remainingResources {
 		fullName := getFullName(obj)
-		fmt.Printf("Deleting: %s\n", fullName)
+		m.log.V(1).Info("Deleting", "Resource", fullName)
 
 		err := m.kubeClient.Delete(ctx, obj)
-		// m.clusterCache.DeleteResource(obj)
 		if err != nil {
 			syncResult.DeleteFailed += 1
 		} else {
 			syncResult.Deleted += 1
-			fmt.Printf("Deleted: %s\n", fullName)
+			m.log.V(1).Info("Deleted", "Resource", fullName)
 		}
 	}
-	m.clusterCache.Invalidate()
 	status := health.HealthStatus{
 		Status:  health.HealthStatusMissing,
 		Message: "",
@@ -278,8 +275,11 @@ func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.Glo
 func (m *syncManager) findApplicationResources(application *v1.AnyApplication) []*unstructured.Unstructured {
 	instanceId := m.getInstanceId(application)
 	cachedResources := m.clusterCache.FindResources(application.Spec.Application.HelmSelector.Namespace, func(r *cache.Resource) bool {
+		if r.Resource == nil {
+			return false
+		}
 		labels := r.Resource.GetLabels()
-		return labels["dcp.hiro.io/instance-id"] == instanceId
+		return labels != nil && labels["dcp.hiro.io/instance-id"] == instanceId
 	})
 	resources := lo.Values(cachedResources)
 	return lo.Map(resources, func(r *cache.Resource, index int) *unstructured.Unstructured { return r.Resource })

@@ -22,5 +22,4 @@ type SyncManager interface {
 	Sync(ctx context.Context, application *v1.AnyApplication) (SyncResult, error)
 	Delete(ctx context.Context, application *v1.AnyApplication) (SyncResult, error)
 	LoadApplication(application *v1.AnyApplication) (GlobalApplication, error)
-	InvalidateCache() error
 }
