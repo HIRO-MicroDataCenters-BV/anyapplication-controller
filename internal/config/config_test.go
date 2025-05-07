@@ -9,6 +9,9 @@ import (
 var sampleYAML = `
 peers:
   - url: localhost:8080
+runtime:
+  zone: zone
+  localPollDuration: 5s
 `
 
 func TestLoadConfig(t *testing.T) {
