@@ -9,6 +9,7 @@ import (
 	"github.com/argoproj/gitops-engine/pkg/engine"
 	"github.com/argoproj/gitops-engine/pkg/health"
 	gitops_sync "github.com/argoproj/gitops-engine/pkg/sync"
+	"github.com/argoproj/gitops-engine/pkg/sync/common"
 	"github.com/argoproj/gitops-engine/pkg/utils/kube"
 	"github.com/cockroachdb/errors"
 	"github.com/go-logr/logr"
@@ -146,6 +147,19 @@ func (m *syncManager) sync(ctx context.Context, app *cachedApp) (*types.SyncResu
 		return syncResult, errors.Wrap(err, "Failed to synchronize cluster state")
 	}
 
+	m.addAndLogResults(resourceSyncResults, syncResult)
+
+	status, err := m.getAggregatedStatus(app)
+	if err != nil {
+		m.log.Error(err, "Failed to get aggregated status")
+		return syncResult, errors.Wrap(err, "Failed to get aggregated status")
+	}
+
+	syncResult.Status = status
+	return syncResult, nil
+}
+
+func (m *syncManager) addAndLogResults(resourceSyncResults []common.ResourceSyncResult, syncResult *types.SyncResult) {
 	for _, resourceSyncResult := range resourceSyncResults {
 		syncResult.AddResult(&resourceSyncResult)
 
@@ -159,14 +173,6 @@ func (m *syncManager) sync(ctx context.Context, app *cachedApp) (*types.SyncResu
 			"SyncPhase", string(resourceSyncResult.SyncPhase),
 		)
 	}
-	status, err := m.getAggregatedStatus(app)
-	if err != nil {
-		m.log.Error(err, "Failed to get aggregated status")
-		return syncResult, errors.Wrap(err, "Failed to get aggregated status")
-	}
-
-	syncResult.Status = status
-	return syncResult, nil
 }
 
 func (m *syncManager) getAggregatedStatus(app *cachedApp) (*health.HealthStatus, error) {
@@ -219,11 +225,17 @@ func (m *syncManager) getAggregatedStatus(app *cachedApp) (*health.HealthStatus,
 }
 
 func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication) (*types.DeleteResult, error) {
-	syncResult := &types.DeleteResult{}
 	app, err := m.getOrRenderApp(application)
 	if err != nil {
-		return syncResult, err
+		return nil, err
 	}
+
+	return m.deleteApp(ctx, application, app)
+}
+
+func (m *syncManager) deleteApp(ctx context.Context, application *v1.AnyApplication, app *cachedApp) (*types.DeleteResult, error) {
+	syncResult := &types.DeleteResult{}
+
 	syncResult.Total += len(app.resources)
 
 	for _, obj := range app.resources {
@@ -259,6 +271,7 @@ func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication
 		}
 	}
 	return syncResult, nil
+
 }
 
 func (m *syncManager) getCacheKey(application *v1.AnyApplication) string {

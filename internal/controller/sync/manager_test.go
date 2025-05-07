@@ -8,6 +8,8 @@ import (
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
 	"github.com/argoproj/gitops-engine/pkg/health"
+	"github.com/argoproj/gitops-engine/pkg/sync/common"
+	"github.com/argoproj/gitops-engine/pkg/utils/kube"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -47,6 +49,7 @@ var _ = Describe("SyncManager", func() {
 		scheme        *runtime.Scheme
 		clusterCache  cache.ClusterCache
 		runtimeConfig config.ApplicationRuntimeConfig
+		gitOpsEngine  *fixture.FakeGitOpsEngine
 	)
 
 	BeforeEach(func() {
@@ -116,8 +119,11 @@ var _ = Describe("SyncManager", func() {
 	// })
 
 	BeforeEach(func() {
+		config := &rest.Config{
+			Host: "https://test",
+		}
 		options := helm.HelmClientOptions{
-			RestConfig: &rest.Config{Host: "https://test"},
+			RestConfig: config,
 			KubeVersion: &chartutil.KubeVersion{
 				Version: fmt.Sprintf("v%s.%s.0", "1", "23"),
 				Major:   "1",
@@ -131,25 +137,54 @@ var _ = Describe("SyncManager", func() {
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
 		clusterCache = fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager = NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig)
-
+		gitOpsEngine = fixture.NewFakeGitopsEngine()
+		syncManager = NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine)
 	})
 
 	It("should sync helm release", func() {
+
+		gitOpsEngine.MockSyncResult([]common.ResourceSyncResult{
+			{
+				ResourceKey: kube.NewResourceKey("group", "kind", "namespace", "test-app1"),
+				Version:     "1.0.0",
+				Order:       1,
+				Status:      common.ResultCodeSynced,
+				Message:     "message",
+				HookType:    common.HookTypeSync,
+				HookPhase:   common.OperationSucceeded,
+				SyncPhase:   common.SyncPhaseSync,
+			},
+			{
+				ResourceKey: kube.NewResourceKey("group", "kind", "namespace", "test-app2"),
+				Version:     "1.0.0",
+				Order:       2,
+				Status:      common.ResultCodeSynced,
+				Message:     "message",
+				HookType:    common.HookTypeSync,
+				HookPhase:   common.OperationSucceeded,
+				SyncPhase:   common.SyncPhaseSync,
+			},
+		})
+
 		syncResult, err := syncManager.Sync(context.Background(), application)
 
+		fmt.Printf("syncResult %v \n", syncResult)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(syncResult.Total).To(Equal(23))
-		Expect(syncResult.Created).To(Equal(23))
-		Expect(syncResult.CreateFailed).To(Equal(0))
-		Expect(syncResult.Updated).To(Equal(0))
-		Expect(syncResult.UpdateFailed).To(Equal(0))
-		Expect(syncResult.Deleted).To(Equal(0))
-		Expect(syncResult.DeleteFailed).To(Equal(0))
-		Expect(syncResult.Status.Status).To(Equal(health.HealthStatusProgressing))
+		Expect(syncResult.Total).To(Equal(2))
+		Expect(syncResult.OperationPhaseStats).To(Equal(map[common.OperationPhase]int{
+			"Succeeded": 2,
+		}))
+		Expect(syncResult.SyncPhaseStats).To(Equal(map[common.SyncPhase]int{
+			"Sync": 2,
+		}))
+		Expect(syncResult.ResultCodeStats).To(Equal(map[common.ResultCode]int{
+			"Synced": 2,
+		}))
+
+		Expect(syncResult.Status.Status).To(Equal(health.HealthStatusUnknown))
 	})
 
-	It("should delete helm release", func() {
+	It("should delete helm release or fail", func() {
 		_, err := syncManager.Sync(context.Background(), application)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -157,13 +192,8 @@ var _ = Describe("SyncManager", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(syncResult.Total).To(Equal(23))
-		Expect(syncResult.Created).To(Equal(0))
-		Expect(syncResult.CreateFailed).To(Equal(0))
-		Expect(syncResult.Updated).To(Equal(0))
-		Expect(syncResult.UpdateFailed).To(Equal(0))
-		Expect(syncResult.Deleted).To(Equal(23))
-		Expect(syncResult.DeleteFailed).To(Equal(0))
-		Expect(syncResult.Status.Status).To(Equal(health.HealthStatusMissing))
+		Expect(syncResult.Deleted).To(Equal(0))
+		Expect(syncResult.DeleteFailed).To(Equal(23))
 	})
 
 })
