@@ -5,5 +5,5 @@ metadata:
   labels:
     {{- include "app.labels" . | nindent 4 }}
 data:
-  config.yaml: |-
+  application-controller.yaml: |-
   {{- .Values.configuration | toYaml | nindent 4 }}

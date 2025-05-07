@@ -6,6 +6,9 @@ metadata:
   labels:
   {{- include "app.labels" . | nindent 4 }}
 rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups:
       - ""
     resources:
@@ -100,21 +103,23 @@ rules:
       - create
       - patch
   - apiGroups: 
-      - anyapplication.hiro.io
+      - dcp.hiro.io
     resources: 
       - anyapplications
+      - anyapplication
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups:
-      - anyapplication.hiro.io
+      - dcp.hiro.io
     resources: 
       - anyapplications/status
     verbs:
       - patch
+      - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "app.fullname" . }}-clusterrole
+  name: {{ include "app.name" . }}-clusterrole
   labels:
   {{- include "app.labels" . | nindent 4 }}
 rules:

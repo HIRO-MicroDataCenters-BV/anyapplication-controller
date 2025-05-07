@@ -42,8 +42,8 @@ resources: {}
 livenessProbe:
   failureThreshold: 3
   httpGet:
-    path: /health
-    port: 8080
+    path: /healthz
+    port: 8081
     scheme: HTTP
   initialDelaySeconds: 5
   periodSeconds: 10
@@ -51,11 +51,15 @@ livenessProbe:
 
 readinessProbe:
   httpGet:
-    path: /health
-    port: 8080
+    path: /readyz
+    port: 8081
     scheme: HTTP
   initialDelaySeconds: 5
   periodSeconds: 10
   timeoutSeconds: 5
 
 configuration:
+  peers: []
+  runtime:
+    zone: zone
+    localPollDuration: 30s
