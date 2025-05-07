@@ -48,6 +48,8 @@ func (job *LocalOperationJob) Run(context types.AsyncJobContext) {
 	go func() {
 		defer job.wg.Done()
 
+		job.runInner(context)
+
 		ticker := time.NewTicker(job.runtimeConfig.LocalPollInterval)
 		defer ticker.Stop()
 

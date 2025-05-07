@@ -29,6 +29,7 @@ var _ = Describe("UndeployJob", func() {
 		fakeClock     clock.Clock
 		runtimeConfig config.ApplicationRuntimeConfig
 		syncManager   types.SyncManager
+		gitOpsEngine  *fixture.FakeGitOpsEngine
 	)
 
 	BeforeEach(func() {
@@ -63,7 +64,7 @@ var _ = Describe("UndeployJob", func() {
 		runtimeConfig = config.ApplicationRuntimeConfig{
 			ZoneId: "zone",
 		}
-
+		gitOpsEngine = fixture.NewFakeGitopsEngine()
 		fakeClock = clock.NewFakeClock()
 
 		helmClient = helm.NewFakeHelmClient()
@@ -75,7 +76,7 @@ var _ = Describe("UndeployJob", func() {
 			Build()
 		application = application.DeepCopy()
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig)
+		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine)
 
 		undeployJob = NewUndeployJob(application, &runtimeConfig, fakeClock)
 	})

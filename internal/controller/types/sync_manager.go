@@ -23,3 +23,7 @@ type SyncManager interface {
 	Delete(ctx context.Context, application *v1.AnyApplication) (SyncResult, error)
 	LoadApplication(application *v1.AnyApplication) (GlobalApplication, error)
 }
+
+type ResourceInfo struct {
+	ManagedByMark string
+}

@@ -33,6 +33,7 @@ var _ = Describe("Jobs", func() {
 		fakeClock     clock.Clock
 		jobs          types.AsyncJobs
 		runtimeConfig config.ApplicationRuntimeConfig
+		gitOpsEngine  *fixture.FakeGitOpsEngine
 	)
 
 	BeforeEach(func() {
@@ -77,6 +78,7 @@ var _ = Describe("Jobs", func() {
 			ZoneId:            "zone",
 			LocalPollInterval: 100 * time.Millisecond,
 		}
+		gitOpsEngine = fixture.NewFakeGitopsEngine()
 
 		kubeClient = fake.NewClientBuilder().
 			WithScheme(scheme).
@@ -86,7 +88,7 @@ var _ = Describe("Jobs", func() {
 		helmClient = helm.NewFakeHelmClient()
 
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager := ctrl_sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig)
+		syncManager := ctrl_sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine)
 
 		context := NewAsyncJobContext(helmClient, kubeClient, ctx, syncManager)
 		jobs = NewJobs(context)
