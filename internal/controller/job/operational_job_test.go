@@ -7,6 +7,8 @@ import (
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
 	"github.com/argoproj/gitops-engine/pkg/health"
+	"github.com/argoproj/gitops-engine/pkg/sync/common"
+	"github.com/argoproj/gitops-engine/pkg/utils/kube"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -34,6 +36,7 @@ var _ = Describe("LocalOperationJob", func() {
 		fakeClock     *clock.FakeClock
 		runtimeConfig config.ApplicationRuntimeConfig
 		jobContext    types.AsyncJobContext
+		gitOpsEngine  *fixture.FakeGitOpsEngine
 	)
 
 	BeforeEach(func() {
@@ -70,7 +73,7 @@ var _ = Describe("LocalOperationJob", func() {
 			ZoneId:            "zone",
 			LocalPollInterval: 100 * time.Millisecond,
 		}
-
+		gitOpsEngine = fixture.NewFakeGitopsEngine()
 		fakeClock = clock.NewFakeClock()
 
 		options := helm.HelmClientOptions{
@@ -91,7 +94,7 @@ var _ = Describe("LocalOperationJob", func() {
 		application = application.DeepCopy()
 
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig)
+		syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine)
 		jobContext = NewAsyncJobContext(helmClient, kubeClient, context.TODO(), syncManager)
 
 		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock)
@@ -107,7 +110,30 @@ var _ = Describe("LocalOperationJob", func() {
 		))
 	})
 
-	It("should sync periodically and report success status", func() {
+	It("should sync periodically and report status", func() {
+
+		gitOpsEngine.MockSyncResult([]common.ResourceSyncResult{
+			{
+				ResourceKey: kube.NewResourceKey("group", "kind", "namespace", "test-app1"),
+				Version:     "1.0.0",
+				Order:       1,
+				Status:      common.ResultCodeSynced,
+				Message:     "message",
+				HookType:    common.HookTypeSync,
+				HookPhase:   common.OperationSucceeded,
+				SyncPhase:   common.SyncPhaseSync,
+			},
+			{
+				ResourceKey: kube.NewResourceKey("group", "kind", "namespace", "test-app2"),
+				Version:     "1.0.0",
+				Order:       2,
+				Status:      common.ResultCodeSynced,
+				Message:     "message",
+				HookType:    common.HookTypeSync,
+				HookPhase:   common.OperationSucceeded,
+				SyncPhase:   common.SyncPhaseSync,
+			},
+		})
 
 		Expect(operationJob.GetStatus()).To(Equal(
 			v1.ConditionStatus{
@@ -134,7 +160,7 @@ var _ = Describe("LocalOperationJob", func() {
 				v1.ConditionStatus{
 					Type:               v1.LocalConditionType,
 					ZoneId:             "zone",
-					Status:             string(health.HealthStatusProgressing),
+					Status:             string(health.HealthStatusUnknown),
 					LastTransitionTime: fakeClock.NowTime(),
 				},
 			))

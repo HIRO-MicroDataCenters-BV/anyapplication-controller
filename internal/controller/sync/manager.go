@@ -67,10 +67,10 @@ func NewSyncManager(
 	}
 }
 
-func (m *syncManager) Sync(ctx context.Context, application *v1.AnyApplication) (types.SyncResult, error) {
+func (m *syncManager) Sync(ctx context.Context, application *v1.AnyApplication) (*types.SyncResult, error) {
 	app, err := m.getOrRenderApp(application)
 	if err != nil {
-		return types.SyncResult{}, err
+		return types.NewSyncResult(), err
 	}
 	return m.sync(ctx, app)
 }
@@ -130,11 +130,9 @@ func (m *syncManager) render(application *v1.AnyApplication) (*cachedApp, error)
 	return &app, nil
 }
 
-func (m *syncManager) sync(ctx context.Context, app *cachedApp) (types.SyncResult, error) {
-	code := health.HealthStatusHealthy
-	msg := ""
+func (m *syncManager) sync(ctx context.Context, app *cachedApp) (*types.SyncResult, error) {
 
-	syncResult := types.SyncResult{}
+	syncResult := types.NewSyncResult()
 	prune := true
 
 	resourceSyncResults, err := m.gitOpsEngine.Sync(ctx, app.resources, func(r *cache.Resource) bool {
@@ -149,6 +147,7 @@ func (m *syncManager) sync(ctx context.Context, app *cachedApp) (types.SyncResul
 	}
 
 	for _, resourceSyncResult := range resourceSyncResults {
+		syncResult.AddResult(&resourceSyncResult)
 
 		m.log.V(1).Info("Resource synced",
 			"resourceKey", string(resourceSyncResult.ResourceKey.String()),
@@ -160,11 +159,24 @@ func (m *syncManager) sync(ctx context.Context, app *cachedApp) (types.SyncResul
 			"SyncPhase", string(resourceSyncResult.SyncPhase),
 		)
 	}
+	status, err := m.getAggregatedStatus(app)
+	if err != nil {
+		m.log.Error(err, "Failed to get aggregated status")
+		return syncResult, errors.Wrap(err, "Failed to get aggregated status")
+	}
+
+	syncResult.Status = status
+	return syncResult, nil
+}
+
+func (m *syncManager) getAggregatedStatus(app *cachedApp) (*health.HealthStatus, error) {
+	statusCounts := 0
+	code := health.HealthStatusHealthy
+	msg := ""
 
 	for _, obj := range app.resources {
 		fullName := getFullName(obj)
 		resourceKey := kube.GetResourceKey(obj)
-		// 	syncResult.Total += 1
 
 		// Get live object from cache
 		live, err := m.clusterCache.GetManagedLiveObjs([]*unstructured.Unstructured{obj}, func(r *cache.Resource) bool {
@@ -188,23 +200,26 @@ func (m *syncManager) sync(ctx context.Context, app *cachedApp) (types.SyncResul
 			continue
 		}
 		if h != nil {
+			statusCounts += 1
 			if health.IsWorse(code, h.Status) {
 				code = h.Status
 				msg = msg + "\n" + h.Message
 			}
 		}
 	}
+	if statusCounts == 0 {
+		code = health.HealthStatusUnknown
+	}
 
 	status := health.HealthStatus{
 		Status:  code,
 		Message: msg,
 	}
-	syncResult.Status = &status
-	return syncResult, nil
+	return &status, nil
 }
 
-func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication) (types.SyncResult, error) {
-	syncResult := types.SyncResult{}
+func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication) (*types.DeleteResult, error) {
+	syncResult := &types.DeleteResult{}
 	app, err := m.getOrRenderApp(application)
 	if err != nil {
 		return syncResult, err
@@ -243,11 +258,6 @@ func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication
 			m.log.V(1).Info("Deleted", "Resource", fullName)
 		}
 	}
-	status := health.HealthStatus{
-		Status:  health.HealthStatusMissing,
-		Message: "",
-	}
-	syncResult.Status = &status
 	return syncResult, nil
 }
 
