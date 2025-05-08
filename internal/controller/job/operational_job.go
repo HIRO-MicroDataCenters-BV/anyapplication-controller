@@ -36,7 +36,7 @@ func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.
 		application:   application,
 		runtimeConfig: runtimeConfig,
 		clock:         clock,
-		status:        health.HealthStatusProgressing,
+		status:        health.HealthStatusUnknown,
 		stopCh:        make(chan struct{}),
 		jobId:         jobId,
 	}

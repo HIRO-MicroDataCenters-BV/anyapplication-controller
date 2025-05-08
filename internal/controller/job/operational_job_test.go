@@ -104,7 +104,7 @@ var _ = Describe("LocalOperationJob", func() {
 		Expect(operationJob.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.LocalConditionType,
 			ZoneId:             "zone",
-			Status:             string(health.HealthStatusProgressing),
+			Status:             string(health.HealthStatusUnknown),
 			LastTransitionTime: fakeClock.NowTime(),
 		},
 		))
@@ -139,7 +139,7 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				Status:             string(health.HealthStatusProgressing),
+				Status:             string(health.HealthStatusUnknown),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
 		))
@@ -150,7 +150,7 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				Status:             string(health.HealthStatusProgressing),
+				Status:             string(health.HealthStatusUnknown),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
 		))
@@ -182,7 +182,7 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				Status:             string(health.HealthStatusProgressing),
+				Status:             string(health.HealthStatusUnknown),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
 		))
