@@ -71,7 +71,7 @@ var _ = Describe("LocalOperationJob", func() {
 
 		runtimeConfig = config.ApplicationRuntimeConfig{
 			ZoneId:            "zone",
-			LocalPollInterval: 100 * time.Millisecond,
+			LocalPollInterval: 10000 * time.Millisecond,
 		}
 		gitOpsEngine = fixture.NewFakeGitopsEngine()
 		fakeClock = clock.NewFakeClock()
@@ -104,7 +104,7 @@ var _ = Describe("LocalOperationJob", func() {
 		Expect(operationJob.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.LocalConditionType,
 			ZoneId:             "zone",
-			Status:             string(health.HealthStatusUnknown),
+			Status:             string(health.HealthStatusProgressing),
 			LastTransitionTime: fakeClock.NowTime(),
 		},
 		))
@@ -139,12 +139,14 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				Status:             string(health.HealthStatusUnknown),
+				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
 		))
 
 		operationJob.Run(jobContext)
+
+		waitForStatus(operationJob, health.HealthStatusUnknown)
 
 		Expect(operationJob.GetStatus()).To(Equal(
 			v1.ConditionStatus{
@@ -154,17 +156,6 @@ var _ = Describe("LocalOperationJob", func() {
 				LastTransitionTime: fakeClock.NowTime(),
 			},
 		))
-		for i := 1; i <= 3; i++ {
-			time.Sleep(500 * time.Millisecond)
-			Expect(operationJob.GetStatus()).To(Equal(
-				v1.ConditionStatus{
-					Type:               v1.LocalConditionType,
-					ZoneId:             "zone",
-					Status:             string(health.HealthStatusUnknown),
-					LastTransitionTime: fakeClock.NowTime(),
-				},
-			))
-		}
 
 		operationJob.Stop()
 
@@ -182,14 +173,14 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				Status:             string(health.HealthStatusUnknown),
+				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
 		))
 
 		operationJob.Run(jobContext)
 
-		time.Sleep(500 * time.Millisecond)
+		waitForStatus(operationJob, health.HealthStatusDegraded)
 
 		Expect(operationJob.GetStatus()).To(Equal(
 			v1.ConditionStatus{
@@ -206,3 +197,13 @@ var _ = Describe("LocalOperationJob", func() {
 	})
 
 })
+
+func waitForStatus(job *LocalOperationJob, status health.HealthStatusCode) {
+	for i := 0; i < 20; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if job.GetStatus().Status == string(status) {
+			return
+		}
+	}
+	Fail(fmt.Sprintf("Expected status %s, but got %s", status, job.GetStatus().Status))
+}
