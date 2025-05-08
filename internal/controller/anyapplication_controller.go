@@ -43,6 +43,7 @@ type AnyApplicationReconciler struct {
 	Reconciler  reconciler.Reconciler
 }
 
+// +kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dcp.hiro.io,resources=anyapplications,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dcp.hiro.io,resources=anyapplications/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=dcp.hiro.io,resources=anyapplications/finalizers,verbs=update
