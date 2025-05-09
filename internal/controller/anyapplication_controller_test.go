@@ -49,6 +49,7 @@ var _ = Describe("AnyApplication Controller", func() {
 		jobs          ctrltypes.AsyncJobs
 		syncManager   ctrltypes.SyncManager
 		reconciler    recon.Reconciler
+		stopFunc      engine.StopFunc
 	)
 
 	Context("When reconciling a resource", func() {
@@ -97,7 +98,7 @@ var _ = Describe("AnyApplication Controller", func() {
 				}),
 			)
 			gitOpsEngine := engine.NewEngine(cfg, clusterCache, engine.WithLogr(log))
-			_, err = gitOpsEngine.Run()
+			stopFunc, err = gitOpsEngine.Run()
 			if err != nil {
 				panic("error " + err.Error())
 			}
@@ -122,7 +123,7 @@ var _ = Describe("AnyApplication Controller", func() {
 								Repository: "https://helm.nginx.com/stable",
 								Chart:      "nginx-ingress",
 								Version:    "2.0.1",
-								Namespace:  "nginx",
+								Namespace:  "default",
 							},
 						},
 						Zones: 1,
@@ -148,6 +149,7 @@ var _ = Describe("AnyApplication Controller", func() {
 
 			By("Cleanup the specific resource instance AnyApplication")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			stopFunc()
 		})
 
 		It("should successfully reconcile the resource", func() {
