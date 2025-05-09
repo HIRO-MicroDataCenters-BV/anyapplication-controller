@@ -4,15 +4,22 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+type ApplicationRuntimeConfig struct {
+	ZoneId            string        `yaml:"zone"`
+	LocalPollInterval time.Duration `yaml:"localPollDuration"`
+}
 
 // Define a struct to match the YAML structure
 type Config struct {
 	Peers []struct {
 		Url string `yaml:"url"`
 	} `yaml:"peers"`
+	Runtime ApplicationRuntimeConfig `yaml:"runtime"`
 }
 
 func LoadConfig(filePath string) (*Config, error) {

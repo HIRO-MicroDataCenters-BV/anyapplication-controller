@@ -1,4 +1,4 @@
-package job
+package status
 
 import (
 	"context"
@@ -10,9 +10,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"testing"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+func TestStatusUpdate(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Status Update Suite")
+}
 
 var _ = Describe("AddOrUpdateStatusCondition", func() {
 	var (
@@ -76,7 +83,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 			Status: string(v1.PlacementStatusDone),
 		}
 
-		err := AddOrUpdateStatusCondition(ctx, fakeClient, client.ObjectKeyFromObject(application), newCondition)
+		err := AddOrUpdateCondition(ctx, fakeClient, client.ObjectKeyFromObject(application), newCondition)
 		Expect(err).ToNot(HaveOccurred())
 
 		updatedApp := &v1.AnyApplication{}
@@ -92,7 +99,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 			Status: string(v1.PlacementStatusDone),
 		}
 
-		err := AddOrUpdateStatusCondition(ctx, fakeClient, client.ObjectKeyFromObject(application), updatedCondition)
+		err := AddOrUpdateCondition(ctx, fakeClient, client.ObjectKeyFromObject(application), updatedCondition)
 		Expect(err).ToNot(HaveOccurred())
 
 		updatedApp := &v1.AnyApplication{}
@@ -104,7 +111,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 	It("should not update if the condition is unchanged", func() {
 		existingCondition := *application.Status.Conditions[0].DeepCopy()
 
-		err := AddOrUpdateStatusCondition(ctx, fakeClient, client.ObjectKeyFromObject(application), existingCondition)
+		err := AddOrUpdateCondition(ctx, fakeClient, client.ObjectKeyFromObject(application), existingCondition)
 		Expect(err).ToNot(HaveOccurred())
 
 		updatedApp := &v1.AnyApplication{}

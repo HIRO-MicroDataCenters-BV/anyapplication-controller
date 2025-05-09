@@ -10,6 +10,7 @@ import (
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/job"
 	"hiro.io/anyapplication/internal/controller/local"
+	"hiro.io/anyapplication/internal/controller/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -28,7 +29,7 @@ var _ = Describe("GlobalApplication", func() {
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
 			jobFactory := job.NewAsyncJobFactory(runtimeConfig, clock)
 
-			statusResult := globalApplication.DeriveNewStatus(EmptyJobConditions(), jobFactory)
+			statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 			status := statusResult.Status.OrEmpty()
 			jobs := statusResult.Jobs
 			Expect(status).To(Equal(
@@ -55,7 +56,7 @@ var _ = Describe("GlobalApplication", func() {
 				LastTransitionTime: clock.NowTime(),
 			}))
 
-			Expect(jobs.JobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 		})
 	})
 
@@ -71,12 +72,7 @@ var _ = Describe("GlobalApplication", func() {
 
 			localApplication := mo.None[local.LocalApplication]()
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
-			existingJobCondition := FromCondition(&v1.ConditionStatus{
-				Type:               v1.PlacementConditionType,
-				ZoneId:             "zone",
-				Status:             string(v1.PlacementStatusInProgress),
-				LastTransitionTime: clock.NowTime(),
-			})
+			existingJobCondition := types.EmptyJobConditions()
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 
 			status := statusResult.Status.OrEmpty()
@@ -97,8 +93,15 @@ var _ = Describe("GlobalApplication", func() {
 				},
 			))
 
-			Expect(jobs.JobsToAdd).To(Equal(mo.None[job.AsyncJob]()))
-			Expect(jobs.JobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
+			jobToAdd := jobs.JobsToAdd.OrEmpty()
+			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
+				Type:               v1.PlacementConditionType,
+				ZoneId:             "zone",
+				Status:             string(v1.PlacementStatusInProgress),
+				LastTransitionTime: clock.NowTime(),
+			}))
+
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 		})
 
 		It("switch to relocation once placement is done", func() {
@@ -113,12 +116,12 @@ var _ = Describe("GlobalApplication", func() {
 					LastTransitionTime: clock.NowTime(),
 				},
 			}
-			existingJobCondition := FromCondition(&v1.ConditionStatus{
+			existingJobCondition := types.FromCondition(v1.ConditionStatus{
 				Type:               v1.PlacementConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.PlacementStatusDone),
 				LastTransitionTime: clock.NowTime(),
-			})
+			}, types.AsyncJobTypeRelocate)
 
 			localApplication := mo.None[local.LocalApplication]()
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
@@ -159,10 +162,10 @@ var _ = Describe("GlobalApplication", func() {
 				Status:             string(v1.RelocationStatusPull),
 				LastTransitionTime: clock.NowTime(),
 			}))
-			Expect(jobs.JobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 		})
 
-		It("switch finish operational once relocation is completed ", func() {
+		It("switch to operational once relocation is completed ", func() {
 			applicationResource := makeApplication()
 			applicationResource.Status.State = v1.RelocationGlobalState
 			applicationResource.Status.Placements = []v1.Placement{{Zone: "zone"}}
@@ -180,12 +183,12 @@ var _ = Describe("GlobalApplication", func() {
 					LastTransitionTime: clock.NowTime(),
 				},
 			}
-			existingJobCondition := FromCondition(&v1.ConditionStatus{
+			existingJobCondition := types.FromCondition(v1.ConditionStatus{
 				Type:               v1.RelocationConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.RelocationStatusDone),
 				LastTransitionTime: clock.NowTime(),
-			})
+			}, types.AsyncJobTypeRelocate)
 
 			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig))
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
@@ -232,7 +235,7 @@ var _ = Describe("GlobalApplication", func() {
 				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: clock.NowTime(),
 			}))
-			Expect(jobs.JobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 		})
 
 		It("should relocate if placements has changed", func() {
@@ -247,7 +250,7 @@ var _ = Describe("GlobalApplication", func() {
 					LastTransitionTime: clock.NowTime(),
 				},
 			}
-			existingJobCondition := EmptyJobConditions()
+			existingJobCondition := types.EmptyJobConditions()
 
 			localApplication := mo.None[local.LocalApplication]()
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
@@ -288,7 +291,7 @@ var _ = Describe("GlobalApplication", func() {
 				Status:             string(v1.RelocationStatusPull),
 				LastTransitionTime: clock.NowTime(),
 			}))
-			Expect(jobs.JobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 		})
 
 		It("should undeploy if current zone not in placements anymore", func() {
@@ -309,7 +312,7 @@ var _ = Describe("GlobalApplication", func() {
 					LastTransitionTime: clock.NowTime(),
 				},
 			}
-			existingJobCondition := EmptyJobConditions()
+			existingJobCondition := types.EmptyJobConditions()
 
 			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig))
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
@@ -350,7 +353,7 @@ var _ = Describe("GlobalApplication", func() {
 				Status:             string(v1.RelocationStatusUndeploy),
 				LastTransitionTime: clock.NowTime(),
 			}))
-			Expect(jobs.JobsToRemove).To(Equal(mo.None[job.AsyncJobType]()))
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 		})
 
 	})

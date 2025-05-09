@@ -1,45 +1,23 @@
 package global
 
 import (
-	"context"
+	"fmt"
 
-	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
-	"hiro.io/anyapplication/internal/controller/job"
 	"hiro.io/anyapplication/internal/controller/local"
+	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/moutils"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type Action string
-
-const (
-	RelocateToCurrentNode Action = "RelocateToCurrentNode"
-)
-
-type GlobalApplication struct {
+type globalApplication struct {
 	locaApplication mo.Option[local.LocalApplication]
 	application     *v1.AnyApplication
 	config          *config.ApplicationRuntimeConfig
 	clock           clock.Clock
-}
-
-func LoadCurrentState(
-	ctx context.Context,
-	clock clock.Clock,
-	client client.Client,
-	application *v1.AnyApplication,
-	config *config.ApplicationRuntimeConfig,
-) (GlobalApplication, error) {
-	localApplication, err := local.LoadCurrentState(ctx, client, &application.Spec.Application, config)
-	if err != nil {
-		return GlobalApplication{}, errors.Wrap(err, "Failed to load local application")
-	}
-	return NewFromLocalApplication(localApplication, clock, application, config), nil
 }
 
 func NewFromLocalApplication(
@@ -47,8 +25,8 @@ func NewFromLocalApplication(
 	clock clock.Clock,
 	application *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
-) GlobalApplication {
-	return GlobalApplication{
+) types.GlobalApplication {
+	return &globalApplication{
 		locaApplication: localApplication,
 		application:     application,
 		config:          config,
@@ -56,15 +34,18 @@ func NewFromLocalApplication(
 	}
 }
 
-type StatusResult struct {
-	Status mo.Option[v1.AnyApplicationStatus]
-	Jobs   NextJobs
+func (g *globalApplication) GetName() string {
+	return g.application.Name
 }
 
-func (g *GlobalApplication) DeriveNewStatus(
-	jobConditions JobApplicationConditions,
-	jobFactory job.AsyncJobFactory,
-) StatusResult {
+func (g *globalApplication) GetNamespace() string {
+	return g.application.Namespace
+}
+
+func (g *globalApplication) DeriveNewStatus(
+	jobConditions types.JobApplicationCondition,
+	jobFactory types.AsyncJobFactory,
+) types.StatusResult {
 
 	current := &g.application.Status
 
@@ -72,6 +53,7 @@ func (g *GlobalApplication) DeriveNewStatus(
 		current.Owner = g.config.ZoneId
 		current.State = v1.NewGlobalState
 	}
+	runningJobType := jobConditions.GetJobType()
 
 	// Update local application status if exists
 	localConditionOpt := moutils.Map(g.locaApplication, func(l local.LocalApplication) v1.ConditionStatus {
@@ -86,7 +68,7 @@ func (g *GlobalApplication) DeriveNewStatus(
 	stateUpdated = updateJobConditions(current, jobConditions) || stateUpdated
 
 	// Update global state
-	globalStateUpdated, nextJobs := updateGlobalState(g.application, g.config, jobFactory, g.locaApplication.IsPresent())
+	globalStateUpdated, nextJobs := updateGlobalState(g.application, g.config, jobFactory, g.locaApplication.IsPresent(), runningJobType)
 
 	stateUpdated = globalStateUpdated || stateUpdated
 
@@ -94,39 +76,42 @@ func (g *GlobalApplication) DeriveNewStatus(
 	if stateUpdated {
 		status = mo.Some(*current)
 	}
-	return StatusResult{
-		status, nextJobs,
+	return types.StatusResult{
+		Status: status, Jobs: nextJobs,
 	}
 }
 
 func updateGlobalState(
 	application *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
-	jobFactory job.AsyncJobFactory,
+	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
-) (bool, NextJobs) {
+	runningJobType mo.Option[types.AsyncJobType],
+) (bool, types.NextJobs) {
 	status := &application.Status
 
 	if status.Owner == config.ZoneId {
-		return globalStateMachine(application, config, jobFactory, applicationPresent)
+		fmt.Printf("Global application %s/%s is owned by zone %s\n", application.Name, application.Namespace, status.Owner)
+		return globalStateMachine(application, config, jobFactory, applicationPresent, runningJobType)
 	} else if applicationPresent || placementsContainZone(status, config.ZoneId) {
-		return localStateMachine(application, config, jobFactory, applicationPresent)
+		return localStateMachine(application, config, jobFactory, applicationPresent, runningJobType)
 	} else {
-		return false, NextJobs{}
+		return false, types.NextJobs{}
 	}
 }
 
 func globalStateMachine(
 	application *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
-	jobFactory job.AsyncJobFactory,
+	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
-) (bool, NextJobs) {
+	runningJobType mo.Option[types.AsyncJobType],
+) (bool, types.NextJobs) {
 	status := &application.Status
 
 	stateUpdated := false
 
-	fsm := NewGlobalFSM(application, config, jobFactory, applicationPresent)
+	fsm := NewGlobalFSM(application, config, jobFactory, applicationPresent, runningJobType)
 	nextStateResult := fsm.NextState()
 
 	maybeNextState, conditionsToAdd, conditionsToRemove := nextStateResult.NextState, nextStateResult.ConditionsToAdd, nextStateResult.ConditionsToRemove
@@ -160,14 +145,15 @@ func globalStateMachine(
 func localStateMachine(
 	application *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
-	jobFactory job.AsyncJobFactory,
+	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
-) (bool, NextJobs) {
+	runningJobType mo.Option[types.AsyncJobType],
+) (bool, types.NextJobs) {
 	status := &application.Status
 
 	stateUpdated := false
 
-	fsm := NewLocalFSM(application, config, jobFactory, applicationPresent)
+	fsm := NewLocalFSM(application, config, jobFactory, applicationPresent, runningJobType)
 	nextStateResult := fsm.NextState()
 
 	conditionsToAdd, conditionsToRemove := nextStateResult.ConditionsToAdd, nextStateResult.ConditionsToRemove
@@ -192,9 +178,10 @@ func localStateMachine(
 	return stateUpdated, jobs
 }
 
-func updateJobConditions(status *v1.AnyApplicationStatus, jobConditions JobApplicationConditions) bool {
+func updateJobConditions(status *v1.AnyApplicationStatus, jobConditions types.JobApplicationCondition) bool {
 	stateUpdated := false
-	for _, condition := range jobConditions.Conditions {
+
+	for _, condition := range jobConditions.GetConditions() {
 		addOrUpdateCondition(status, condition)
 		stateUpdated = true
 	}

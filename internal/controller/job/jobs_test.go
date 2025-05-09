@@ -7,7 +7,10 @@ import (
 
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
+	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/fixture"
 	ctrl_sync "hiro.io/anyapplication/internal/controller/sync"
+	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,13 +25,15 @@ import (
 
 var _ = Describe("Jobs", func() {
 	var (
-		ctx         context.Context
-		kubeClient  client.Client
-		helmClient  helm.HelmClient
-		application *v1.AnyApplication
-		scheme      *runtime.Scheme
-		fakeClock   clock.Clock
-		jobs        AsyncJobs
+		ctx           context.Context
+		kubeClient    client.Client
+		helmClient    helm.HelmClient
+		application   *v1.AnyApplication
+		scheme        *runtime.Scheme
+		fakeClock     clock.Clock
+		jobs          types.AsyncJobs
+		runtimeConfig config.ApplicationRuntimeConfig
+		gitOpsEngine  *fixture.FakeGitOpsEngine
 	)
 
 	BeforeEach(func() {
@@ -69,6 +74,11 @@ var _ = Describe("Jobs", func() {
 				},
 			},
 		}
+		runtimeConfig = config.ApplicationRuntimeConfig{
+			ZoneId:            "zone",
+			LocalPollInterval: 100 * time.Millisecond,
+		}
+		gitOpsEngine = fixture.NewFakeGitopsEngine()
 
 		kubeClient = fake.NewClientBuilder().
 			WithScheme(scheme).
@@ -77,8 +87,8 @@ var _ = Describe("Jobs", func() {
 			Build()
 		helmClient = helm.NewFakeHelmClient()
 
-		clusterCache := ctrl_sync.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager := ctrl_sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		syncManager := ctrl_sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine)
 
 		context := NewAsyncJobContext(helmClient, kubeClient, ctx, syncManager)
 		jobs = NewJobs(context)
@@ -86,11 +96,11 @@ var _ = Describe("Jobs", func() {
 	})
 
 	It("should run job and get completion status", func() {
-		appId := ApplicationId{
+		appId := types.ApplicationId{
 			Name:      "test",
 			Namespace: "test",
 		}
-		job := newTestJob(appId, AsyncJobTypeLocalOperation, fakeClock, 100*time.Millisecond)
+		job := newTestJob(appId, types.AsyncJobTypeLocalOperation, fakeClock, 100*time.Millisecond)
 
 		jobs.Execute(job)
 		currentJobOpt := jobs.GetCurrent(appId)
@@ -115,7 +125,7 @@ var _ = Describe("Jobs", func() {
 })
 
 type testJob struct {
-	id       JobId
+	id       types.JobId
 	clock    clock.Clock
 	interval time.Duration
 	stopCh   chan struct{}
@@ -123,10 +133,10 @@ type testJob struct {
 	status   health.HealthStatusCode
 }
 
-func newTestJob(applicationId ApplicationId, jobType AsyncJobType, clock clock.Clock, interval time.Duration) AsyncJob {
+func newTestJob(applicationId types.ApplicationId, jobType types.AsyncJobType, clock clock.Clock, interval time.Duration) types.AsyncJob {
 	return &testJob{
 		clock: clock,
-		id: JobId{
+		id: types.JobId{
 			JobType:       jobType,
 			ApplicationId: applicationId,
 		},
@@ -136,10 +146,10 @@ func newTestJob(applicationId ApplicationId, jobType AsyncJobType, clock clock.C
 	}
 }
 
-func (j *testJob) GetJobID() JobId {
+func (j *testJob) GetJobID() types.JobId {
 	return j.id
 }
-func (j *testJob) GetType() AsyncJobType {
+func (j *testJob) GetType() types.AsyncJobType {
 	return j.id.JobType
 }
 func (j *testJob) GetStatus() v1.ConditionStatus {
@@ -150,7 +160,7 @@ func (j *testJob) GetStatus() v1.ConditionStatus {
 		LastTransitionTime: j.clock.NowTime(),
 	}
 }
-func (j *testJob) Run(context AsyncJobContext) {
+func (j *testJob) Run(context types.AsyncJobContext) {
 	j.wg.Add(1)
 
 	go func() {

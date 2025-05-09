@@ -26,19 +26,24 @@ import (
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
-	"hiro.io/anyapplication/internal/controller/job"
-	"hiro.io/anyapplication/internal/controller/sync"
+	"hiro.io/anyapplication/internal/controller/reconciler"
+	"hiro.io/anyapplication/internal/controller/status"
+	"hiro.io/anyapplication/internal/controller/types"
 )
+
+const anyApplicationFinalizerName = "anyapplication.finalizers.hiro.com"
 
 // AnyApplicationReconciler reconciles a AnyApplication object
 type AnyApplicationReconciler struct {
 	client.Client
 	Scheme      *runtime.Scheme
 	Config      *config.ApplicationRuntimeConfig
-	SyncManager sync.SyncManager
-	Jobs        job.AsyncJobs
+	SyncManager types.SyncManager
+	Jobs        types.AsyncJobs
+	Reconciler  reconciler.Reconciler
 }
 
+// +kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dcp.hiro.io,resources=anyapplications,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dcp.hiro.io,resources=anyapplications/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=dcp.hiro.io,resources=anyapplications/finalizers,verbs=update
@@ -55,31 +60,79 @@ type AnyApplicationReconciler struct {
 func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	// resource := &dcpv1.AnyApplication{}
-	// if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
-	// 	log.Error(err, "Unable to get AnyApplication ", "name", req.Name, "namespace", req.Namespace)
-	// 	// TODO (user): handle error
-	// 	return ctrl.Result{}, nil
-	// }
+	resource := &dcpv1.AnyApplication{}
+	if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
+		log.Error(err, "Unable to get AnyApplication ", "name", req.Name, "namespace", req.Namespace)
+		// TODO (user): handle error
+		return ctrl.Result{}, nil
+	}
 
-	// reconcilerBuilder := reconciler.NewReconcilerBuilder(ctx, r.Client, resource, r.Config)
-	// reconciler, err := reconcilerBuilder.Build()
-	// if err != nil {
-	// 	// TODO (user): handle error
-	// 	return ctrl.Result{}, nil
-	// }
+	if !resource.DeletionTimestamp.IsZero() {
+		// The resource is being deleted
+		return r.resourceCleanup(ctx, resource)
+	}
 
-	// result := reconciler.DoReconcile()
+	if !containsString(resource.Finalizers, anyApplicationFinalizerName) {
+		return r.addFinalizer(ctx, resource)
+	}
 
-	// resource.Status = result.Status.OrElse(resource.Status)
+	globalApplication, err := r.SyncManager.LoadApplication(resource)
+	if err != nil {
+		log.Error(err, "failed to load application state")
+		return ctrl.Result{}, err
+	}
 
-	// err = r.Client.Status().Update(ctx, resource)
-	// if err != nil {
-	// 	log.Error(err, "failed to update AnyApplication status")
-	// 	return ctrl.Result{}, err
-	// }
+	result := r.Reconciler.DoReconcile(globalApplication)
 
-	log.Info("AnyApplicaitonResource status synced")
+	log.Info("reconciler result", "result", result)
+	if result.Status.IsPresent() {
+		err = status.UpdateStatus(ctx, r.Client, req.NamespacedName, func(applicationStatus *dcpv1.AnyApplicationStatus) bool {
+			*applicationStatus = result.Status.OrEmpty()
+			return true
+		})
+		if err != nil {
+			log.Error(err, "failed to update status")
+			return ctrl.Result{}, err // TODO maybe requeue
+		}
+	}
+	// Run job only after status update
+	result.JobsToAdd.ForEach(func(newJob types.AsyncJob) {
+		applicationId := newJob.GetJobID().ApplicationId
+		r.Jobs.Stop(applicationId)
+		log.Info("Starting job", newJob.GetJobID())
+		r.Jobs.Execute(newJob)
+	})
+
+	return ctrl.Result{}, nil
+}
+
+func (r *AnyApplicationReconciler) addFinalizer(ctx context.Context, resource *dcpv1.AnyApplication) (ctrl.Result, error) {
+	resource.Finalizers = append(resource.Finalizers, anyApplicationFinalizerName)
+	if err := r.Update(ctx, resource); err != nil {
+		return ctrl.Result{}, err
+	}
+	// Requeue after updating the finalizer
+	return ctrl.Result{Requeue: true}, nil
+}
+
+func (r *AnyApplicationReconciler) resourceCleanup(ctx context.Context, resource *dcpv1.AnyApplication) (ctrl.Result, error) {
+	if containsString(resource.Finalizers, anyApplicationFinalizerName) {
+		// Perform cleanup logic here
+		applicationId := types.ApplicationId{
+			Name:      resource.Name,
+			Namespace: resource.Namespace,
+		}
+		r.Jobs.Stop(applicationId)
+		if _, err := r.SyncManager.Delete(ctx, resource); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		// Remove finalizer and update
+		resource.Finalizers = removeString(resource.Finalizers, anyApplicationFinalizerName)
+		if err := r.Update(ctx, resource); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -90,4 +143,23 @@ func (r *AnyApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&dcpv1.AnyApplication{}).
 		Named("anyapplication").
 		Complete(r)
+}
+
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+func removeString(slice []string, s string) []string {
+	var result []string
+	for _, item := range slice {
+		if item != s {
+			result = append(result, item)
+		}
+	}
+	return result
 }

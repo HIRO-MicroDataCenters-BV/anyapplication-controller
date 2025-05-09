@@ -7,13 +7,17 @@ import (
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
 	"github.com/argoproj/gitops-engine/pkg/health"
+	"github.com/argoproj/gitops-engine/pkg/sync/common"
+	"github.com/argoproj/gitops-engine/pkg/utils/kube"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/chartutil"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/fixture"
 	"hiro.io/anyapplication/internal/controller/sync"
+	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,7 +35,8 @@ var _ = Describe("LocalOperationJob", func() {
 		scheme        *runtime.Scheme
 		fakeClock     *clock.FakeClock
 		runtimeConfig config.ApplicationRuntimeConfig
-		jobContext    AsyncJobContext
+		jobContext    types.AsyncJobContext
+		gitOpsEngine  *fixture.FakeGitOpsEngine
 	)
 
 	BeforeEach(func() {
@@ -66,9 +71,9 @@ var _ = Describe("LocalOperationJob", func() {
 
 		runtimeConfig = config.ApplicationRuntimeConfig{
 			ZoneId:            "zone",
-			LocalPollInterval: 100 * time.Millisecond,
+			LocalPollInterval: 10000 * time.Millisecond,
 		}
-
+		gitOpsEngine = fixture.NewFakeGitopsEngine()
 		fakeClock = clock.NewFakeClock()
 
 		options := helm.HelmClientOptions{
@@ -88,8 +93,8 @@ var _ = Describe("LocalOperationJob", func() {
 			Build()
 		application = application.DeepCopy()
 
-		clusterCache := sync.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine)
 		jobContext = NewAsyncJobContext(helmClient, kubeClient, context.TODO(), syncManager)
 
 		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock)
@@ -105,7 +110,30 @@ var _ = Describe("LocalOperationJob", func() {
 		))
 	})
 
-	It("should sync periodically and report success status", func() {
+	It("should sync periodically and report status", func() {
+
+		gitOpsEngine.MockSyncResult([]common.ResourceSyncResult{
+			{
+				ResourceKey: kube.NewResourceKey("group", "kind", "namespace", "test-app1"),
+				Version:     "1.0.0",
+				Order:       1,
+				Status:      common.ResultCodeSynced,
+				Message:     "message",
+				HookType:    common.HookTypeSync,
+				HookPhase:   common.OperationSucceeded,
+				SyncPhase:   common.SyncPhaseSync,
+			},
+			{
+				ResourceKey: kube.NewResourceKey("group", "kind", "namespace", "test-app2"),
+				Version:     "1.0.0",
+				Order:       2,
+				Status:      common.ResultCodeSynced,
+				Message:     "message",
+				HookType:    common.HookTypeSync,
+				HookPhase:   common.OperationSucceeded,
+				SyncPhase:   common.SyncPhaseSync,
+			},
+		})
 
 		Expect(operationJob.GetStatus()).To(Equal(
 			v1.ConditionStatus{
@@ -118,25 +146,16 @@ var _ = Describe("LocalOperationJob", func() {
 
 		operationJob.Run(jobContext)
 
+		waitForStatus(operationJob, health.HealthStatusUnknown)
+
 		Expect(operationJob.GetStatus()).To(Equal(
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				Status:             string(health.HealthStatusProgressing),
+				Status:             string(health.HealthStatusUnknown),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
 		))
-		for i := 1; i <= 3; i++ {
-			time.Sleep(500 * time.Millisecond)
-			Expect(operationJob.GetStatus()).To(Equal(
-				v1.ConditionStatus{
-					Type:               v1.LocalConditionType,
-					ZoneId:             "zone",
-					Status:             string(health.HealthStatusProgressing),
-					LastTransitionTime: fakeClock.NowTime(),
-				},
-			))
-		}
 
 		operationJob.Stop()
 
@@ -161,7 +180,7 @@ var _ = Describe("LocalOperationJob", func() {
 
 		operationJob.Run(jobContext)
 
-		time.Sleep(500 * time.Millisecond)
+		waitForStatus(operationJob, health.HealthStatusDegraded)
 
 		Expect(operationJob.GetStatus()).To(Equal(
 			v1.ConditionStatus{
@@ -178,3 +197,13 @@ var _ = Describe("LocalOperationJob", func() {
 	})
 
 })
+
+func waitForStatus(job *LocalOperationJob, status health.HealthStatusCode) {
+	for i := 0; i < 20; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if job.GetStatus().Status == string(status) {
+			return
+		}
+	}
+	Fail(fmt.Sprintf("Expected status %s, but got %s", status, job.GetStatus().Status))
+}

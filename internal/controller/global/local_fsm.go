@@ -4,28 +4,30 @@ import (
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
-	"hiro.io/anyapplication/internal/controller/job"
+	types "hiro.io/anyapplication/internal/controller/types"
 )
 
 type LocalFSM struct {
 	application        *v1.AnyApplication
 	config             *config.ApplicationRuntimeConfig
-	jobFactory         job.AsyncJobFactory
+	jobFactory         types.AsyncJobFactory
 	applicationPresent bool
+	runningJobType     mo.Option[types.AsyncJobType]
 }
 
 func NewLocalFSM(
 	application *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
-	jobFactory job.AsyncJobFactory,
+	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
+	runningJobType mo.Option[types.AsyncJobType],
 ) LocalFSM {
 	return LocalFSM{
-		application, config, jobFactory, applicationPresent,
+		application, config, jobFactory, applicationPresent, runningJobType,
 	}
 }
 
-func (g *LocalFSM) NextState() NextStateResult {
+func (g *LocalFSM) NextState() types.NextStateResult {
 	status := g.application.Status
 
 	if !placementsContainZone(&status, g.config.ZoneId) && g.applicationPresent {
@@ -36,18 +38,19 @@ func (g *LocalFSM) NextState() NextStateResult {
 		return g.handleOperation()
 	}
 
-	return NextStateResult{}
+	return types.NextStateResult{}
 }
 
-func (g *LocalFSM) handleUndeploy() NextStateResult {
+func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 	status := g.application.Status
 
-	operationCondition, _ := getCondition(&status, v1.LocalConditionType, g.config.ZoneId)
+	operationCondition, _ := getCondition(status.Conditions, v1.LocalConditionType, g.config.ZoneId)
 
-	undeployCondition, found := getCondition(&status, v1.RelocationConditionType, g.config.ZoneId)
+	undeployCondition, found := getCondition(status.Conditions, v1.RelocationConditionType, g.config.ZoneId)
 	undeployConditionOpt := mo.EmptyableToOption(undeployCondition)
-	undeployJobOpt := mo.None[job.AsyncJob]()
-	if !found {
+	undeployJobOpt := mo.None[types.AsyncJob]()
+
+	if !found || !g.isRunning(types.AsyncJobTypeRelocate) {
 		undeployJob := g.jobFactory.CreateUndeployJob(g.application)
 		undeployCondition := undeployJob.GetStatus()
 
@@ -55,26 +58,26 @@ func (g *LocalFSM) handleUndeploy() NextStateResult {
 		undeployJobOpt = mo.Some(undeployJob)
 	}
 
-	return NextStateResult{
+	return types.NextStateResult{
 		ConditionsToAdd:    undeployConditionOpt,
 		ConditionsToRemove: mo.EmptyableToOption(operationCondition),
-		Jobs:               NextJobs{JobsToAdd: undeployJobOpt},
+		Jobs:               types.NextJobs{JobsToAdd: undeployJobOpt},
 	}
 }
 
-func (g *LocalFSM) handleOperation() NextStateResult {
+func (g *LocalFSM) handleOperation() types.NextStateResult {
 	status := g.application.Status
 
-	_, found := getCondition(&status, v1.LocalConditionType, g.config.ZoneId)
-	if !found {
+	_, found := getCondition(status.Conditions, v1.LocalConditionType, g.config.ZoneId)
+	if !found || !g.isRunning(types.AsyncJobTypeLocalOperation) {
 
 		if !g.applicationPresent {
 			relocationJob := g.jobFactory.CreateRelocationJob(g.application)
 			relocationCondition := relocationJob.GetStatus()
 			relocationConditionOpt := mo.Some(&relocationCondition)
-			return NextStateResult{
+			return types.NextStateResult{
 				ConditionsToAdd: relocationConditionOpt,
-				Jobs:            NextJobs{JobsToAdd: mo.Some(relocationJob)},
+				Jobs:            types.NextJobs{JobsToAdd: mo.Some(relocationJob)},
 			}
 
 		} else {
@@ -82,13 +85,17 @@ func (g *LocalFSM) handleOperation() NextStateResult {
 			operationCondition := operationJob.GetStatus()
 
 			operationConditionOpt := mo.Some(&operationCondition)
-			return NextStateResult{
+			return types.NextStateResult{
 				ConditionsToAdd: operationConditionOpt,
-				Jobs:            NextJobs{JobsToAdd: mo.Some(operationJob)},
+				Jobs:            types.NextJobs{JobsToAdd: mo.Some(operationJob)},
 			}
 
 		}
 	} else {
-		return NextStateResult{}
+		return types.NextStateResult{}
 	}
+}
+
+func (g *LocalFSM) isRunning(jobType types.AsyncJobType) bool {
+	return g.runningJobType.OrEmpty() == jobType
 }

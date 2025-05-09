@@ -5,6 +5,8 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/status"
+	"hiro.io/anyapplication/internal/controller/types"
 )
 
 type RelocationJob struct {
@@ -13,13 +15,13 @@ type RelocationJob struct {
 	status        v1.RelocationStatus
 	clock         clock.Clock
 	msg           string
-	jobId         JobId
+	jobId         types.JobId
 }
 
 func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *RelocationJob {
-	jobId := JobId{
-		JobType: AsyncJobTypeLocalOperation,
-		ApplicationId: ApplicationId{
+	jobId := types.JobId{
+		JobType: types.AsyncJobTypeLocalOperation,
+		ApplicationId: types.ApplicationId{
 			Name:      application.Name,
 			Namespace: application.Namespace,
 		},
@@ -35,7 +37,7 @@ func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.Appl
 	}
 }
 
-func (job *RelocationJob) Run(context AsyncJobContext) {
+func (job *RelocationJob) Run(context types.AsyncJobContext) {
 
 	syncManager := context.GetSyncManager()
 	ctx := context.GetGoContext()
@@ -51,31 +53,31 @@ func (job *RelocationJob) Run(context AsyncJobContext) {
 	}
 }
 
-func (job *RelocationJob) Fail(context AsyncJobContext, msg string) {
+func (job *RelocationJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = v1.RelocationStatusFailure
-	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+	err := status.AddOrUpdateCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
 	if err != nil {
 		job.status = v1.RelocationStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
 	}
 }
 
-func (job *RelocationJob) Success(context AsyncJobContext, status *health.HealthStatus) {
+func (job *RelocationJob) Success(context types.AsyncJobContext, healthStatus *health.HealthStatus) {
 	job.status = v1.RelocationStatusDone
-	err := AddOrUpdateStatusCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+	err := status.AddOrUpdateCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
 	if err != nil {
 		job.status = v1.RelocationStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
 	}
 }
 
-func (job *RelocationJob) GetJobID() JobId {
+func (job *RelocationJob) GetJobID() types.JobId {
 	return job.jobId
 }
 
-func (job *RelocationJob) GetType() AsyncJobType {
-	return AsyncJobTypeRelocate
+func (job *RelocationJob) GetType() types.AsyncJobType {
+	return types.AsyncJobTypeRelocate
 }
 
 func (job *RelocationJob) GetStatus() v1.ConditionStatus {

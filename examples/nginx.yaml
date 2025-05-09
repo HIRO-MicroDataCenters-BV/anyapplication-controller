@@ -2,9 +2,6 @@
 apiVersion: dcp.hiro.io/v1
 kind: AnyApplication
 metadata:
-  labels:
-    app.kubernetes.io/name: anyapplication-controller
-    app.kubernetes.io/managed-by: kustomize
   name: nginx-app
   namespace: default
 spec:

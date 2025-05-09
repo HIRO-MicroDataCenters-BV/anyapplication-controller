@@ -1,14 +1,12 @@
 package local
 
 import (
-	"context"
-
 	"github.com/argoproj/gitops-engine/pkg/health"
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 type LocalApplication struct {
@@ -18,13 +16,11 @@ type LocalApplication struct {
 	messages []string
 }
 
-func LoadCurrentState(
-	ctx context.Context,
-	client client.Client,
-	applicationSpec *v1.ApplicationMatcherSpec,
-	config *config.ApplicationRuntimeConfig,
-) (mo.Option[LocalApplication], error) {
-	bundle, err := LoadApplicationBundle(ctx, client, applicationSpec)
+func NewFromUnstructured(resources []*unstructured.Unstructured, config *config.ApplicationRuntimeConfig) (mo.Option[LocalApplication], error) {
+	if len(resources) == 0 {
+		return mo.None[LocalApplication](), nil
+	}
+	bundle, err := LoadApplicationBundle(resources)
 	if err != nil {
 		return mo.None[LocalApplication](), err
 	}
@@ -38,11 +34,6 @@ func LoadCurrentState(
 		messages: messages,
 		config:   config,
 	}), nil
-}
-
-func NewLocalApplicationFromTemplate(template string) (mo.Option[LocalApplication], error) {
-
-	return mo.None[LocalApplication](), nil
 }
 
 func (l *LocalApplication) GetStatus() health.HealthStatusCode {

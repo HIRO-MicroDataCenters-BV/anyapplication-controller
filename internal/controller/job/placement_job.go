@@ -4,6 +4,8 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/status"
+	"hiro.io/anyapplication/internal/controller/types"
 )
 
 type LocalPlacementJob struct {
@@ -12,13 +14,13 @@ type LocalPlacementJob struct {
 	clock         clock.Clock
 	status        v1.PlacementStatus
 	msg           string
-	jobId         JobId
+	jobId         types.JobId
 }
 
 func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *LocalPlacementJob {
-	jobId := JobId{
-		JobType: AsyncJobTypeLocalOperation,
-		ApplicationId: ApplicationId{
+	jobId := types.JobId{
+		JobType: types.AsyncJobTypeLocalOperation,
+		ApplicationId: types.ApplicationId{
 			Name:      application.Name,
 			Namespace: application.Namespace,
 		},
@@ -33,25 +35,35 @@ func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.
 	}
 }
 
-func (job *LocalPlacementJob) Run(context AsyncJobContext) {
+func (job *LocalPlacementJob) Run(context types.AsyncJobContext) {
 	client := context.GetKubeClient()
 	ctx := context.GetGoContext()
 
 	job.status = v1.PlacementStatusDone
 
-	err := AddOrUpdateStatusCondition(ctx, client, job.application.GetNamespacedName(), job.GetStatus())
+	err := status.UpdateStatus(ctx, client, job.application.GetNamespacedName(), func(applicationStatus *v1.AnyApplicationStatus) bool {
+		applicationStatus.Placements = []v1.Placement{
+			{
+				Zone: job.runtimeConfig.ZoneId,
+			},
+		}
+		condition := job.GetStatus()
+		status.AddOrUpdate(applicationStatus, &condition)
+		return true
+	})
+
 	if err != nil {
 		job.status = v1.PlacementStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
 	}
 }
 
-func (job *LocalPlacementJob) GetJobID() JobId {
+func (job *LocalPlacementJob) GetJobID() types.JobId {
 	return job.jobId
 }
 
-func (job *LocalPlacementJob) GetType() AsyncJobType {
-	return AsyncJobTypeLocalPlacement
+func (job *LocalPlacementJob) GetType() types.AsyncJobType {
+	return types.AsyncJobTypeLocalPlacement
 }
 
 func (job *LocalPlacementJob) GetStatus() v1.ConditionStatus {

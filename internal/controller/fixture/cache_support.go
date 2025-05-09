@@ -1,4 +1,4 @@
-package sync
+package fixture
 
 import (
 	"github.com/argoproj/gitops-engine/pkg/cache"

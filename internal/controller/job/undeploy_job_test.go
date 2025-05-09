@@ -9,7 +9,9 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/fixture"
 	"hiro.io/anyapplication/internal/controller/sync"
+	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,7 +28,8 @@ var _ = Describe("UndeployJob", func() {
 		scheme        *runtime.Scheme
 		fakeClock     clock.Clock
 		runtimeConfig config.ApplicationRuntimeConfig
-		syncManager   sync.SyncManager
+		syncManager   types.SyncManager
+		gitOpsEngine  *fixture.FakeGitOpsEngine
 	)
 
 	BeforeEach(func() {
@@ -61,7 +64,7 @@ var _ = Describe("UndeployJob", func() {
 		runtimeConfig = config.ApplicationRuntimeConfig{
 			ZoneId: "zone",
 		}
-
+		gitOpsEngine = fixture.NewFakeGitopsEngine()
 		fakeClock = clock.NewFakeClock()
 
 		helmClient = helm.NewFakeHelmClient()
@@ -72,8 +75,8 @@ var _ = Describe("UndeployJob", func() {
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
 		application = application.DeepCopy()
-		clusterCache := sync.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache)
+		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine)
 
 		undeployJob = NewUndeployJob(application, &runtimeConfig, fakeClock)
 	})

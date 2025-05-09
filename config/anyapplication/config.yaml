@@ -1,0 +1,5 @@
+peers:
+  - url: localhost:8080
+runtime:
+  zone: zone
+  localPollDuration: 10s

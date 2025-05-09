@@ -1,0 +1,142 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+  name: anyapplications.dcp.hiro.io
+spec:
+  group: dcp.hiro.io
+  names:
+    kind: AnyApplication
+    listKind: AnyApplicationList
+    plural: anyapplications
+    singular: anyapplication
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: AnyApplication is the Schema for the anyapplications API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AnyApplicationSpec defines the desired state of AnyApplication.
+            properties:
+              application:
+                description: Foo is an example field of AnyApplication. Edit anyapplication_types.go
+                  to remove/update
+                properties:
+                  helm:
+                    properties:
+                      chart:
+                        type: string
+                      namespace:
+                        type: string
+                      repository:
+                        type: string
+                      values:
+                        type: string
+                      version:
+                        type: string
+                    required:
+                    - chart
+                    - namespace
+                    - repository
+                    - version
+                    type: object
+                  resourceSelector:
+                    additionalProperties:
+                      type: string
+                    type: object
+                type: object
+              placement-strategy:
+                properties:
+                  strategy:
+                    type: string
+                required:
+                - strategy
+                type: object
+              recover-strategy:
+                properties:
+                  max-retries:
+                    type: integer
+                  tolerance:
+                    type: integer
+                type: object
+              zones:
+                type: integer
+            required:
+            - application
+            - zones
+            type: object
+          status:
+            description: AnyApplicationStatus defines the observed state of AnyApplication.
+            properties:
+              conditions:
+                items:
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    msg:
+                      type: string
+                    reason:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                    zoneId:
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - status
+                  - type
+                  - zoneId
+                  type: object
+                type: array
+              owner:
+                type: string
+              placements:
+                items:
+                  properties:
+                    node-affinity:
+                      items:
+                        type: string
+                      type: array
+                    zone:
+                      type: string
+                  required:
+                  - zone
+                  type: object
+                type: array
+              state:
+                type: string
+            required:
+            - owner
+            - state
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
