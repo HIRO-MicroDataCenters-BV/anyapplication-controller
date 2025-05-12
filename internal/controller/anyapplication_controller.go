@@ -18,6 +18,8 @@ package controller
 
 import (
 	"context"
+	"reflect"
+	"sync/atomic"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -31,7 +33,7 @@ import (
 	"hiro.io/anyapplication/internal/controller/types"
 )
 
-const anyApplicationFinalizerName = "anyapplication.finalizers.hiro.com"
+const anyApplicationFinalizerName = "anyapplication.finalizers.hiro.io"
 
 // AnyApplicationReconciler reconciles a AnyApplication object
 type AnyApplicationReconciler struct {
@@ -84,22 +86,25 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	result := r.Reconciler.DoReconcile(globalApplication)
 
-	log.Info("reconciler result", "result", result)
+	log.Info("reconciler", "result", result)
 	if result.Status.IsPresent() {
-		err = status.UpdateStatus(ctx, r.Client, req.NamespacedName, func(applicationStatus *dcpv1.AnyApplicationStatus) bool {
-			*applicationStatus = result.Status.OrEmpty()
-			return true
+		stopRetrying := atomic.Bool{}
+		newStatus := result.Status.OrEmpty()
+
+		statusUpdater := status.NewStatusUpdater(ctx, log.WithName("Controller StatusUpdater"), r.Client, req.NamespacedName)
+		err = statusUpdater.UpdateStatus(&stopRetrying, func(applicationStatus *dcpv1.AnyApplicationStatus) bool {
+			return mergeStatus(applicationStatus, &newStatus)
 		})
 		if err != nil {
 			log.Error(err, "failed to update status")
 			return ctrl.Result{}, err // TODO maybe requeue
 		}
 	}
-	// Run job only after status update
+
 	result.JobsToAdd.ForEach(func(newJob types.AsyncJob) {
 		applicationId := newJob.GetJobID().ApplicationId
 		r.Jobs.Stop(applicationId)
-		log.Info("Starting job", newJob.GetJobID())
+		log.Info("Starting job", "jobId", newJob.GetJobID())
 		r.Jobs.Execute(newJob)
 	})
 
@@ -162,4 +167,40 @@ func removeString(slice []string, s string) []string {
 		}
 	}
 	return result
+}
+
+func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.AnyApplicationStatus) bool {
+	updated := false
+	if newStatus.Placements != nil && !reflect.DeepEqual(currentStatus.Placements, newStatus.Placements) {
+		currentStatus.Placements = newStatus.Placements
+		updated = true
+	}
+	if newStatus.State != dcpv1.UnknownGlobalState && currentStatus.State != newStatus.State {
+		currentStatus.State = newStatus.State
+		updated = true
+	}
+	if newStatus.Owner != "" && currentStatus.Owner != newStatus.Owner {
+		currentStatus.Owner = newStatus.Owner
+		updated = true
+	}
+
+	if newStatus.Conditions != nil {
+		for _, newCondition := range newStatus.Conditions {
+			found := false
+			for i, existingCondition := range currentStatus.Conditions {
+				if existingCondition.Type == newCondition.Type && existingCondition.ZoneId == newCondition.ZoneId {
+					if existingCondition.LastTransitionTime.Time.Before(newCondition.LastTransitionTime.Time) {
+						currentStatus.Conditions[i] = newCondition
+						updated = true
+					}
+					found = true
+				}
+			}
+			if !found {
+				currentStatus.Conditions = append(currentStatus.Conditions, newCondition)
+				updated = true
+			}
+		}
+	}
+	return updated
 }

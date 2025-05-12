@@ -1,12 +1,16 @@
 package job
 
 import (
+	"sync/atomic"
+
 	"github.com/argoproj/gitops-engine/pkg/health"
+	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type RelocationJob struct {
@@ -16,6 +20,8 @@ type RelocationJob struct {
 	clock         clock.Clock
 	msg           string
 	jobId         types.JobId
+	stopped       atomic.Bool
+	log           logr.Logger
 }
 
 func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *RelocationJob {
@@ -26,7 +32,7 @@ func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.Appl
 			Namespace: application.Namespace,
 		},
 	}
-
+	log := logf.Log.WithName("RelocationJob")
 	return &RelocationJob{
 		status:        v1.RelocationStatusPull,
 		application:   application,
@@ -34,6 +40,8 @@ func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.Appl
 		clock:         clock,
 		msg:           "",
 		jobId:         jobId,
+		stopped:       atomic.Bool{},
+		log:           log,
 	}
 }
 
@@ -56,7 +64,9 @@ func (job *RelocationJob) Run(context types.AsyncJobContext) {
 func (job *RelocationJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = v1.RelocationStatusFailure
-	err := status.AddOrUpdateCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+	statusUpdater := status.NewStatusUpdater(
+		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
+	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
 	if err != nil {
 		job.status = v1.RelocationStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -65,7 +75,10 @@ func (job *RelocationJob) Fail(context types.AsyncJobContext, msg string) {
 
 func (job *RelocationJob) Success(context types.AsyncJobContext, healthStatus *health.HealthStatus) {
 	job.status = v1.RelocationStatusDone
-	err := status.AddOrUpdateCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+
+	statusUpdater := status.NewStatusUpdater(
+		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
+	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
 	if err != nil {
 		job.status = v1.RelocationStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -90,4 +103,6 @@ func (job *RelocationJob) GetStatus() v1.ConditionStatus {
 	}
 }
 
-func (job *RelocationJob) Stop() {}
+func (job *RelocationJob) Stop() {
+	job.stopped.Store(true)
+}

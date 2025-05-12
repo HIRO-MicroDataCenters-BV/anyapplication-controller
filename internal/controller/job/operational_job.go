@@ -2,14 +2,17 @@ package job
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/health"
+	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type LocalOperationJob struct {
@@ -21,9 +24,12 @@ type LocalOperationJob struct {
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
 	jobId         types.JobId
+	stopped       atomic.Bool
+	log           logr.Logger
 }
 
 func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *LocalOperationJob {
+	log := logf.Log.WithName("LocalOperationJob")
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
 		ApplicationId: types.ApplicationId{
@@ -39,6 +45,8 @@ func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.
 		status:        health.HealthStatusProgressing,
 		stopCh:        make(chan struct{}),
 		jobId:         jobId,
+		stopped:       atomic.Bool{},
+		log:           log,
 	}
 }
 
@@ -79,6 +87,7 @@ func (job *LocalOperationJob) runInner(context types.AsyncJobContext) {
 }
 
 func (job *LocalOperationJob) Stop() {
+	job.stopped.Store(true)
 	close(job.stopCh)
 	job.wg.Wait()
 }
@@ -86,7 +95,10 @@ func (job *LocalOperationJob) Stop() {
 func (job *LocalOperationJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = health.HealthStatusDegraded
-	err := status.AddOrUpdateCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+
+	statusUpdater := status.NewStatusUpdater(
+		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
+	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
 	if err != nil {
 		job.status = health.HealthStatusDegraded
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -95,7 +107,9 @@ func (job *LocalOperationJob) Fail(context types.AsyncJobContext, msg string) {
 
 func (job *LocalOperationJob) Success(context types.AsyncJobContext, healthStatus *health.HealthStatus) {
 	job.status = healthStatus.Status
-	err := status.AddOrUpdateCondition(context.GetGoContext(), context.GetKubeClient(), job.application.GetNamespacedName(), job.GetStatus())
+	statusUpdater := status.NewStatusUpdater(
+		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
+	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
 	if err != nil {
 		job.status = health.HealthStatusDegraded
 		job.msg = "Cannot Update Application Condition. " + err.Error()

@@ -2,8 +2,9 @@ package status
 
 import (
 	"context"
-	"fmt"
+	"sync/atomic"
 
+	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -11,10 +12,34 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func UpdateStatus(ctx context.Context, c client.Client, name types.NamespacedName, statusUpdate func(status *v1.AnyApplicationStatus) bool) error {
+type StatusUpdater struct {
+	ctx    context.Context
+	log    logr.Logger
+	client client.Client
+	name   types.NamespacedName
+}
+
+func NewStatusUpdater(
+	ctx context.Context,
+	log logr.Logger,
+	client client.Client,
+	name types.NamespacedName,
+) StatusUpdater {
+	return StatusUpdater{
+		ctx:    ctx,
+		log:    log,
+		client: client,
+		name:   name,
+	}
+}
+
+func (su *StatusUpdater) UpdateStatus(
+	stopRetrying *atomic.Bool,
+	statusUpdate func(status *v1.AnyApplicationStatus) bool,
+) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var application v1.AnyApplication
-		if err := c.Get(ctx, name, &application); err != nil {
+		if err := su.client.Get(su.ctx, su.name, &application); err != nil {
 			if errors.IsNotFound(err) {
 				return nil // Resource gone
 			}
@@ -28,16 +53,24 @@ func UpdateStatus(ctx context.Context, c client.Client, name types.NamespacedNam
 		}
 		// Update or insert condition
 		if updated {
-			fmt.Printf("Updating status %v\n", updatedApplication.Status)
-			return c.Status().Update(ctx, updatedApplication)
+			if stopRetrying != nil && stopRetrying.Load() {
+				return nil // stop retrying
+			}
+
+			err := su.client.Status().Update(su.ctx, updatedApplication)
+			su.log.Info("Updating status", "status", updatedApplication.Status, "error", err)
+			return err
 		}
 		return nil // no change needed
 	})
 }
 
-func AddOrUpdateCondition(ctx context.Context, c client.Client, name types.NamespacedName, toAddOrUpdate v1.ConditionStatus) error {
-	return UpdateStatus(ctx, c, name, func(status *v1.AnyApplicationStatus) bool {
-		return AddOrUpdate(status, &toAddOrUpdate)
+func (su *StatusUpdater) UpdateCondition(
+	stopRetrying *atomic.Bool,
+	conditionToUpdate v1.ConditionStatus,
+) error {
+	return su.UpdateStatus(stopRetrying, func(status *v1.AnyApplicationStatus) bool {
+		return AddOrUpdate(status, &conditionToUpdate)
 	})
 }
 
