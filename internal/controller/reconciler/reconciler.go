@@ -8,8 +8,9 @@ import (
 )
 
 type ReconcilerResult struct {
-	Status    mo.Option[v1.AnyApplicationStatus]
-	JobsToAdd mo.Option[types.AsyncJob]
+	Status       mo.Option[v1.AnyApplicationStatus]
+	JobsToAdd    mo.Option[types.AsyncJob]
+	JobsToRemove bool
 }
 
 type Reconciler struct {
@@ -39,8 +40,9 @@ func (r *Reconciler) DoReconcile(globalApplication types.GlobalApplication) Reco
 	statusResult := globalApplication.DeriveNewStatus(jobConditions, r.jobFactory)
 
 	reconcilerResult := ReconcilerResult{
-		Status:    statusResult.Status,
-		JobsToAdd: statusResult.Jobs.JobsToAdd,
+		Status:       statusResult.Status,
+		JobsToAdd:    statusResult.Jobs.JobsToAdd,
+		JobsToRemove: statusResult.Jobs.JobsToRemove.IsPresent(),
 	}
 	return reconcilerResult
 }
