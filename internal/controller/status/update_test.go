@@ -2,6 +2,7 @@ package status
 
 import (
 	"context"
+	"sync/atomic"
 
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
@@ -9,9 +10,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"testing"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -28,6 +31,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 		application *v1.AnyApplication
 		scheme      *runtime.Scheme
 		fakeClock   clock.Clock
+		log         logr.Logger
 	)
 
 	BeforeEach(func() {
@@ -74,6 +78,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 			WithRuntimeObjects(application).
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
+		log = logf.Log.WithName("UndeployJob")
 	})
 
 	It("should add a new condition if it does not exist", func() {
@@ -82,8 +87,10 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 			ZoneId: "zone2",
 			Status: string(v1.PlacementStatusDone),
 		}
+		stopRetrying := atomic.Bool{}
+		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application))
+		err := statusUpdater.UpdateCondition(&stopRetrying, newCondition)
 
-		err := AddOrUpdateCondition(ctx, fakeClient, client.ObjectKeyFromObject(application), newCondition)
 		Expect(err).ToNot(HaveOccurred())
 
 		updatedApp := &v1.AnyApplication{}
@@ -98,8 +105,10 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 			ZoneId: "zone",
 			Status: string(v1.PlacementStatusDone),
 		}
+		stopRetrying := atomic.Bool{}
+		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application))
+		err := statusUpdater.UpdateCondition(&stopRetrying, updatedCondition)
 
-		err := AddOrUpdateCondition(ctx, fakeClient, client.ObjectKeyFromObject(application), updatedCondition)
 		Expect(err).ToNot(HaveOccurred())
 
 		updatedApp := &v1.AnyApplication{}
@@ -111,7 +120,10 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 	It("should not update if the condition is unchanged", func() {
 		existingCondition := *application.Status.Conditions[0].DeepCopy()
 
-		err := AddOrUpdateCondition(ctx, fakeClient, client.ObjectKeyFromObject(application), existingCondition)
+		stopRetrying := atomic.Bool{}
+
+		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application))
+		err := statusUpdater.UpdateCondition(&stopRetrying, existingCondition)
 		Expect(err).ToNot(HaveOccurred())
 
 		updatedApp := &v1.AnyApplication{}

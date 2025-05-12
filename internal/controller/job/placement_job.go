@@ -1,11 +1,15 @@
 package job
 
 import (
+	"sync/atomic"
+
+	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type LocalPlacementJob struct {
@@ -15,6 +19,8 @@ type LocalPlacementJob struct {
 	status        v1.PlacementStatus
 	msg           string
 	jobId         types.JobId
+	stopped       atomic.Bool
+	log           logr.Logger
 }
 
 func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *LocalPlacementJob {
@@ -25,13 +31,15 @@ func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.
 			Namespace: application.Namespace,
 		},
 	}
-
+	log := logf.Log.WithName("LocalPlacementJob")
 	return &LocalPlacementJob{
 		application:   application,
 		runtimeConfig: runtimeConfig,
 		clock:         clock,
 		status:        v1.PlacementStatusInProgress,
 		jobId:         jobId,
+		stopped:       atomic.Bool{},
+		log:           log,
 	}
 }
 
@@ -40,14 +48,15 @@ func (job *LocalPlacementJob) Run(context types.AsyncJobContext) {
 	ctx := context.GetGoContext()
 
 	job.status = v1.PlacementStatusDone
+	condition := job.GetStatus()
 
-	err := status.UpdateStatus(ctx, client, job.application.GetNamespacedName(), func(applicationStatus *v1.AnyApplicationStatus) bool {
+	statusUpdater := status.NewStatusUpdater(ctx, job.log.WithName("LocalPlacementJob StatusUpdater"), client, job.application.GetNamespacedName())
+	err := statusUpdater.UpdateStatus(&job.stopped, func(applicationStatus *v1.AnyApplicationStatus) bool {
 		applicationStatus.Placements = []v1.Placement{
 			{
 				Zone: job.runtimeConfig.ZoneId,
 			},
 		}
-		condition := job.GetStatus()
 		status.AddOrUpdate(applicationStatus, &condition)
 		return true
 	})
@@ -76,4 +85,6 @@ func (job *LocalPlacementJob) GetStatus() v1.ConditionStatus {
 	}
 }
 
-func (job *LocalPlacementJob) Stop() {}
+func (job *LocalPlacementJob) Stop() {
+	job.stopped.Store(true)
+}
