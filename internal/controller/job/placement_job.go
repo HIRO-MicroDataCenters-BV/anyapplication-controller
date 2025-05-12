@@ -50,7 +50,7 @@ func (job *LocalPlacementJob) Run(context types.AsyncJobContext) {
 	job.status = v1.PlacementStatusDone
 	condition := job.GetStatus()
 
-	statusUpdater := status.NewStatusUpdater(ctx, job.log.WithName("LocalPlacementJob StatusUpdater"), client, job.application.GetNamespacedName())
+	statusUpdater := status.NewStatusUpdater(ctx, job.log.WithName("StatusUpdater"), client, job.application.GetNamespacedName())
 	err := statusUpdater.UpdateStatus(&job.stopped, func(applicationStatus *v1.AnyApplicationStatus) bool {
 		applicationStatus.Placements = []v1.Placement{
 			{

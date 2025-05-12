@@ -62,7 +62,7 @@ func (job *UndeployJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = v1.RelocationStatusFailure
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(), job.log.WithName("UndeployJob StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
+		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
 	if err != nil {
 		job.status = v1.RelocationStatusFailure
@@ -74,7 +74,7 @@ func (job *UndeployJob) Success(context types.AsyncJobContext) {
 	job.status = v1.RelocationStatusDone
 
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(), job.log.WithName("UndeployJob StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
+		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
 
 	if err != nil {

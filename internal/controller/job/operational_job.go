@@ -97,7 +97,7 @@ func (job *LocalOperationJob) Fail(context types.AsyncJobContext, msg string) {
 	job.status = health.HealthStatusDegraded
 
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(), job.log.WithName("LocalOperationalJob StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
+		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
 	if err != nil {
 		job.status = health.HealthStatusDegraded
@@ -108,7 +108,7 @@ func (job *LocalOperationJob) Fail(context types.AsyncJobContext, msg string) {
 func (job *LocalOperationJob) Success(context types.AsyncJobContext, healthStatus *health.HealthStatus) {
 	job.status = healthStatus.Status
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(), job.log.WithName("LocalOperationalJob StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
+		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
 	if err != nil {
 		job.status = health.HealthStatusDegraded
