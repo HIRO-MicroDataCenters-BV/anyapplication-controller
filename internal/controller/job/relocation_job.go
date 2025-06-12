@@ -22,6 +22,7 @@ type RelocationJob struct {
 	jobId         types.JobId
 	stopped       atomic.Bool
 	log           logr.Logger
+	version       string
 }
 
 func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *RelocationJob {
@@ -32,6 +33,7 @@ func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.Appl
 			Namespace: application.Namespace,
 		},
 	}
+	version := application.ResourceVersion
 	log := logf.Log.WithName("RelocationJob")
 	return &RelocationJob{
 		status:        v1.RelocationStatusPull,
@@ -42,6 +44,7 @@ func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.Appl
 		jobId:         jobId,
 		stopped:       atomic.Bool{},
 		log:           log,
+		version:       version,
 	}
 }
 
@@ -100,6 +103,7 @@ func (job *RelocationJob) GetStatus() v1.ConditionStatus {
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
+		ZoneVersion:        job.version,
 	}
 }
 

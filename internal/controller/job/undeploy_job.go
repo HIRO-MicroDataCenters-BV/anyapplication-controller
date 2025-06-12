@@ -21,6 +21,7 @@ type UndeployJob struct {
 	jobId         types.JobId
 	stopped       atomic.Bool
 	log           logr.Logger
+	version       string
 }
 
 func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *UndeployJob {
@@ -31,6 +32,7 @@ func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.Applic
 			Namespace: application.Namespace,
 		},
 	}
+	version := application.ResourceVersion
 	log := logf.Log.WithName("UndeployJob")
 	return &UndeployJob{
 		status:        v1.RelocationStatusUndeploy,
@@ -41,6 +43,7 @@ func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.Applic
 		jobId:         jobId,
 		stopped:       atomic.Bool{},
 		log:           log,
+		version:       version,
 	}
 }
 
@@ -98,6 +101,7 @@ func (job *UndeployJob) GetStatus() v1.ConditionStatus {
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
+		ZoneVersion:        job.version,
 	}
 }
 

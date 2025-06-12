@@ -21,6 +21,7 @@ type LocalPlacementJob struct {
 	jobId         types.JobId
 	stopped       atomic.Bool
 	log           logr.Logger
+	version       string
 }
 
 func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *LocalPlacementJob {
@@ -31,6 +32,7 @@ func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.
 			Namespace: application.Namespace,
 		},
 	}
+	version := application.ResourceVersion
 	log := logf.Log.WithName("LocalPlacementJob")
 	return &LocalPlacementJob{
 		application:   application,
@@ -40,6 +42,7 @@ func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.
 		jobId:         jobId,
 		stopped:       atomic.Bool{},
 		log:           log,
+		version:       version,
 	}
 }
 
@@ -82,6 +85,7 @@ func (job *LocalPlacementJob) GetStatus() v1.ConditionStatus {
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
+		ZoneVersion:        job.version,
 	}
 }
 
