@@ -28,9 +28,9 @@ import (
 	"github.com/argoproj/gitops-engine/pkg/cache"
 	"github.com/argoproj/gitops-engine/pkg/engine"
 	"github.com/go-logr/logr"
+	"go.uber.org/zap/zapcore"
 	"helm.sh/helm/v3/pkg/chartutil"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/klog/v2/textlogger"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,6 +38,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
+	configctrl "sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -105,12 +106,23 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	logger := zap.New(zap.UseFlagOptions(&opts))
-	ctrl.SetLogger(logger)
-
 	controllerConfig, err := config.LoadConfig(configurationFile)
 	failIfError(err, setupLog, "Failed to load application configuration")
 	applicationConfig := controllerConfig.Runtime
+
+	loggers := make(map[string]logr.Logger)
+	for name, levelStr := range controllerConfig.Logging.Components {
+		lvl := config.ParseLevel(levelStr)
+		loggers[name] = buildLogger(lvl).WithName(name)
+	}
+	// klog.InitFlags(nil)
+	// flag.Set("v", "0") // or "2", etc. Higher values = more logs
+	// flag.Parse()       // Bind flags if using Cobra or other CLI parsers
+	// klog.SetOutput(io.Discard)
+
+	logger := buildLogger(config.ParseLevel(controllerConfig.Logging.DefaultLevel))
+	// logger := zap.New(zap.UseFlagOptions(&opts))
+	ctrl.SetLogger(logger)
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -196,7 +208,9 @@ func main() {
 			config.GetCertificate = metricsCertWatcher.GetCertificate
 		})
 	}
-	config := ctrl.GetConfigOrDie()
+	// config := ctrl.GetConfigOrDie()
+	config, err := configctrl.GetConfigWithContext(applicationConfig.ZoneId)
+	failIfError(err, setupLog, "unable to get config")
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -232,11 +246,11 @@ func main() {
 	})
 	failIfError(err, setupLog, "unable to create helm client")
 
-	log := textlogger.NewLogger(textlogger.NewConfig())
+	// log := textlogger.NewLogger(textlogger.NewConfig())
 	clock := clock.NewClock()
 
 	clusterCache := cache.NewClusterCache(config,
-		cache.SetLogr(log),
+		cache.SetLogr(loggers["ClusterCache"]),
 		cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
 			managedByMark := un.GetLabels()["dcp.hiro.io/managed-by"]
 			info = &types.ResourceInfo{ManagedByMark: un.GetLabels()["dcp.hiro.io/managed-by"]}
@@ -244,14 +258,15 @@ func main() {
 			return
 		}),
 	)
-	gitOpsEngine := engine.NewEngine(config, clusterCache, engine.WithLogr(log))
+	gitOpsEngine := engine.NewEngine(config, clusterCache, engine.WithLogr(loggers["GitOpsEngine"]))
 	stopFunc, err := gitOpsEngine.Run()
 	failIfError(err, setupLog, "unable to start gitops engine")
 
-	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, clock, &applicationConfig, gitOpsEngine)
+	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, clock,
+		&applicationConfig, gitOpsEngine, loggers["SyncManager"])
 	jobContext := job.NewAsyncJobContext(helmClient, kubeClient, context.Background(), syncManager)
 	jobs := job.NewJobs(jobContext)
-	jobFactory := job.NewAsyncJobFactory(&applicationConfig, clock)
+	jobFactory := job.NewAsyncJobFactory(&applicationConfig, clock, loggers["Jobs"])
 
 	reconciler := reconciler.NewReconciler(jobs, jobFactory)
 
@@ -262,6 +277,7 @@ func main() {
 		SyncManager: syncManager,
 		Jobs:        jobs,
 		Reconciler:  reconciler,
+		Log:         loggers["Controller"],
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AnyApplication")
 		os.Exit(1)
@@ -303,4 +319,22 @@ func failIfError(err error, log logr.Logger, msg string) {
 		log.Error(err, msg)
 		os.Exit(1)
 	}
+}
+
+func buildLogger(level zapcore.Level) logr.Logger {
+	enabler := LevelEnablerFunc{minLevel: level}
+	opts := zap.Options{
+		Development: true,
+		Level:       enabler,
+	}
+	return zap.New(zap.UseFlagOptions(&opts))
+}
+
+type LevelEnablerFunc struct {
+	minLevel zapcore.Level
+}
+
+// Enabled returns true if the level is greater than or equal to minLevel
+func (l LevelEnablerFunc) Enabled(level zapcore.Level) bool {
+	return level >= l.minLevel
 }

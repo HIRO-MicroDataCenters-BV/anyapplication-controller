@@ -1,5 +1,13 @@
 peers:
   - url: localhost:8080
 runtime:
-  zone: zone
+  zone: kind-kind-cluster1
   localPollDuration: 10s
+logging:
+  default_level: info
+  components:
+    SyncManager: none
+    GitOpsEngine: none
+    ClusterCache: none
+    Controller: none
+    Jobs: info

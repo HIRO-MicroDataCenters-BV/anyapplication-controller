@@ -12,7 +12,6 @@ import (
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type LocalOperationJob struct {
@@ -26,10 +25,11 @@ type LocalOperationJob struct {
 	jobId         types.JobId
 	stopped       atomic.Bool
 	log           logr.Logger
+	version       string
 }
 
-func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *LocalOperationJob {
-	log := logf.Log.WithName("LocalOperationJob")
+func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock, log logr.Logger) *LocalOperationJob {
+	log = log.WithName("LocalOperationJob")
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
 		ApplicationId: types.ApplicationId{
@@ -37,6 +37,7 @@ func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.
 			Namespace: application.Namespace,
 		},
 	}
+	version := application.ResourceVersion
 
 	return &LocalOperationJob{
 		application:   application,
@@ -47,6 +48,7 @@ func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.
 		jobId:         jobId,
 		stopped:       atomic.Bool{},
 		log:           log,
+		version:       version,
 	}
 }
 
@@ -131,5 +133,6 @@ func (job *LocalOperationJob) GetStatus() v1.ConditionStatus {
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
+		ZoneVersion:        job.version,
 	}
 }

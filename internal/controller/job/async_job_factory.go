@@ -1,6 +1,7 @@
 package job
 
 import (
+	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
@@ -10,31 +11,33 @@ import (
 type AsyncJobFactoryImpl struct {
 	config *config.ApplicationRuntimeConfig
 	clock  clock.Clock
+	log    logr.Logger
 }
 
-func NewAsyncJobFactory(config *config.ApplicationRuntimeConfig, clock clock.Clock) AsyncJobFactoryImpl {
+func NewAsyncJobFactory(config *config.ApplicationRuntimeConfig, clock clock.Clock, log logr.Logger) AsyncJobFactoryImpl {
 	return AsyncJobFactoryImpl{
 		config: config,
 		clock:  clock,
+		log:    log,
 	}
 }
 
 func (f AsyncJobFactoryImpl) CreateRelocationJob(application *v1.AnyApplication) types.AsyncJob {
-	return NewRelocationJob(application, f.config, f.clock)
+	return NewRelocationJob(application, f.config, f.clock, f.log)
 }
 
 func (f AsyncJobFactoryImpl) CreateOnwershipTransferJob(application *v1.AnyApplication) types.AsyncJob {
-	return NewOwnershipTransferJob(application, f.config, f.clock)
+	return NewOwnershipTransferJob(application, f.config, f.clock, f.log)
 }
 
 func (f AsyncJobFactoryImpl) CreateUndeployJob(application *v1.AnyApplication) types.AsyncJob {
-	return NewUndeployJob(application, f.config, f.clock)
+	return NewUndeployJob(application, f.config, f.clock, f.log)
 }
 
 func (f AsyncJobFactoryImpl) CreateLocalPlacementJob(application *v1.AnyApplication) types.AsyncJob {
-	return NewLocalPlacementJob(application, f.config, f.clock)
+	return NewLocalPlacementJob(application, f.config, f.clock, f.log)
 }
 
 func (f AsyncJobFactoryImpl) CreateOperationJob(application *v1.AnyApplication) types.AsyncJob {
-	return NewLocalOperationJob(application, f.config, f.clock)
+	return NewLocalOperationJob(application, f.config, f.clock, f.log)
 }

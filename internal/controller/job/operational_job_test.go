@@ -24,6 +24,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("LocalOperationJob", func() {
@@ -94,16 +95,17 @@ var _ = Describe("LocalOperationJob", func() {
 		application = application.DeepCopy()
 
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine)
+		syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 		jobContext = NewAsyncJobContext(helmClient, kubeClient, context.TODO(), syncManager)
 
-		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock)
+		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock, logf.Log)
 	})
 
 	It("should return initial status", func() {
 		Expect(operationJob.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.LocalConditionType,
 			ZoneId:             "zone",
+			ZoneVersion:        "999",
 			Status:             string(health.HealthStatusProgressing),
 			LastTransitionTime: fakeClock.NowTime(),
 		},
@@ -139,6 +141,7 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
+				ZoneVersion:        "999",
 				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
@@ -152,6 +155,7 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
+				ZoneVersion:        "999",
 				Status:             string(health.HealthStatusUnknown),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
@@ -167,12 +171,13 @@ var _ = Describe("LocalOperationJob", func() {
 			Chart:      "test-chart",
 			Version:    "1.0.0",
 		}
-		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock)
+		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock, logf.Log)
 
 		Expect(operationJob.GetStatus()).To(Equal(
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
+				ZoneVersion:        "999",
 				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
@@ -186,6 +191,7 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
+				ZoneVersion:        "999",
 				Status:             string(health.HealthStatusDegraded),
 				LastTransitionTime: fakeClock.NowTime(),
 				Msg:                "Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",

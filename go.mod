@@ -106,6 +106,7 @@ require (
 	k8s.io/cli-runtime v0.32.2 // indirect
 	k8s.io/component-helpers v0.32.2 // indirect
 	k8s.io/controller-manager v0.32.3 // indirect
+	k8s.io/klog v1.0.0 // indirect
 	k8s.io/kube-aggregator v0.32.2 // indirect
 	k8s.io/kubernetes v1.32.2 // indirect
 	oras.land/oras-go v1.2.5 // indirect

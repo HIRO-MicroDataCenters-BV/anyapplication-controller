@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
 	"github.com/argoproj/gitops-engine/pkg/health"
@@ -88,7 +89,7 @@ var _ = Describe("Jobs", func() {
 		helmClient = helm.NewFakeHelmClient()
 
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager := ctrl_sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine)
+		syncManager := ctrl_sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
 		context := NewAsyncJobContext(helmClient, kubeClient, ctx, syncManager)
 		jobs = NewJobs(context)

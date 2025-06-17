@@ -63,3 +63,11 @@ configuration:
   runtime:
     zone: zone
     localPollDuration: 30s
+  logging:
+    default_level: info
+    components:
+      SyncManager: none
+      GitOpsEngine: none
+      ClusterCache: none
+      Controller: none
+      Jobs: info

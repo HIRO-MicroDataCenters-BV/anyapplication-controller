@@ -24,7 +24,6 @@ import (
 	"hiro.io/anyapplication/internal/helm"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type cachedApp struct {
@@ -52,10 +51,9 @@ func NewSyncManager(
 	clock clock.Clock,
 	config *config.ApplicationRuntimeConfig,
 	gitOpsEngine engine.GitOpsEngine,
-
+	logger logr.Logger,
 ) types.SyncManager {
-	log := logf.Log.WithName("SyncManager")
-
+	log := logger.WithName("SyncManager")
 	return &syncManager{
 		kubeClient:   kubeClient,
 		helmClient:   helmClient,
@@ -281,11 +279,12 @@ func (m *syncManager) getInstanceId(application *v1.AnyApplication) string {
 
 func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.GlobalApplication, error) {
 	resources := m.findApplicationResources(application)
-	localApplication, err := local.NewFromUnstructured(resources, m.config)
+	version := application.ResourceVersion
+	localApplication, err := local.NewFromUnstructured(version, resources, m.config)
 	if err != nil {
 		return nil, errors.Wrap(err, "Fail to create local application")
 	}
-	globalApplication := global.NewFromLocalApplication(localApplication, m.clock, application, m.config)
+	globalApplication := global.NewFromLocalApplication(localApplication, m.clock, application, m.config, m.log)
 	return globalApplication, nil
 }
 

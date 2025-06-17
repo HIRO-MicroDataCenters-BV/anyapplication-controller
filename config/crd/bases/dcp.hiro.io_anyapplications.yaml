@@ -105,11 +105,14 @@ spec:
                       type: string
                     zoneId:
                       type: string
+                    zoneVersion:
+                      type: string
                   required:
                   - lastTransitionTime
                   - status
                   - type
                   - zoneId
+                  - zoneVersion
                   type: object
                 type: array
               owner:

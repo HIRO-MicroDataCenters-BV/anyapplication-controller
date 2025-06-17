@@ -9,7 +9,6 @@ import (
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type UndeployJob struct {
@@ -21,9 +20,10 @@ type UndeployJob struct {
 	jobId         types.JobId
 	stopped       atomic.Bool
 	log           logr.Logger
+	version       string
 }
 
-func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *UndeployJob {
+func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock, log logr.Logger) *UndeployJob {
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
 		ApplicationId: types.ApplicationId{
@@ -31,7 +31,8 @@ func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.Applic
 			Namespace: application.Namespace,
 		},
 	}
-	log := logf.Log.WithName("UndeployJob")
+	version := application.ResourceVersion
+	log = log.WithName("UndeployJob")
 	return &UndeployJob{
 		status:        v1.RelocationStatusUndeploy,
 		application:   application,
@@ -41,6 +42,7 @@ func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.Applic
 		jobId:         jobId,
 		stopped:       atomic.Bool{},
 		log:           log,
+		version:       version,
 	}
 }
 
@@ -98,6 +100,7 @@ func (job *UndeployJob) GetStatus() v1.ConditionStatus {
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
+		ZoneVersion:        job.version,
 	}
 }
 

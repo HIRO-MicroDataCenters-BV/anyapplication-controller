@@ -14,9 +14,10 @@ type LocalApplication struct {
 	config   *config.ApplicationRuntimeConfig
 	status   health.HealthStatusCode
 	messages []string
+	version  string
 }
 
-func NewFromUnstructured(resources []*unstructured.Unstructured, config *config.ApplicationRuntimeConfig) (mo.Option[LocalApplication], error) {
+func NewFromUnstructured(version string, resources []*unstructured.Unstructured, config *config.ApplicationRuntimeConfig) (mo.Option[LocalApplication], error) {
 	if len(resources) == 0 {
 		return mo.None[LocalApplication](), nil
 	}
@@ -33,6 +34,7 @@ func NewFromUnstructured(resources []*unstructured.Unstructured, config *config.
 		status:   status,
 		messages: messages,
 		config:   config,
+		version:  version,
 	}), nil
 }
 
@@ -52,6 +54,7 @@ func (l *LocalApplication) GetCondition() v1.ConditionStatus {
 		Status:             string(l.status),
 		Reason:             "",
 		Msg:                "",
+		ZoneVersion:        l.version,
 	}
 	return condition
 }

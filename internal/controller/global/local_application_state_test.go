@@ -12,6 +12,7 @@ import (
 	"hiro.io/anyapplication/internal/controller/local"
 	"hiro.io/anyapplication/internal/controller/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("Local Application FSM", func() {
@@ -30,7 +31,7 @@ var _ = Describe("Local Application FSM", func() {
 			ZoneId: "zone",
 		}
 
-		jobFactory = job.NewAsyncJobFactory(&runtimeConfig, fakeClock)
+		jobFactory = job.NewAsyncJobFactory(&runtimeConfig, fakeClock, logf.Log)
 		localApplication = mo.None[local.LocalApplication]()
 
 		application = v1.AnyApplication{
@@ -57,7 +58,7 @@ var _ = Describe("Local Application FSM", func() {
 				State: v1.UnknownGlobalState,
 			},
 		}
-		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig)
+		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 
 	})
 
@@ -117,7 +118,7 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig))
-		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig)
+		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 
 		status := statusResult.Status.OrEmpty()
@@ -166,7 +167,7 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig))
-		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig)
+		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 
 		status := statusResult.Status.OrEmpty()

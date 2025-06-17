@@ -1,6 +1,7 @@
 package job
 
 import (
+	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
@@ -13,9 +14,10 @@ type OwnershipTransferJob struct {
 	status        v1.OwnershipTransferStatus
 	clock         clock.Clock
 	jobId         types.JobId
+	log           logr.Logger
 }
 
-func NewOwnershipTransferJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *OwnershipTransferJob {
+func NewOwnershipTransferJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock, log logr.Logger) *OwnershipTransferJob {
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
 		ApplicationId: types.ApplicationId{
@@ -30,6 +32,7 @@ func NewOwnershipTransferJob(application *v1.AnyApplication, runtimeConfig *conf
 		status:        v1.OwnershipTransferPulling,
 		clock:         clock,
 		jobId:         jobId,
+		log:           log,
 	}
 }
 

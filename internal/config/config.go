@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,6 +21,12 @@ type Config struct {
 		Url string `yaml:"url"`
 	} `yaml:"peers"`
 	Runtime ApplicationRuntimeConfig `yaml:"runtime"`
+	Logging LoggingConfig            `yaml:"logging"`
+}
+
+type LoggingConfig struct {
+	DefaultLevel string            `yaml:"default_level"`
+	Components   map[string]string `yaml:"components"`
 }
 
 func LoadConfig(filePath string) (*Config, error) {
@@ -44,4 +51,23 @@ func LoadConfig(filePath string) (*Config, error) {
 	}
 
 	return config, nil
+}
+
+func ParseLevel(lvl string) zapcore.Level {
+	var level zapcore.Level
+	switch lvl {
+	case "debug":
+		level = zapcore.DebugLevel
+	case "info":
+		level = zapcore.InfoLevel
+	case "warn":
+		level = zapcore.WarnLevel
+	case "error":
+		level = zapcore.ErrorLevel
+	case "none":
+		level = zapcore.PanicLevel
+	default:
+		level = zapcore.InfoLevel
+	}
+	return level
 }
