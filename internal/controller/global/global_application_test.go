@@ -12,6 +12,7 @@ import (
 	"hiro.io/anyapplication/internal/controller/local"
 	"hiro.io/anyapplication/internal/controller/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("GlobalApplication", func() {
@@ -26,8 +27,8 @@ var _ = Describe("GlobalApplication", func() {
 		It("transit to placement state", func() {
 			applicationResource := makeApplication()
 			applicationResource.Status.Owner = ""
-			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
-			jobFactory := job.NewAsyncJobFactory(runtimeConfig, clock)
+			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig, logf.Log)
+			jobFactory := job.NewAsyncJobFactory(runtimeConfig, clock, logf.Log)
 
 			statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 			status := statusResult.Status.OrEmpty()
@@ -64,14 +65,14 @@ var _ = Describe("GlobalApplication", func() {
 		runtimeConfig := &config.ApplicationRuntimeConfig{
 			ZoneId: "zone",
 		}
-		jobFactory := job.NewAsyncJobFactory(runtimeConfig, clock)
+		jobFactory := job.NewAsyncJobFactory(runtimeConfig, clock, logf.Log)
 
 		It("create local placement job", func() {
 			applicationResource := makeApplication()
 			applicationResource.Status.State = v1.PlacementGlobalState
 
 			localApplication := mo.None[local.LocalApplication]()
-			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
+			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig, logf.Log)
 			existingJobCondition := types.EmptyJobConditions()
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 
@@ -124,7 +125,7 @@ var _ = Describe("GlobalApplication", func() {
 			}, types.AsyncJobTypeRelocate)
 
 			localApplication := mo.None[local.LocalApplication]()
-			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
+			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig, logf.Log)
 
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 
@@ -191,7 +192,7 @@ var _ = Describe("GlobalApplication", func() {
 			}, types.AsyncJobTypeRelocate)
 
 			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig))
-			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
+			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig, logf.Log)
 
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 
@@ -253,7 +254,7 @@ var _ = Describe("GlobalApplication", func() {
 			existingJobCondition := types.EmptyJobConditions()
 
 			localApplication := mo.None[local.LocalApplication]()
-			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
+			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig, logf.Log)
 
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 
@@ -315,7 +316,7 @@ var _ = Describe("GlobalApplication", func() {
 			existingJobCondition := types.EmptyJobConditions()
 
 			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig))
-			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig)
+			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig, logf.Log)
 
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 

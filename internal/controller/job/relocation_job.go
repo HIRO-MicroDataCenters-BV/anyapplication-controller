@@ -10,7 +10,6 @@ import (
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type RelocationJob struct {
@@ -25,7 +24,7 @@ type RelocationJob struct {
 	version       string
 }
 
-func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *RelocationJob {
+func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock, log logr.Logger) *RelocationJob {
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
 		ApplicationId: types.ApplicationId{
@@ -34,7 +33,7 @@ func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.Appl
 		},
 	}
 	version := application.ResourceVersion
-	log := logf.Log.WithName("RelocationJob")
+	log = log.WithName("RelocationJob")
 	return &RelocationJob{
 		status:        v1.RelocationStatusPull,
 		application:   application,

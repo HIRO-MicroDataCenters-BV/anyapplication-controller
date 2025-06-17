@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("PlacementJob", func() {
@@ -69,13 +70,14 @@ var _ = Describe("PlacementJob", func() {
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
 		application = application.DeepCopy()
-		placementJob = NewLocalPlacementJob(application, &runtimeConfig, fakeClock)
+		placementJob = NewLocalPlacementJob(application, &runtimeConfig, fakeClock, logf.Log)
 	})
 
 	It("should return initial status", func() {
 		Expect(placementJob.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.PlacementConditionType,
 			ZoneId:             "zone",
+			ZoneVersion:        "999",
 			Status:             string(v1.PlacementStatusInProgress),
 			LastTransitionTime: fakeClock.NowTime(),
 		},
@@ -95,6 +97,7 @@ var _ = Describe("PlacementJob", func() {
 				{
 					Type:               v1.PlacementConditionType,
 					ZoneId:             "zone",
+					ZoneVersion:        "999",
 					Status:             string(v1.PlacementStatusDone),
 					LastTransitionTime: fakeClock.NowTime(),
 				},
@@ -105,6 +108,7 @@ var _ = Describe("PlacementJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.PlacementConditionType,
 				ZoneId:             "zone",
+				ZoneVersion:        "999",
 				Status:             string(v1.PlacementStatusDone),
 				LastTransitionTime: fakeClock.NowTime(),
 			},

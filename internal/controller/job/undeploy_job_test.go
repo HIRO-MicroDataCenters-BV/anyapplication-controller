@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("UndeployJob", func() {
@@ -76,15 +77,16 @@ var _ = Describe("UndeployJob", func() {
 			Build()
 		application = application.DeepCopy()
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine)
+		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
-		undeployJob = NewUndeployJob(application, &runtimeConfig, fakeClock)
+		undeployJob = NewUndeployJob(application, &runtimeConfig, fakeClock, logf.Log)
 	})
 
 	It("should return initial status", func() {
 		Expect(undeployJob.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.RelocationConditionType,
 			ZoneId:             "zone",
+			ZoneVersion:        "999",
 			Status:             string(v1.RelocationStatusUndeploy),
 			LastTransitionTime: fakeClock.NowTime(),
 		},
@@ -104,6 +106,7 @@ var _ = Describe("UndeployJob", func() {
 				{
 					Type:               v1.RelocationConditionType,
 					ZoneId:             "zone",
+					ZoneVersion:        "999",
 					Status:             string(v1.RelocationStatusDone),
 					LastTransitionTime: fakeClock.NowTime(),
 				},
@@ -114,6 +117,7 @@ var _ = Describe("UndeployJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.RelocationConditionType,
 				ZoneId:             "zone",
+				ZoneVersion:        "999",
 				Status:             string(v1.RelocationStatusDone),
 				LastTransitionTime: fakeClock.NowTime(),
 			},

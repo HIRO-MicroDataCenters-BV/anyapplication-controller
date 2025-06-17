@@ -12,7 +12,6 @@ import (
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type LocalOperationJob struct {
@@ -29,8 +28,8 @@ type LocalOperationJob struct {
 	version       string
 }
 
-func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *LocalOperationJob {
-	log := logf.Log.WithName("LocalOperationJob")
+func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock, log logr.Logger) *LocalOperationJob {
+	log = log.WithName("LocalOperationJob")
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
 		ApplicationId: types.ApplicationId{

@@ -9,7 +9,6 @@ import (
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type LocalPlacementJob struct {
@@ -24,7 +23,7 @@ type LocalPlacementJob struct {
 	version       string
 }
 
-func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock) *LocalPlacementJob {
+func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock, log logr.Logger) *LocalPlacementJob {
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
 		ApplicationId: types.ApplicationId{
@@ -33,7 +32,7 @@ func NewLocalPlacementJob(application *v1.AnyApplication, runtimeConfig *config.
 		},
 	}
 	version := application.ResourceVersion
-	log := logf.Log.WithName("LocalPlacementJob")
+	log = log.WithName("LocalPlacementJob")
 	return &LocalPlacementJob{
 		application:   application,
 		runtimeConfig: runtimeConfig,

@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -103,10 +104,10 @@ var _ = Describe("AnyApplication Controller", func() {
 				panic("error " + err.Error())
 			}
 
-			syncManager = sync.NewSyncManager(k8sClient, helmClient, clusterCache, clock, &runtimeConfig, gitOpsEngine)
+			syncManager = sync.NewSyncManager(k8sClient, helmClient, clusterCache, clock, &runtimeConfig, gitOpsEngine, logf.Log)
 			jobContext := job.NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
 			jobs = job.NewJobs(jobContext)
-			jobFactory := job.NewAsyncJobFactory(&runtimeConfig, clock)
+			jobFactory := job.NewAsyncJobFactory(&runtimeConfig, clock, logf.Log)
 
 			reconciler = recon.NewReconciler(jobs, jobFactory)
 

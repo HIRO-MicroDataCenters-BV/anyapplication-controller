@@ -21,10 +21,10 @@ import (
 	"reflect"
 	"sync/atomic"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
@@ -43,6 +43,7 @@ type AnyApplicationReconciler struct {
 	SyncManager types.SyncManager
 	Jobs        types.AsyncJobs
 	Reconciler  reconciler.Reconciler
+	Log         logr.Logger
 }
 
 // +kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch;create;update;patch;delete
@@ -60,11 +61,10 @@ type AnyApplicationReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.4/pkg/reconcile
 func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
 
 	resource := &dcpv1.AnyApplication{}
 	if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
-		log.Error(err, "Unable to get AnyApplication ", "name", req.Name, "namespace", req.Namespace)
+		r.Log.Error(err, "Unable to get AnyApplication ", "name", req.Name, "namespace", req.Namespace)
 		// TODO (user): handle error
 		return ctrl.Result{}, nil
 	}
@@ -84,23 +84,23 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	globalApplication, err := r.SyncManager.LoadApplication(resource)
 	if err != nil {
-		log.Error(err, "failed to load application state")
+		r.Log.Error(err, "failed to load application state")
 		return ctrl.Result{}, err
 	}
 
 	result := r.Reconciler.DoReconcile(globalApplication)
 
-	log.Info("reconciler", "result", result)
+	r.Log.Info("reconciler result", result)
 	if result.Status.IsPresent() {
 		stopRetrying := atomic.Bool{}
 		newStatus := result.Status.OrEmpty()
 
-		statusUpdater := status.NewStatusUpdater(ctx, log.WithName("Controller StatusUpdater"), r.Client, req.NamespacedName)
+		statusUpdater := status.NewStatusUpdater(ctx, r.Log.WithName("Controller StatusUpdater"), r.Client, req.NamespacedName)
 		err = statusUpdater.UpdateStatus(&stopRetrying, func(applicationStatus *dcpv1.AnyApplicationStatus) bool {
 			return mergeStatus(applicationStatus, &newStatus)
 		})
 		if err != nil {
-			log.Error(err, "failed to update status")
+			r.Log.Error(err, "failed to update status")
 			return ctrl.Result{}, err // TODO maybe requeue
 		}
 	}
@@ -108,7 +108,7 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	result.JobsToAdd.ForEach(func(newJob types.AsyncJob) {
 		applicationId := newJob.GetJobID().ApplicationId
 		r.Jobs.Stop(applicationId)
-		log.Info("Starting job", "jobId", newJob.GetJobID())
+		r.Log.Info("Starting job", "jobId", newJob.GetJobID())
 		r.Jobs.Execute(newJob)
 	})
 

@@ -1,8 +1,7 @@
 package global
 
 import (
-	"fmt"
-
+	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
@@ -18,6 +17,7 @@ type globalApplication struct {
 	application     *v1.AnyApplication
 	config          *config.ApplicationRuntimeConfig
 	clock           clock.Clock
+	log             logr.Logger
 }
 
 func NewFromLocalApplication(
@@ -25,12 +25,15 @@ func NewFromLocalApplication(
 	clock clock.Clock,
 	application *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
+	log logr.Logger,
 ) types.GlobalApplication {
+	log = log.WithName("GlobalApplication")
 	return &globalApplication{
 		locaApplication: localApplication,
 		application:     application,
 		config:          config,
 		clock:           clock,
+		log:             log,
 	}
 }
 
@@ -68,7 +71,7 @@ func (g *globalApplication) DeriveNewStatus(
 	stateUpdated = updateJobConditions(current, jobConditions) || stateUpdated
 
 	// Update global state
-	globalStateUpdated, nextJobs := updateGlobalState(g.application, g.config, jobFactory, g.locaApplication.IsPresent(), runningJobType)
+	globalStateUpdated, nextJobs := updateGlobalState(g.application, g.config, jobFactory, g.locaApplication.IsPresent(), runningJobType, g.log)
 
 	stateUpdated = globalStateUpdated || stateUpdated
 
@@ -87,11 +90,12 @@ func updateGlobalState(
 	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
 	runningJobType mo.Option[types.AsyncJobType],
+	log logr.Logger,
 ) (bool, types.NextJobs) {
 	status := &application.Status
 
 	if status.Owner == config.ZoneId {
-		fmt.Printf("Global application %s/%s is owned by zone %s\n", application.Name, application.Namespace, status.Owner)
+		log.Info("Global application %s/%s is owned by zone %s\n", application.Name, application.Namespace, status.Owner)
 		return globalStateMachine(application, config, jobFactory, applicationPresent, runningJobType)
 	} else if applicationPresent || placementsContainZone(status, config.ZoneId) {
 		return localStateMachine(application, config, jobFactory, applicationPresent, runningJobType)
