@@ -78,6 +78,10 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.addFinalizer(ctx, resource)
 	}
 
+	if !currentZone(resource, r.Config.ZoneId) {
+		return ctrl.Result{}, nil
+	}
+
 	globalApplication, err := r.SyncManager.LoadApplication(resource)
 	if err != nil {
 		log.Error(err, "failed to load application state")
@@ -203,4 +207,19 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 		}
 	}
 	return updated
+}
+
+func currentZone(resource *dcpv1.AnyApplication, zone string) bool {
+
+	isNewApplication := resource.Status.State == ""
+
+	isOwnerZone := resource.Status.Owner == zone
+	isPlacementZone := false
+	for _, placement := range resource.Status.Placements {
+		if placement.Zone == zone {
+			isPlacementZone = true
+		}
+	}
+
+	return isNewApplication || isOwnerZone || isPlacementZone
 }
