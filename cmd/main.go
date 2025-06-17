@@ -262,7 +262,8 @@ func main() {
 	stopFunc, err := gitOpsEngine.Run()
 	failIfError(err, setupLog, "unable to start gitops engine")
 
-	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, clock, &applicationConfig, gitOpsEngine, loggers["SyncManager"])
+	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, clock,
+		&applicationConfig, gitOpsEngine, loggers["SyncManager"])
 	jobContext := job.NewAsyncJobContext(helmClient, kubeClient, context.Background(), syncManager)
 	jobs := job.NewJobs(jobContext)
 	jobFactory := job.NewAsyncJobFactory(&applicationConfig, clock, loggers["Jobs"])
