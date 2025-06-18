@@ -7,6 +7,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
 )
@@ -21,9 +22,16 @@ type UndeployJob struct {
 	stopped       atomic.Bool
 	log           logr.Logger
 	version       string
+	events        *events.Events
 }
 
-func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock, log logr.Logger) *UndeployJob {
+func NewUndeployJob(
+	application *v1.AnyApplication,
+	runtimeConfig *config.ApplicationRuntimeConfig,
+	clock clock.Clock,
+	log logr.Logger,
+	events *events.Events,
+) *UndeployJob {
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
 		ApplicationId: types.ApplicationId{
@@ -43,6 +51,7 @@ func NewUndeployJob(application *v1.AnyApplication, runtimeConfig *config.Applic
 		stopped:       atomic.Bool{},
 		log:           log,
 		version:       version,
+		events:        events,
 	}
 }
 
@@ -64,8 +73,15 @@ func (job *UndeployJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = v1.RelocationStatusFailure
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
+		context.GetGoContext(),
+		job.log.WithName("StatusUpdater"),
+		context.GetKubeClient(),
+		job.application.GetNamespacedName(),
+		job.runtimeConfig.ZoneId,
+		job.events,
+	)
+	event := events.Event{Reason: "Undeploy failure", Msg: job.msg}
+	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
 		job.status = v1.RelocationStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -76,8 +92,15 @@ func (job *UndeployJob) Success(context types.AsyncJobContext) {
 	job.status = v1.RelocationStatusDone
 
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
+		context.GetGoContext(),
+		job.log.WithName("StatusUpdater"),
+		context.GetKubeClient(),
+		job.application.GetNamespacedName(),
+		job.runtimeConfig.ZoneId,
+		job.events,
+	)
+	event := events.Event{Reason: "Undeploy state changed to '" + string(job.status) + "'", Msg: job.msg}
+	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 
 	if err != nil {
 		job.status = v1.RelocationStatusFailure

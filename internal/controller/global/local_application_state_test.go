@@ -8,6 +8,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/controller/job"
 	"hiro.io/anyapplication/internal/controller/local"
 	"hiro.io/anyapplication/internal/controller/types"
@@ -23,6 +24,7 @@ var _ = Describe("Local Application FSM", func() {
 		application       v1.AnyApplication
 		localApplication  mo.Option[local.LocalApplication]
 		globalApplication types.GlobalApplication
+		fakeEvents        events.Events
 	)
 
 	BeforeEach(func() {
@@ -30,8 +32,8 @@ var _ = Describe("Local Application FSM", func() {
 		runtimeConfig = config.ApplicationRuntimeConfig{
 			ZoneId: "zone",
 		}
-
-		jobFactory = job.NewAsyncJobFactory(&runtimeConfig, fakeClock, logf.Log)
+		fakeEvents = events.NewFakeEvents()
+		jobFactory = job.NewAsyncJobFactory(&runtimeConfig, fakeClock, logf.Log, &fakeEvents)
 		localApplication = mo.None[local.LocalApplication]()
 
 		application = v1.AnyApplication{

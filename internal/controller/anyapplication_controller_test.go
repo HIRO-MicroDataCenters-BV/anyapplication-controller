@@ -37,6 +37,7 @@ import (
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/controller/job"
 	recon "hiro.io/anyapplication/internal/controller/reconciler"
 	"hiro.io/anyapplication/internal/controller/sync"
@@ -51,6 +52,7 @@ var _ = Describe("AnyApplication Controller", func() {
 		syncManager   ctrltypes.SyncManager
 		reconciler    recon.Reconciler
 		stopFunc      engine.StopFunc
+		fakeEvents    events.Events
 	)
 
 	Context("When reconciling a resource", func() {
@@ -85,7 +87,7 @@ var _ = Describe("AnyApplication Controller", func() {
 			}
 
 			clock := clock.NewClock()
-
+			fakeEvents = events.NewFakeEvents()
 			log := textlogger.NewLogger(textlogger.NewConfig())
 			clusterCache := cache.NewClusterCache(cfg,
 				cache.SetLogr(log),
@@ -107,7 +109,7 @@ var _ = Describe("AnyApplication Controller", func() {
 			syncManager = sync.NewSyncManager(k8sClient, helmClient, clusterCache, clock, &runtimeConfig, gitOpsEngine, logf.Log)
 			jobContext := job.NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
 			jobs = job.NewJobs(jobContext)
-			jobFactory := job.NewAsyncJobFactory(&runtimeConfig, clock, logf.Log)
+			jobFactory := job.NewAsyncJobFactory(&runtimeConfig, clock, logf.Log, &fakeEvents)
 
 			reconciler = recon.NewReconciler(jobs, jobFactory)
 

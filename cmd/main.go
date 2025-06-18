@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -49,6 +50,7 @@ import (
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/controller/job"
 	"hiro.io/anyapplication/internal/controller/reconciler"
 	"hiro.io/anyapplication/internal/controller/sync"
@@ -246,8 +248,14 @@ func main() {
 	})
 	failIfError(err, setupLog, "unable to create helm client")
 
-	// log := textlogger.NewLogger(textlogger.NewConfig())
 	clock := clock.NewClock()
+	resourceExcludes := controllerConfig.Cache.ExcludesSet()
+	cacheSettings := cache.Settings{
+		ResourcesFilter: ResourceFilterFunc(func(group, kind, cluster string) bool {
+			key := fmt.Sprintf("%s/%s", group, kind)
+			return resourceExcludes[key]
+		}),
+	}
 
 	clusterCache := cache.NewClusterCache(config,
 		cache.SetLogr(loggers["ClusterCache"]),
@@ -257,17 +265,26 @@ func main() {
 			cacheManifest = managedByMark != ""
 			return
 		}),
+		cache.SetSettings(cacheSettings),
 	)
 	gitOpsEngine := engine.NewEngine(config, clusterCache, engine.WithLogr(loggers["GitOpsEngine"]))
 	stopFunc, err := gitOpsEngine.Run()
 	failIfError(err, setupLog, "unable to start gitops engine")
 
-	syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, clock,
-		&applicationConfig, gitOpsEngine, loggers["SyncManager"])
+	syncManager := sync.NewSyncManager(
+		kubeClient,
+		helmClient,
+		clusterCache,
+		clock,
+		&applicationConfig,
+		gitOpsEngine,
+		loggers["SyncManager"],
+	)
+
 	jobContext := job.NewAsyncJobContext(helmClient, kubeClient, context.Background(), syncManager)
 	jobs := job.NewJobs(jobContext)
-	jobFactory := job.NewAsyncJobFactory(&applicationConfig, clock, loggers["Jobs"])
-
+	events := events.NewEvents(mgr.GetEventRecorderFor("Controller"))
+	jobFactory := job.NewAsyncJobFactory(&applicationConfig, clock, loggers["Jobs"], &events)
 	reconciler := reconciler.NewReconciler(jobs, jobFactory)
 
 	if err = (&controller.AnyApplicationReconciler{
@@ -277,7 +294,9 @@ func main() {
 		SyncManager: syncManager,
 		Jobs:        jobs,
 		Reconciler:  reconciler,
+		Recorder:    mgr.GetEventRecorderFor("Controller"),
 		Log:         loggers["Controller"],
+		Events:      &events,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AnyApplication")
 		os.Exit(1)
@@ -337,4 +356,10 @@ type LevelEnablerFunc struct {
 // Enabled returns true if the level is greater than or equal to minLevel
 func (l LevelEnablerFunc) Enabled(level zapcore.Level) bool {
 	return level >= l.minLevel
+}
+
+type ResourceFilterFunc func(group, kind, cluster string) bool
+
+func (f ResourceFilterFunc) IsExcludedResource(group, kind, cluster string) bool {
+	return f(group, kind, cluster)
 }

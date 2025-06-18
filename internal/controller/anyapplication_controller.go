@@ -18,16 +18,20 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sync/atomic"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/controller/reconciler"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
@@ -38,12 +42,14 @@ const anyApplicationFinalizerName = "anyapplication.finalizers.hiro.io"
 // AnyApplicationReconciler reconciles a AnyApplication object
 type AnyApplicationReconciler struct {
 	client.Client
+	Recorder    record.EventRecorder
 	Scheme      *runtime.Scheme
 	Config      *config.ApplicationRuntimeConfig
 	SyncManager types.SyncManager
 	Jobs        types.AsyncJobs
 	Reconciler  reconciler.Reconciler
 	Log         logr.Logger
+	Events      *events.Events
 }
 
 // +kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch;create;update;patch;delete
@@ -51,13 +57,6 @@ type AnyApplicationReconciler struct {
 // +kubebuilder:rbac:groups=dcp.hiro.io,resources=anyapplications/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=dcp.hiro.io,resources=anyapplications/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the AnyApplication object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.4/pkg/reconcile
 func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -85,7 +84,10 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	globalApplication, err := r.SyncManager.LoadApplication(resource)
 	if err != nil {
 		r.Log.Error(err, "failed to load application state")
-		return ctrl.Result{}, err
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: 1 * time.Second,
+		}, err
 	}
 
 	result := r.Reconciler.DoReconcile(globalApplication)
@@ -95,13 +97,24 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		stopRetrying := atomic.Bool{}
 		newStatus := result.Status.OrEmpty()
 
-		statusUpdater := status.NewStatusUpdater(ctx, r.Log.WithName("Controller StatusUpdater"), r.Client, req.NamespacedName)
-		err = statusUpdater.UpdateStatus(&stopRetrying, func(applicationStatus *dcpv1.AnyApplicationStatus) bool {
+		statusUpdater := status.NewStatusUpdater(
+			ctx,
+			r.Log.WithName("Controller StatusUpdater"),
+			r.Client,
+			req.NamespacedName,
+			r.Config.ZoneId,
+			r.Events,
+		)
+
+		err = statusUpdater.UpdateStatus(&stopRetrying, func(applicationStatus *dcpv1.AnyApplicationStatus) (bool, events.Event) {
 			return mergeStatus(applicationStatus, &newStatus)
 		})
 		if err != nil {
-			r.Log.Error(err, "failed to update status")
-			return ctrl.Result{}, err // TODO maybe requeue
+			r.Log.Error(err, "failed to update status: requeuing")
+			return ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: 1 * time.Second,
+			}, err
 		}
 	}
 
@@ -173,18 +186,23 @@ func removeString(slice []string, s string) []string {
 	return result
 }
 
-func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.AnyApplicationStatus) bool {
+func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.AnyApplicationStatus) (bool, events.Event) {
 	updated := false
+	reason := "Global state change"
+	msg := ""
 	if newStatus.Placements != nil && !reflect.DeepEqual(currentStatus.Placements, newStatus.Placements) {
 		currentStatus.Placements = newStatus.Placements
+		msg += fmt.Sprintf("Placements are set to '%v'. ", newStatus.Placements)
 		updated = true
 	}
 	if newStatus.State != dcpv1.UnknownGlobalState && currentStatus.State != newStatus.State {
 		currentStatus.State = newStatus.State
+		msg += "Global state changed to '" + string(newStatus.State) + "'. "
 		updated = true
 	}
 	if newStatus.Owner != "" && currentStatus.Owner != newStatus.Owner {
 		currentStatus.Owner = newStatus.Owner
+		msg += "Owner changed to '" + newStatus.Owner + "'."
 		updated = true
 	}
 
@@ -206,7 +224,8 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 			}
 		}
 	}
-	return updated
+	event := events.Event{Reason: reason, Msg: msg}
+	return updated, event
 }
 
 func currentZone(resource *dcpv1.AnyApplication, zone string) bool {

@@ -2,10 +2,12 @@ package status
 
 import (
 	"context"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/controller/events"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -17,6 +19,8 @@ type StatusUpdater struct {
 	log    logr.Logger
 	client client.Client
 	name   types.NamespacedName
+	zoneId string
+	events *events.Events
 }
 
 func NewStatusUpdater(
@@ -24,18 +28,22 @@ func NewStatusUpdater(
 	log logr.Logger,
 	client client.Client,
 	name types.NamespacedName,
+	zoneId string,
+	events *events.Events,
 ) StatusUpdater {
 	return StatusUpdater{
 		ctx:    ctx,
 		log:    log,
 		client: client,
 		name:   name,
+		zoneId: zoneId,
+		events: events,
 	}
 }
 
 func (su *StatusUpdater) UpdateStatus(
 	stopRetrying *atomic.Bool,
-	statusUpdate func(status *v1.AnyApplicationStatus) bool,
+	statusUpdate func(status *v1.AnyApplicationStatus) (bool, events.Event),
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var application v1.AnyApplication
@@ -48,16 +56,20 @@ func (su *StatusUpdater) UpdateStatus(
 
 		updatedApplication := application.DeepCopy()
 		updated := false
+		eventToSend := events.Event{}
 		if statusUpdate != nil {
-			updated = statusUpdate(&updatedApplication.Status)
+			updated, eventToSend = statusUpdate(&updatedApplication.Status)
 		}
 		// Update or insert condition
 		if updated {
 			if stopRetrying != nil && stopRetrying.Load() {
 				return nil // stop retrying
 			}
-
+			incrementZoneVersion(updatedApplication, su.zoneId)
 			err := su.client.Status().Update(su.ctx, updatedApplication)
+			if err == nil {
+				su.events.Emit(updatedApplication, eventToSend)
+			}
 			su.log.Info("Updating status", "status", updatedApplication.Status, "error", err)
 			return err
 		}
@@ -68,9 +80,11 @@ func (su *StatusUpdater) UpdateStatus(
 func (su *StatusUpdater) UpdateCondition(
 	stopRetrying *atomic.Bool,
 	conditionToUpdate v1.ConditionStatus,
+	event events.Event,
 ) error {
-	return su.UpdateStatus(stopRetrying, func(status *v1.AnyApplicationStatus) bool {
-		return AddOrUpdate(status, &conditionToUpdate)
+	return su.UpdateStatus(stopRetrying, func(status *v1.AnyApplicationStatus) (bool, events.Event) {
+		updated := AddOrUpdate(status, &conditionToUpdate)
+		return updated, event
 	})
 }
 
@@ -95,4 +109,30 @@ func AddOrUpdate(status *v1.AnyApplicationStatus, toAddOrUpdate *v1.ConditionSta
 		updated = true
 	}
 	return updated
+}
+
+func incrementZoneVersion(application *v1.AnyApplication, ZoneId string) {
+	version, err := strconv.ParseInt(application.ResourceVersion, 10, 64)
+	if err != nil {
+		version = 0
+	}
+	latestVersion := version + 1
+	for _, condition := range application.Status.Conditions {
+		if condition.ZoneId == ZoneId {
+			conditionVersion, err := strconv.ParseInt(condition.ZoneVersion, 10, 64)
+			if err != nil {
+				conditionVersion = 0
+			}
+			if conditionVersion >= latestVersion {
+				latestVersion = conditionVersion + 1
+			}
+		}
+	}
+	latestVersionStr := strconv.FormatInt(latestVersion, 10)
+	for i, condition := range application.Status.Conditions {
+		if condition.ZoneId == ZoneId {
+			application.Status.Conditions[i].ZoneVersion = latestVersionStr
+		}
+	}
+
 }

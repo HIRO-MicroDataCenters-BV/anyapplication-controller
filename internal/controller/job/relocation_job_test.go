@@ -9,6 +9,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/controller/fixture"
 	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/controller/types"
@@ -31,11 +32,14 @@ var _ = Describe("RelocationJob", func() {
 		runtimeConfig config.ApplicationRuntimeConfig
 		syncManager   types.SyncManager
 		gitOpsEngine  *fixture.FakeGitOpsEngine
+		fakeEvents    events.Events
 	)
 
 	BeforeEach(func() {
 		scheme = runtime.NewScheme()
 		_ = v1.AddToScheme(scheme)
+
+		fakeEvents = events.NewFakeEvents()
 
 		application = &v1.AnyApplication{
 			ObjectMeta: metav1.ObjectMeta{
@@ -81,7 +85,7 @@ var _ = Describe("RelocationJob", func() {
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
 		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
-		relocationJob = NewRelocationJob(application, &runtimeConfig, fakeClock, logf.Log)
+		relocationJob = NewRelocationJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
 	})
 
 	It("should return initial status", func() {
@@ -108,7 +112,7 @@ var _ = Describe("RelocationJob", func() {
 				{
 					Type:               v1.RelocationConditionType,
 					ZoneId:             "zone",
-					ZoneVersion:        "999",
+					ZoneVersion:        "1000",
 					Status:             string(v1.RelocationStatusDone),
 					LastTransitionTime: fakeClock.NowTime(),
 				},

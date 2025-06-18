@@ -21,7 +21,20 @@ type Config struct {
 		Url string `yaml:"url"`
 	} `yaml:"peers"`
 	Runtime ApplicationRuntimeConfig `yaml:"runtime"`
+	Cache   CacheConfig              `yaml:"cache"`
 	Logging LoggingConfig            `yaml:"logging"`
+}
+
+type CacheConfig struct {
+	Excludes []string `yaml:"excludes"`
+}
+
+func (c *CacheConfig) ExcludesSet() map[string]bool {
+	set := make(map[string]bool)
+	for _, v := range c.Excludes {
+		set[v] = true
+	}
+	return set
 }
 
 type LoggingConfig struct {

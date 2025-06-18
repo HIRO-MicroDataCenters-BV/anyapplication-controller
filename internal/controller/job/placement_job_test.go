@@ -8,6 +8,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -25,11 +26,14 @@ var _ = Describe("PlacementJob", func() {
 		scheme        *runtime.Scheme
 		fakeClock     clock.Clock
 		runtimeConfig config.ApplicationRuntimeConfig
+		fakeEvents    events.Events
 	)
 
 	BeforeEach(func() {
 		scheme = runtime.NewScheme()
 		_ = v1.AddToScheme(scheme)
+
+		fakeEvents = events.NewFakeEvents()
 
 		application = &v1.AnyApplication{
 			ObjectMeta: metav1.ObjectMeta{
@@ -70,7 +74,7 @@ var _ = Describe("PlacementJob", func() {
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
 		application = application.DeepCopy()
-		placementJob = NewLocalPlacementJob(application, &runtimeConfig, fakeClock, logf.Log)
+		placementJob = NewLocalPlacementJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
 	})
 
 	It("should return initial status", func() {
@@ -97,7 +101,7 @@ var _ = Describe("PlacementJob", func() {
 				{
 					Type:               v1.PlacementConditionType,
 					ZoneId:             "zone",
-					ZoneVersion:        "999",
+					ZoneVersion:        "1000",
 					Status:             string(v1.PlacementStatusDone),
 					LastTransitionTime: fakeClock.NowTime(),
 				},
