@@ -284,6 +284,7 @@ func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.Glo
 	if err != nil {
 		return nil, errors.Wrap(err, "Fail to create local application")
 	}
+
 	globalApplication := global.NewFromLocalApplication(localApplication, m.clock, application, m.config, m.log)
 	return globalApplication, nil
 }

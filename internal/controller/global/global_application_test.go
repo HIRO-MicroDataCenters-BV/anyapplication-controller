@@ -8,6 +8,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/controller/job"
 	"hiro.io/anyapplication/internal/controller/local"
 	"hiro.io/anyapplication/internal/controller/types"
@@ -23,12 +24,13 @@ var _ = Describe("GlobalApplication", func() {
 			ZoneId: "zone",
 		}
 		localApplication := mo.None[local.LocalApplication]()
+		events := events.NewFakeEvents()
 
 		It("transit to placement state", func() {
 			applicationResource := makeApplication()
 			applicationResource.Status.Owner = ""
 			globalApplication := NewFromLocalApplication(localApplication, clock, applicationResource, runtimeConfig, logf.Log)
-			jobFactory := job.NewAsyncJobFactory(runtimeConfig, clock, logf.Log)
+			jobFactory := job.NewAsyncJobFactory(runtimeConfig, clock, logf.Log, &events)
 
 			statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 			status := statusResult.Status.OrEmpty()
@@ -65,7 +67,8 @@ var _ = Describe("GlobalApplication", func() {
 		runtimeConfig := &config.ApplicationRuntimeConfig{
 			ZoneId: "zone",
 		}
-		jobFactory := job.NewAsyncJobFactory(runtimeConfig, clock, logf.Log)
+		events := events.NewFakeEvents()
+		jobFactory := job.NewAsyncJobFactory(runtimeConfig, clock, logf.Log, &events)
 
 		It("create local placement job", func() {
 			applicationResource := makeApplication()

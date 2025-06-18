@@ -15,6 +15,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/controller/fixture"
 	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/controller/types"
@@ -38,11 +39,13 @@ var _ = Describe("LocalOperationJob", func() {
 		runtimeConfig config.ApplicationRuntimeConfig
 		jobContext    types.AsyncJobContext
 		gitOpsEngine  *fixture.FakeGitOpsEngine
+		fakeEvents    events.Events
 	)
 
 	BeforeEach(func() {
 		scheme = runtime.NewScheme()
 		_ = v1.AddToScheme(scheme)
+		fakeEvents = events.NewFakeEvents()
 
 		application = &v1.AnyApplication{
 			ObjectMeta: metav1.ObjectMeta{
@@ -98,7 +101,8 @@ var _ = Describe("LocalOperationJob", func() {
 		syncManager := sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 		jobContext = NewAsyncJobContext(helmClient, kubeClient, context.TODO(), syncManager)
 
-		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock, logf.Log)
+		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
+
 	})
 
 	It("should return initial status", func() {
@@ -171,7 +175,7 @@ var _ = Describe("LocalOperationJob", func() {
 			Chart:      "test-chart",
 			Version:    "1.0.0",
 		}
-		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock, logf.Log)
+		operationJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
 
 		Expect(operationJob.GetStatus()).To(Equal(
 			v1.ConditionStatus{

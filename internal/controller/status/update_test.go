@@ -6,6 +6,7 @@ import (
 
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
+	"hiro.io/anyapplication/internal/controller/events"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,12 +33,15 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 		scheme      *runtime.Scheme
 		fakeClock   clock.Clock
 		log         logr.Logger
+		fakeEvents  events.Events
 	)
 
 	BeforeEach(func() {
 		ctx = context.TODO()
 		fakeClock = clock.NewFakeClock()
 		scheme = runtime.NewScheme()
+		fakeEvents = events.NewFakeEvents()
+
 		_ = v1.AddToScheme(scheme)
 
 		application = &v1.AnyApplication{
@@ -88,8 +92,9 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 			Status: string(v1.PlacementStatusDone),
 		}
 		stopRetrying := atomic.Bool{}
-		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application))
-		err := statusUpdater.UpdateCondition(&stopRetrying, newCondition)
+		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
+		event := events.Event{}
+		err := statusUpdater.UpdateCondition(&stopRetrying, newCondition, event)
 
 		Expect(err).ToNot(HaveOccurred())
 
@@ -106,14 +111,17 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 			Status: string(v1.PlacementStatusDone),
 		}
 		stopRetrying := atomic.Bool{}
-		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application))
-		err := statusUpdater.UpdateCondition(&stopRetrying, updatedCondition)
+		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
+		event := events.Event{}
+		err := statusUpdater.UpdateCondition(&stopRetrying, updatedCondition, event)
 
 		Expect(err).ToNot(HaveOccurred())
 
 		updatedApp := &v1.AnyApplication{}
 		err = fakeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
 		Expect(err).ToNot(HaveOccurred())
+
+		updatedCondition.ZoneVersion = "1000"
 		Expect(updatedApp.Status.Conditions).To(ContainElement(updatedCondition))
 	})
 
@@ -122,8 +130,9 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 
 		stopRetrying := atomic.Bool{}
 
-		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application))
-		err := statusUpdater.UpdateCondition(&stopRetrying, existingCondition)
+		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
+		event := events.Event{}
+		err := statusUpdater.UpdateCondition(&stopRetrying, existingCondition, event)
 		Expect(err).ToNot(HaveOccurred())
 
 		updatedApp := &v1.AnyApplication{}

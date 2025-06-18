@@ -5,6 +5,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/controller/types"
 )
 
@@ -15,9 +16,16 @@ type OwnershipTransferJob struct {
 	clock         clock.Clock
 	jobId         types.JobId
 	log           logr.Logger
+	events        *events.Events
 }
 
-func NewOwnershipTransferJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock, log logr.Logger) *OwnershipTransferJob {
+func NewOwnershipTransferJob(
+	application *v1.AnyApplication,
+	runtimeConfig *config.ApplicationRuntimeConfig,
+	clock clock.Clock,
+	log logr.Logger,
+	events *events.Events,
+) *OwnershipTransferJob {
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
 		ApplicationId: types.ApplicationId{
@@ -33,6 +41,7 @@ func NewOwnershipTransferJob(application *v1.AnyApplication, runtimeConfig *conf
 		clock:         clock,
 		jobId:         jobId,
 		log:           log,
+		events:        events,
 	}
 }
 

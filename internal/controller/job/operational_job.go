@@ -10,6 +10,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
 )
@@ -25,10 +26,17 @@ type LocalOperationJob struct {
 	jobId         types.JobId
 	stopped       atomic.Bool
 	log           logr.Logger
+	events        *events.Events
 	version       string
 }
 
-func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock, log logr.Logger) *LocalOperationJob {
+func NewLocalOperationJob(
+	application *v1.AnyApplication,
+	runtimeConfig *config.ApplicationRuntimeConfig,
+	clock clock.Clock,
+	log logr.Logger,
+	events *events.Events,
+) *LocalOperationJob {
 	log = log.WithName("LocalOperationJob")
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
@@ -49,6 +57,7 @@ func NewLocalOperationJob(application *v1.AnyApplication, runtimeConfig *config.
 		stopped:       atomic.Bool{},
 		log:           log,
 		version:       version,
+		events:        events,
 	}
 }
 
@@ -99,8 +108,15 @@ func (job *LocalOperationJob) Fail(context types.AsyncJobContext, msg string) {
 	job.status = health.HealthStatusDegraded
 
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
+		context.GetGoContext(),
+		job.log.WithName("StatusUpdater"),
+		context.GetKubeClient(),
+		job.application.GetNamespacedName(),
+		job.runtimeConfig.ZoneId,
+		job.events,
+	)
+	event := events.Event{Reason: "Operation Failure", Msg: job.msg}
+	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
 		job.status = health.HealthStatusDegraded
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -110,8 +126,15 @@ func (job *LocalOperationJob) Fail(context types.AsyncJobContext, msg string) {
 func (job *LocalOperationJob) Success(context types.AsyncJobContext, healthStatus *health.HealthStatus) {
 	job.status = healthStatus.Status
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
+		context.GetGoContext(),
+		job.log.WithName("StatusUpdater"),
+		context.GetKubeClient(),
+		job.application.GetNamespacedName(),
+		job.runtimeConfig.ZoneId,
+		job.events,
+	)
+	event := events.Event{Reason: "Operation state change to " + string(job.status), Msg: job.msg}
+	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
 		job.status = health.HealthStatusDegraded
 		job.msg = "Cannot Update Application Condition. " + err.Error()

@@ -26,6 +26,7 @@ func NewFromLocalApplication(
 	application *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
 	log logr.Logger,
+
 ) types.GlobalApplication {
 	log = log.WithName("GlobalApplication")
 	return &globalApplication{

@@ -8,6 +8,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/events"
 	"hiro.io/anyapplication/internal/controller/status"
 	"hiro.io/anyapplication/internal/controller/types"
 )
@@ -22,9 +23,16 @@ type RelocationJob struct {
 	stopped       atomic.Bool
 	log           logr.Logger
 	version       string
+	events        *events.Events
 }
 
-func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.ApplicationRuntimeConfig, clock clock.Clock, log logr.Logger) *RelocationJob {
+func NewRelocationJob(
+	application *v1.AnyApplication,
+	runtimeConfig *config.ApplicationRuntimeConfig,
+	clock clock.Clock,
+	log logr.Logger,
+	events *events.Events,
+) *RelocationJob {
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
 		ApplicationId: types.ApplicationId{
@@ -44,6 +52,7 @@ func NewRelocationJob(application *v1.AnyApplication, runtimeConfig *config.Appl
 		stopped:       atomic.Bool{},
 		log:           log,
 		version:       version,
+		events:        events,
 	}
 }
 
@@ -67,8 +76,15 @@ func (job *RelocationJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = v1.RelocationStatusFailure
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
+		context.GetGoContext(),
+		job.log.WithName("StatusUpdater"),
+		context.GetKubeClient(),
+		job.application.GetNamespacedName(),
+		job.runtimeConfig.ZoneId,
+		job.events,
+	)
+	event := events.Event{Reason: "Relocation failure", Msg: job.msg}
+	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
 		job.status = v1.RelocationStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -79,8 +95,15 @@ func (job *RelocationJob) Success(context types.AsyncJobContext, healthStatus *h
 	job.status = v1.RelocationStatusDone
 
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(), job.log.WithName("StatusUpdater"), context.GetKubeClient(), job.application.GetNamespacedName())
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus())
+		context.GetGoContext(),
+		job.log.WithName("StatusUpdater"),
+		context.GetKubeClient(),
+		job.application.GetNamespacedName(),
+		job.runtimeConfig.ZoneId,
+		job.events,
+	)
+	event := events.Event{Reason: "Relocation state changed to '" + string(job.status) + "'", Msg: job.msg}
+	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
 		job.status = v1.RelocationStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
