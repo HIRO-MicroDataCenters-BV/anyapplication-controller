@@ -188,7 +188,7 @@ func removeString(slice []string, s string) []string {
 
 func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.AnyApplicationStatus) (bool, events.Event) {
 	updated := false
-	reason := "Global state change"
+	reason := events.GlobalStateChangeReason
 	msg := ""
 	if newStatus.Placements != nil && !reflect.DeepEqual(currentStatus.Placements, newStatus.Placements) {
 		currentStatus.Placements = newStatus.Placements

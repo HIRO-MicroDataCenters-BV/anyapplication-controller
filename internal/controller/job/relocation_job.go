@@ -83,7 +83,7 @@ func (job *RelocationJob) Fail(context types.AsyncJobContext, msg string) {
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: "Relocation failure", Msg: job.msg}
+	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Relocation failure: " + job.msg}
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
 		job.status = v1.RelocationStatusFailure
@@ -102,7 +102,7 @@ func (job *RelocationJob) Success(context types.AsyncJobContext, healthStatus *h
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: "Relocation state changed to '" + string(job.status) + "'", Msg: job.msg}
+	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Relocation state changed to '" + string(job.status) + "'. " + job.msg}
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
 		job.status = v1.RelocationStatusFailure

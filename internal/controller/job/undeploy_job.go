@@ -80,7 +80,7 @@ func (job *UndeployJob) Fail(context types.AsyncJobContext, msg string) {
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: "Undeploy failure", Msg: job.msg}
+	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Undeploy failure: " + job.msg}
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
 		job.status = v1.RelocationStatusFailure
@@ -99,7 +99,7 @@ func (job *UndeployJob) Success(context types.AsyncJobContext) {
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: "Undeploy state changed to '" + string(job.status) + "'", Msg: job.msg}
+	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Undeploy state changed to '" + string(job.status) + "'" + job.msg}
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 
 	if err != nil {
