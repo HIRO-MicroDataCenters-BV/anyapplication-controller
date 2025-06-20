@@ -10,8 +10,18 @@ type NextJobs struct {
 	JobsToRemove mo.Option[AsyncJobType]
 }
 
-func (n NextJobs) Add(other NextJobs) {
+func (n *NextJobs) Add(other NextJobs) {
+	if n.JobsToAdd.IsAbsent() {
+		n.JobsToAdd = other.JobsToAdd
+	} else if other.JobsToAdd.IsPresent() {
+		panic("Multiple jobs to schedule")
+	}
 
+	if n.JobsToRemove.IsAbsent() {
+		n.JobsToRemove = other.JobsToRemove
+	} else if other.JobsToRemove.IsPresent() {
+		panic("Multiple jobs to unschedule")
+	}
 }
 
 type NextStateResult struct {

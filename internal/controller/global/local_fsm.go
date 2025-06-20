@@ -49,6 +49,8 @@ func (g *LocalFSM) NextState() types.NextStateResult {
 func (g *LocalFSM) handleDeploy() types.NextStateResult {
 	status := &g.application.Status
 	conditionsToRemove := make([]*v1.ConditionStatus, 0)
+	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.LocalConditionType, g.config.ZoneId)
+	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymenConditionType, g.config.ZoneId)
 
 	isDeploymentSucceeded := deploymentSuccessfull(status.Conditions, g.config.ZoneId)
 	if !g.applicationPresent && !isDeploymentSucceeded {
@@ -103,6 +105,7 @@ func (g *LocalFSM) handleOperation() types.NextStateResult {
 	status := &g.application.Status
 
 	conditionsToRemove := make([]*v1.ConditionStatus, 0)
+	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymenConditionType, g.config.ZoneId)
 
 	isDeploymentSucceeded := deploymentSuccessfull(status.Conditions, g.config.ZoneId)
 
