@@ -77,10 +77,6 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.addFinalizer(ctx, resource)
 	}
 
-	if !currentZone(resource, r.Config.ZoneId) {
-		return ctrl.Result{}, nil
-	}
-
 	globalApplication, err := r.SyncManager.LoadApplication(resource)
 	if err != nil {
 		r.Log.Error(err, "failed to load application state")
@@ -88,6 +84,10 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			Requeue:      true,
 			RequeueAfter: 1 * time.Second,
 		}, err
+	}
+
+	if !globalApplication.IsDeployed() && !currentZone(resource, r.Config.ZoneId) {
+		return ctrl.Result{}, nil
 	}
 
 	result := r.Reconciler.DoReconcile(globalApplication)
@@ -188,7 +188,7 @@ func removeString(slice []string, s string) []string {
 
 func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.AnyApplicationStatus) (bool, events.Event) {
 	updated := false
-	reason := "Global state change"
+	reason := events.GlobalStateChangeReason
 	msg := ""
 	if newStatus.Placements != nil && !reflect.DeepEqual(currentStatus.Placements, newStatus.Placements) {
 		currentStatus.Placements = newStatus.Placements

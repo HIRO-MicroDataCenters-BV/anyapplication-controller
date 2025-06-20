@@ -29,16 +29,22 @@ func NewGlobalFSM(
 	}
 }
 
-func (g *GlobalFSM) NextState() types.NextStateResult {
-	status := g.application.Status
+func (g *GlobalFSM) isRunning(jobType types.AsyncJobType) bool {
+	return g.runningJobType.OrEmpty() == jobType
+}
 
-	if !placementExists(&status) {
+func (g *GlobalFSM) NextState() types.NextStateResult {
+	status := &g.application.Status
+
+	if !placementExists(status) {
 		return g.handlePlacementState()
 	}
-	if operationalInAllPlacementZones(&status) {
-		return g.handleOperationalState()
-	} else {
-		return g.handleRelocationState()
+	if isFailureCondition(g.application) {
+		return g.handleFailureState()
+	}
+	state := getGlobalState(&g.application.Status)
+	return types.NextStateResult{
+		NextState: mo.Some(state),
 	}
 }
 
@@ -77,115 +83,6 @@ func (g *GlobalFSM) handlePlacementState() types.NextStateResult {
 	}
 }
 
-func (g *GlobalFSM) isRunning(jobType types.AsyncJobType) bool {
-	return g.runningJobType.OrEmpty() == jobType
-}
-
-func (g *GlobalFSM) handleOperationalState() types.NextStateResult {
-	status := g.application.Status
-
-	if isFailureCondition(g.application) {
-		return g.handleFailureState()
-	}
-
-	if placementsContainZone(&status, g.config.ZoneId) {
-		_, found := getCondition(status.Conditions, v1.LocalConditionType, g.config.ZoneId)
-
-		if !found || !g.isRunning(types.AsyncJobTypeLocalOperation) {
-			operationJob := g.jobFactory.CreateOperationJob(g.application)
-			condition := operationJob.GetStatus()
-
-			return types.NextStateResult{
-				NextState:       mo.Some(v1.OperationalGlobalState),
-				ConditionsToAdd: mo.Some(&condition),
-				Jobs: types.NextJobs{
-					JobsToAdd: mo.Some(operationJob),
-				},
-			}
-		}
-	}
-	if !placementsContainZone(&status, g.config.ZoneId) && g.applicationPresent {
-		// Undeploy application
-		operationCondition, _ := getCondition(status.Conditions, v1.LocalConditionType, g.config.ZoneId)
-
-		condition, found := getCondition(status.Conditions, v1.RelocationConditionType, g.config.ZoneId)
-		relocationCondition := mo.EmptyableToOption(condition)
-		relocationJob := mo.None[types.AsyncJob]()
-		if !found {
-			undeployJob := g.jobFactory.CreateUndeployJob(g.application)
-			cond := undeployJob.GetStatus()
-
-			relocationCondition = mo.Some(&cond)
-			relocationJob = mo.Some(undeployJob)
-		}
-
-		return types.NextStateResult{
-			NextState:          mo.Some(v1.OperationalGlobalState),
-			ConditionsToAdd:    relocationCondition,
-			ConditionsToRemove: mo.EmptyableToOption(operationCondition),
-			Jobs:               types.NextJobs{JobsToAdd: relocationJob},
-		}
-
-	}
-
-	return types.NextStateResult{
-		NextState: mo.Some(v1.OperationalGlobalState),
-	}
-
-}
-func (g *GlobalFSM) handleRelocationState() types.NextStateResult {
-	status := g.application.Status
-
-	localRelocationCondition, found := getCondition(status.Conditions, v1.RelocationConditionType, g.config.ZoneId)
-	if !found || !g.isRunning(types.AsyncJobTypeRelocate) {
-		relocationJob := g.jobFactory.CreateRelocationJob(g.application)
-		condition := relocationJob.GetStatus()
-
-		return types.NextStateResult{
-			NextState:       mo.Some(v1.RelocationGlobalState),
-			ConditionsToAdd: mo.Some(&condition),
-			Jobs: types.NextJobs{
-				JobsToAdd: mo.Some(relocationJob),
-			},
-		}
-	} else {
-		switch localRelocationCondition.Status {
-		case string(v1.RelocationStatusDone):
-
-			operationJob := g.jobFactory.CreateOperationJob(g.application)
-			condition := operationJob.GetStatus()
-
-			return types.NextStateResult{
-				NextState:       mo.Some(v1.OperationalGlobalState),
-				ConditionsToAdd: mo.Some(&condition),
-				Jobs: types.NextJobs{
-					JobsToAdd: mo.Some(operationJob),
-				},
-			}
-		case string(v1.RelocationStatusFailure):
-
-			relocationJob := g.jobFactory.CreateRelocationJob(g.application)
-			condition := relocationJob.GetStatus()
-
-			return types.NextStateResult{
-				NextState:       mo.Some(v1.RelocationGlobalState),
-				ConditionsToAdd: mo.Some(&condition),
-				Jobs: types.NextJobs{
-					JobsToAdd: mo.Some(relocationJob),
-				},
-			}
-
-		case string(v1.RelocationStatusPull), string(v1.RelocationStatusUndeploy):
-			return types.NextStateResult{
-				NextState: mo.Some(v1.RelocationGlobalState),
-			}
-		default:
-			panic("unexpected relocation status " + localRelocationCondition.Status)
-		}
-	}
-
-}
-
 func (g *GlobalFSM) handleFailureState() types.NextStateResult {
 	// spec := g.application.Spec
 	// if spec.PlacementStrategy.Strategy == v1.PlacementStrategyLocal {
@@ -197,21 +94,50 @@ func (g *GlobalFSM) handleFailureState() types.NextStateResult {
 	}
 }
 
-func operationalInAllPlacementZones(status *v1.AnyApplicationStatus) bool {
+// func operationalInAllPlacementZones(status *v1.AnyApplicationStatus) bool {
+// 	for _, placement := range status.Placements {
+// 		if !conditionExists(status, v1.LocalConditionType, placement.Zone) {
+// 			return false
+// 		}
+// 	}
+// 	return true
+// }
+
+func getGlobalState(status *v1.AnyApplicationStatus) v1.GlobalState {
+	state := v1.OperationalGlobalState
 	for _, placement := range status.Placements {
-		if !conditionExists(status, v1.LocalConditionType, placement.Zone) {
-			return false
+		conditionOpt := getHighestZoneCondition(status.Conditions, placement.Zone)
+		condition, present := conditionOpt.Get()
+		if present && (condition.Type == v1.DeploymenConditionType || condition.Type == v1.UndeploymenConditionType) {
+			state = v1.RelocationGlobalState
+		} else if !present {
+			state = v1.RelocationGlobalState
 		}
 	}
-	return true
+	return state
 }
 
-func conditionExists(status *v1.AnyApplicationStatus, conditionType v1.ApplicationConditionType, zoneId string) bool {
-	_, ok := lo.Find(status.Conditions, func(condition v1.ConditionStatus) bool {
-		return condition.Type == conditionType && condition.ZoneId == zoneId
-	})
-	return ok
+func getHighestZoneCondition(conditions []v1.ConditionStatus, zoneId string) mo.Option[*v1.ConditionStatus] {
+	conditionTypes := []v1.ApplicationConditionType{
+		v1.LocalConditionType,
+		v1.DeploymenConditionType,
+		v1.UndeploymenConditionType,
+	}
+	for _, conditionType := range conditionTypes {
+		condition, found := getCondition(conditions, conditionType, zoneId)
+		if found {
+			return mo.Some(condition)
+		}
+	}
+	return mo.None[*v1.ConditionStatus]()
 }
+
+// func conditionExists(status *v1.AnyApplicationStatus, conditionType v1.ApplicationConditionType, zoneId string) bool {
+// 	_, ok := lo.Find(status.Conditions, func(condition v1.ConditionStatus) bool {
+// 		return condition.Type == conditionType && condition.ZoneId == zoneId
+// 	})
+// 	return ok
+// }
 
 func getCondition(conditions []v1.ConditionStatus, conditionType v1.ApplicationConditionType, zoneId string) (*v1.ConditionStatus, bool) {
 	condition, ok := lo.Find(conditions, func(condition v1.ConditionStatus) bool {

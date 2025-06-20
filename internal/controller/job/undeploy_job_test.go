@@ -88,10 +88,10 @@ var _ = Describe("UndeployJob", func() {
 
 	It("should return initial status", func() {
 		Expect(undeployJob.GetStatus()).To(Equal(v1.ConditionStatus{
-			Type:               v1.RelocationConditionType,
+			Type:               v1.UndeploymenConditionType,
 			ZoneId:             "zone",
 			ZoneVersion:        "999",
-			Status:             string(v1.RelocationStatusUndeploy),
+			Status:             string(v1.UndeploymentStatusUndeploy),
 			LastTransitionTime: fakeClock.NowTime(),
 		},
 		))
@@ -108,10 +108,10 @@ var _ = Describe("UndeployJob", func() {
 		Expect(result.Status.Conditions).To(Equal(
 			[]v1.ConditionStatus{
 				{
-					Type:               v1.RelocationConditionType,
+					Type:               v1.UndeploymenConditionType,
 					ZoneId:             "zone",
 					ZoneVersion:        "1000",
-					Status:             string(v1.RelocationStatusDone),
+					Status:             string(v1.UndeploymentStatusDone),
 					LastTransitionTime: fakeClock.NowTime(),
 				},
 			},
@@ -119,10 +119,10 @@ var _ = Describe("UndeployJob", func() {
 
 		Expect(undeployJob.GetStatus()).To(Equal(
 			v1.ConditionStatus{
-				Type:               v1.RelocationConditionType,
+				Type:               v1.UndeploymenConditionType,
 				ZoneId:             "zone",
 				ZoneVersion:        "999",
-				Status:             string(v1.RelocationStatusDone),
+				Status:             string(v1.UndeploymentStatusDone),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
 		))

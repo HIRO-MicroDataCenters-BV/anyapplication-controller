@@ -16,7 +16,7 @@ import (
 type RelocationJob struct {
 	application   *v1.AnyApplication
 	runtimeConfig *config.ApplicationRuntimeConfig
-	status        v1.RelocationStatus
+	status        v1.DeploymentStatus
 	clock         clock.Clock
 	msg           string
 	jobId         types.JobId
@@ -43,7 +43,7 @@ func NewRelocationJob(
 	version := application.ResourceVersion
 	log = log.WithName("RelocationJob")
 	return &RelocationJob{
-		status:        v1.RelocationStatusPull,
+		status:        v1.DeploymentStatusPull,
 		application:   application,
 		runtimeConfig: runtimeConfig,
 		clock:         clock,
@@ -74,7 +74,7 @@ func (job *RelocationJob) Run(context types.AsyncJobContext) {
 
 func (job *RelocationJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
-	job.status = v1.RelocationStatusFailure
+	job.status = v1.DeploymentStatusFailure
 	statusUpdater := status.NewStatusUpdater(
 		context.GetGoContext(),
 		job.log.WithName("StatusUpdater"),
@@ -83,16 +83,16 @@ func (job *RelocationJob) Fail(context types.AsyncJobContext, msg string) {
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: "Relocation failure", Msg: job.msg}
+	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Deployment failure: " + job.msg}
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
-		job.status = v1.RelocationStatusFailure
+		job.status = v1.DeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
 	}
 }
 
 func (job *RelocationJob) Success(context types.AsyncJobContext, healthStatus *health.HealthStatus) {
-	job.status = v1.RelocationStatusDone
+	job.status = v1.DeploymentStatusDone
 
 	statusUpdater := status.NewStatusUpdater(
 		context.GetGoContext(),
@@ -102,10 +102,10 @@ func (job *RelocationJob) Success(context types.AsyncJobContext, healthStatus *h
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: "Relocation state changed to '" + string(job.status) + "'", Msg: job.msg}
+	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Deployment state changed to '" + string(job.status) + "'. " + job.msg}
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
-		job.status = v1.RelocationStatusFailure
+		job.status = v1.DeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
 	}
 }
@@ -115,12 +115,12 @@ func (job *RelocationJob) GetJobID() types.JobId {
 }
 
 func (job *RelocationJob) GetType() types.AsyncJobType {
-	return types.AsyncJobTypeRelocate
+	return types.AsyncJobTypeDeploy
 }
 
 func (job *RelocationJob) GetStatus() v1.ConditionStatus {
 	return v1.ConditionStatus{
-		Type:               v1.RelocationConditionType,
+		Type:               v1.DeploymenConditionType,
 		ZoneId:             job.runtimeConfig.ZoneId,
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),

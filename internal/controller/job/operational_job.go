@@ -115,7 +115,7 @@ func (job *LocalOperationJob) Fail(context types.AsyncJobContext, msg string) {
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: "Operation Failure", Msg: job.msg}
+	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Operation Failure: " + job.msg}
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
 		job.status = health.HealthStatusDegraded
@@ -133,7 +133,7 @@ func (job *LocalOperationJob) Success(context types.AsyncJobContext, healthStatu
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: "Operation state change to " + string(job.status), Msg: job.msg}
+	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Operation state change to " + string(job.status) + job.msg}
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
 		job.status = health.HealthStatusDegraded
