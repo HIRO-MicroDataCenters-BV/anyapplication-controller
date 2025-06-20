@@ -15,7 +15,7 @@ import (
 type UndeployJob struct {
 	application   *v1.AnyApplication
 	runtimeConfig *config.ApplicationRuntimeConfig
-	status        v1.RelocationStatus
+	status        v1.UndeploymentStatus
 	clock         clock.Clock
 	msg           string
 	jobId         types.JobId
@@ -42,7 +42,7 @@ func NewUndeployJob(
 	version := application.ResourceVersion
 	log = log.WithName("UndeployJob")
 	return &UndeployJob{
-		status:        v1.RelocationStatusUndeploy,
+		status:        v1.UndeploymentStatusUndeploy,
 		application:   application,
 		runtimeConfig: runtimeConfig,
 		clock:         clock,
@@ -71,7 +71,7 @@ func (job *UndeployJob) Run(context types.AsyncJobContext) {
 
 func (job *UndeployJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
-	job.status = v1.RelocationStatusFailure
+	job.status = v1.UndeploymentStatusFailure
 	statusUpdater := status.NewStatusUpdater(
 		context.GetGoContext(),
 		job.log.WithName("StatusUpdater"),
@@ -83,13 +83,13 @@ func (job *UndeployJob) Fail(context types.AsyncJobContext, msg string) {
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Undeploy failure: " + job.msg}
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 	if err != nil {
-		job.status = v1.RelocationStatusFailure
+		job.status = v1.UndeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
 	}
 }
 
 func (job *UndeployJob) Success(context types.AsyncJobContext) {
-	job.status = v1.RelocationStatusDone
+	job.status = v1.UndeploymentStatusDone
 
 	statusUpdater := status.NewStatusUpdater(
 		context.GetGoContext(),
@@ -103,7 +103,7 @@ func (job *UndeployJob) Success(context types.AsyncJobContext) {
 	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
 
 	if err != nil {
-		job.status = v1.RelocationStatusFailure
+		job.status = v1.UndeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
 	}
 }
@@ -118,7 +118,7 @@ func (job *UndeployJob) GetType() types.AsyncJobType {
 
 func (job *UndeployJob) GetStatus() v1.ConditionStatus {
 	return v1.ConditionStatus{
-		Type:               v1.RelocationConditionType,
+		Type:               v1.UndeploymenConditionType,
 		ZoneId:             job.runtimeConfig.ZoneId,
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),

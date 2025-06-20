@@ -34,6 +34,11 @@ func (g *LocalFSM) NextState() types.NextStateResult {
 		return g.handleUndeploy()
 	}
 
+	isDeploymentSucceeded := deploymentSuccessfull(status.Conditions, g.config.ZoneId)
+	if placementsContainZone(&status, g.config.ZoneId) && !isDeploymentSucceeded {
+		return g.handleDeploy()
+	}
+
 	if placementsContainZone(&status, g.config.ZoneId) {
 		return g.handleOperation()
 	}
@@ -41,61 +46,106 @@ func (g *LocalFSM) NextState() types.NextStateResult {
 	return types.NextStateResult{}
 }
 
-func (g *LocalFSM) handleUndeploy() types.NextStateResult {
-	status := g.application.Status
+func (g *LocalFSM) handleDeploy() types.NextStateResult {
+	status := &g.application.Status
+	conditionsToRemove := make([]*v1.ConditionStatus, 0)
 
-	operationCondition, _ := getCondition(status.Conditions, v1.LocalConditionType, g.config.ZoneId)
+	isDeploymentSucceeded := deploymentSuccessfull(status.Conditions, g.config.ZoneId)
+	if !g.applicationPresent && !isDeploymentSucceeded {
+		if !g.isRunning(types.AsyncJobTypeDeploy) {
+			deployJob := g.jobFactory.CreateDeploymentJob(g.application)
+			deployJobOpt := mo.Some(deployJob)
+			deployCondition := deployJob.GetStatus()
+			deployConditionOpt := mo.EmptyableToOption(&deployCondition)
 
-	undeployCondition, found := getCondition(status.Conditions, v1.RelocationConditionType, g.config.ZoneId)
-	undeployConditionOpt := mo.EmptyableToOption(undeployCondition)
-	undeployJobOpt := mo.None[types.AsyncJob]()
-
-	if !found || !g.isRunning(types.AsyncJobTypeRelocate) {
-		undeployJob := g.jobFactory.CreateUndeployJob(g.application)
-		undeployCondition := undeployJob.GetStatus()
-
-		undeployConditionOpt = mo.Some(&undeployCondition)
-		undeployJobOpt = mo.Some(undeployJob)
+			return types.NextStateResult{
+				ConditionsToAdd:    deployConditionOpt,
+				ConditionsToRemove: conditionsToRemove,
+				Jobs:               types.NextJobs{JobsToAdd: deployJobOpt},
+			}
+		}
 	}
 
 	return types.NextStateResult{
-		ConditionsToAdd:    undeployConditionOpt,
-		ConditionsToRemove: mo.EmptyableToOption(operationCondition),
-		Jobs:               types.NextJobs{JobsToAdd: undeployJobOpt},
+		ConditionsToRemove: conditionsToRemove,
+	}
+}
+
+func (g *LocalFSM) handleUndeploy() types.NextStateResult {
+	status := &g.application.Status
+	conditionsToRemove := make([]*v1.ConditionStatus, 0)
+	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.LocalConditionType, g.config.ZoneId)
+	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.DeploymenConditionType, g.config.ZoneId)
+
+	if !g.isRunning(types.AsyncJobTypeUndeploy) {
+
+		if g.applicationPresent {
+			undeployJob := g.jobFactory.CreateUndeployJob(g.application)
+			undeployJobOpt := mo.Some(undeployJob)
+			undeployCondition := undeployJob.GetStatus()
+			undeployConditionOpt := mo.EmptyableToOption(&undeployCondition)
+
+			return types.NextStateResult{
+				ConditionsToAdd:    undeployConditionOpt,
+				ConditionsToRemove: conditionsToRemove,
+				Jobs:               types.NextJobs{JobsToAdd: undeployJobOpt},
+			}
+		}
+	}
+
+	return types.NextStateResult{
+		ConditionsToRemove: conditionsToRemove,
 	}
 }
 
 func (g *LocalFSM) handleOperation() types.NextStateResult {
-	status := g.application.Status
 
-	_, found := getCondition(status.Conditions, v1.LocalConditionType, g.config.ZoneId)
-	if !found || !g.isRunning(types.AsyncJobTypeLocalOperation) {
+	status := &g.application.Status
 
-		if !g.applicationPresent {
-			relocationJob := g.jobFactory.CreateRelocationJob(g.application)
-			relocationCondition := relocationJob.GetStatus()
-			relocationConditionOpt := mo.Some(&relocationCondition)
-			return types.NextStateResult{
-				ConditionsToAdd: relocationConditionOpt,
-				Jobs:            types.NextJobs{JobsToAdd: mo.Some(relocationJob)},
-			}
+	conditionsToRemove := make([]*v1.ConditionStatus, 0)
 
-		} else {
-			operationJob := g.jobFactory.CreateOperationJob(g.application)
-			operationCondition := operationJob.GetStatus()
+	isDeploymentSucceeded := deploymentSuccessfull(status.Conditions, g.config.ZoneId)
 
-			operationConditionOpt := mo.Some(&operationCondition)
-			return types.NextStateResult{
-				ConditionsToAdd: operationConditionOpt,
-				Jobs:            types.NextJobs{JobsToAdd: mo.Some(operationJob)},
-			}
+	if isDeploymentSucceeded && !g.isRunning(types.AsyncJobTypeLocalOperation) {
+		operationJob := g.jobFactory.CreateOperationJob(g.application)
+		operationCondition := operationJob.GetStatus()
 
+		operationConditionOpt := mo.Some(&operationCondition)
+		return types.NextStateResult{
+			ConditionsToAdd:    operationConditionOpt,
+			ConditionsToRemove: conditionsToRemove,
+			Jobs:               types.NextJobs{JobsToAdd: mo.Some(operationJob)},
 		}
-	} else {
-		return types.NextStateResult{}
+	}
+
+	// By default remove deployment conditions
+	if g.isRunning(types.AsyncJobTypeLocalOperation) {
+		conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.DeploymenConditionType, g.config.ZoneId)
+	}
+
+	return types.NextStateResult{
+		ConditionsToRemove: conditionsToRemove,
 	}
 }
 
 func (g *LocalFSM) isRunning(jobType types.AsyncJobType) bool {
 	return g.runningJobType.OrEmpty() == jobType
+}
+
+func deploymentSuccessfull(conditions []v1.ConditionStatus, zoneId string) bool {
+	deploymentCondition, deploymentConditionFound := getCondition(conditions, v1.DeploymenConditionType, zoneId)
+	return deploymentConditionFound && deploymentCondition.Status == string(v1.DeploymentStatusDone)
+}
+
+func addConditionToRemoveList(
+	conditionsToRemove []*v1.ConditionStatus,
+	conditions []v1.ConditionStatus,
+	conditionType v1.ApplicationConditionType,
+	zoneId string,
+) []*v1.ConditionStatus {
+	condition, found := getCondition(conditions, conditionType, zoneId)
+	if found {
+		conditionsToRemove = append(conditionsToRemove, condition)
+	}
+	return conditionsToRemove
 }

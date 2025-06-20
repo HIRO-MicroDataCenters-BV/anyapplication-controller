@@ -38,8 +38,9 @@ var _ = Describe("Local Application FSM", func() {
 
 		application = v1.AnyApplication{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-app",
-				Namespace: "default",
+				Name:            "test-app",
+				Namespace:       "default",
+				ResourceVersion: "1",
 			},
 			Spec: v1.AnyApplicationSpec{
 				Application: v1.ApplicationMatcherSpec{
@@ -75,7 +76,7 @@ var _ = Describe("Local Application FSM", func() {
 		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 	})
 
-	It("should create start relocation once placement is done", func() {
+	It("should start deployment once placement is done", func() {
 		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
 
 		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
@@ -89,9 +90,10 @@ var _ = Describe("Local Application FSM", func() {
 				Owner:      "otherzone",
 				Conditions: []v1.ConditionStatus{
 					{
-						Type:               v1.RelocationConditionType,
+						Type:               v1.DeploymenConditionType,
 						ZoneId:             "zone",
-						Status:             string(v1.RelocationStatusPull),
+						ZoneVersion:        "1",
+						Status:             string(v1.DeploymentStatusPull),
 						LastTransitionTime: fakeClock.NowTime(),
 					},
 				},
@@ -100,12 +102,50 @@ var _ = Describe("Local Application FSM", func() {
 
 		jobToAdd := jobs.JobsToAdd.OrEmpty()
 		Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
-			Type:               v1.RelocationConditionType,
+			Type:               v1.DeploymenConditionType,
 			ZoneId:             "zone",
-			Status:             string(v1.RelocationStatusPull),
+			ZoneVersion:        "1",
+			Status:             string(v1.DeploymentStatusPull),
 			LastTransitionTime: fakeClock.NowTime(),
 		}))
 
+		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
+	})
+
+	It("should avoid double start deployment job if one is already running", func() {
+		deploymentCondition := v1.ConditionStatus{
+			Type:               v1.DeploymenConditionType,
+			ZoneId:             "zone",
+			ZoneVersion:        "1",
+			Status:             string(v1.DeploymentStatusPull),
+			LastTransitionTime: fakeClock.NowTime(),
+		}
+
+		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
+		application.Status.Conditions = []v1.ConditionStatus{deploymentCondition}
+
+		statusResult := globalApplication.DeriveNewStatus(types.FromCondition(deploymentCondition, types.AsyncJobTypeDeploy), jobFactory)
+
+		status := statusResult.Status.OrEmpty()
+		jobs := statusResult.Jobs
+		Expect(status).To(Equal(
+			v1.AnyApplicationStatus{
+				State:      v1.UnknownGlobalState,
+				Placements: []v1.Placement{{Zone: "zone"}},
+				Owner:      "otherzone",
+				Conditions: []v1.ConditionStatus{
+					{
+						Type:               v1.DeploymenConditionType,
+						ZoneId:             "zone",
+						ZoneVersion:        "1",
+						Status:             string(v1.DeploymentStatusPull),
+						LastTransitionTime: fakeClock.NowTime(),
+					},
+				},
+			},
+		))
+
+		Expect(jobs.JobsToAdd).To(Equal(mo.None[types.AsyncJob]()))
 		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 	})
 
@@ -113,9 +153,10 @@ var _ = Describe("Local Application FSM", func() {
 		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
 		application.Status.Conditions = []v1.ConditionStatus{
 			{
-				Type:               v1.RelocationConditionType,
+				Type:               v1.DeploymenConditionType,
 				ZoneId:             "zone",
-				Status:             string(v1.RelocationStatusDone),
+				ZoneVersion:        "1",
+				Status:             string(v1.DeploymentStatusDone),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
 		}
@@ -132,14 +173,16 @@ var _ = Describe("Local Application FSM", func() {
 				Owner:      "otherzone",
 				Conditions: []v1.ConditionStatus{
 					{
-						Type:               v1.RelocationConditionType,
+						Type:               v1.DeploymenConditionType,
 						ZoneId:             "zone",
-						Status:             string(v1.RelocationStatusDone),
+						ZoneVersion:        "1",
+						Status:             string(v1.DeploymentStatusDone),
 						LastTransitionTime: fakeClock.NowTime(),
 					},
 					{
 						Type:               v1.LocalConditionType,
 						ZoneId:             "zone",
+						ZoneVersion:        "1",
 						Status:             string(health.HealthStatusProgressing),
 						LastTransitionTime: fakeClock.NowTime(),
 					},
@@ -151,10 +194,58 @@ var _ = Describe("Local Application FSM", func() {
 		Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.LocalConditionType,
 			ZoneId:             "zone",
+			ZoneVersion:        "1",
 			Status:             string(health.HealthStatusProgressing),
 			LastTransitionTime: fakeClock.NowTime(),
 		}))
 
+		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
+	})
+
+	It("should avoid double start operational job if it is in progress", func() {
+		operationalCondition := v1.ConditionStatus{
+			Type:               v1.LocalConditionType,
+			ZoneId:             "zone",
+			ZoneVersion:        "1",
+			Status:             string(health.HealthStatusProgressing),
+			LastTransitionTime: fakeClock.NowTime(),
+		}
+
+		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
+		application.Status.Conditions = []v1.ConditionStatus{
+			{
+				Type:               v1.DeploymenConditionType,
+				ZoneId:             "zone",
+				ZoneVersion:        "1",
+				Status:             string(v1.DeploymentStatusDone),
+				LastTransitionTime: fakeClock.NowTime(),
+			},
+			operationalCondition,
+		}
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig))
+		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
+		statusResult := globalApplication.DeriveNewStatus(types.FromCondition(operationalCondition, types.AsyncJobTypeLocalOperation), jobFactory)
+
+		status := statusResult.Status.OrEmpty()
+		jobs := statusResult.Jobs
+		Expect(status).To(Equal(
+			v1.AnyApplicationStatus{
+				State:      v1.UnknownGlobalState,
+				Placements: []v1.Placement{{Zone: "zone"}},
+				Owner:      "otherzone",
+				Conditions: []v1.ConditionStatus{
+					{
+						Type:               v1.LocalConditionType,
+						ZoneId:             "zone",
+						ZoneVersion:        "1",
+						Status:             string(health.HealthStatusProgressing),
+						LastTransitionTime: fakeClock.NowTime(),
+					},
+				},
+			},
+		))
+
+		Expect(jobs.JobsToAdd).To(Equal(mo.None[types.AsyncJob]()))
 		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 	})
 
@@ -164,6 +255,7 @@ var _ = Describe("Local Application FSM", func() {
 			{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
+				ZoneVersion:        "1",
 				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
@@ -181,9 +273,10 @@ var _ = Describe("Local Application FSM", func() {
 				Owner:      "otherzone",
 				Conditions: []v1.ConditionStatus{
 					{
-						Type:               v1.RelocationConditionType,
+						Type:               v1.UndeploymenConditionType,
 						ZoneId:             "zone",
-						Status:             string(v1.RelocationStatusUndeploy),
+						ZoneVersion:        "1",
+						Status:             string(v1.UndeploymentStatusUndeploy),
 						LastTransitionTime: fakeClock.NowTime(),
 					},
 				},
@@ -192,12 +285,61 @@ var _ = Describe("Local Application FSM", func() {
 
 		jobToAdd := jobs.JobsToAdd.OrEmpty()
 		Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
-			Type:               v1.RelocationConditionType,
+			Type:               v1.UndeploymenConditionType,
 			ZoneId:             "zone",
-			Status:             string(v1.RelocationStatusUndeploy),
+			ZoneVersion:        "1",
+			Status:             string(v1.UndeploymentStatusUndeploy),
 			LastTransitionTime: fakeClock.NowTime(),
 		}))
 
+		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
+
+	})
+
+	It("should avoid double starting undeploy job if the undeploy job is already in progress", func() {
+		undeployCondition := v1.ConditionStatus{
+			Type:               v1.UndeploymenConditionType,
+			ZoneId:             "zone",
+			ZoneVersion:        "1",
+			Status:             string(v1.UndeploymentStatusUndeploy),
+			LastTransitionTime: fakeClock.NowTime(),
+		}
+
+		application.Status.Placements = []v1.Placement{{Zone: "otherzone"}}
+		application.Status.Conditions = []v1.ConditionStatus{
+			{
+				Type:               v1.LocalConditionType,
+				ZoneId:             "zone",
+				ZoneVersion:        "1",
+				Status:             string(health.HealthStatusProgressing),
+				LastTransitionTime: fakeClock.NowTime(),
+			},
+			undeployCondition,
+		}
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig))
+		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
+		statusResult := globalApplication.DeriveNewStatus(types.FromCondition(undeployCondition, types.AsyncJobTypeUndeploy), jobFactory)
+
+		status := statusResult.Status.OrEmpty()
+		jobs := statusResult.Jobs
+		Expect(status).To(Equal(
+			v1.AnyApplicationStatus{
+				State:      v1.UnknownGlobalState,
+				Placements: []v1.Placement{{Zone: "otherzone"}},
+				Owner:      "otherzone",
+				Conditions: []v1.ConditionStatus{
+					{
+						Type:               v1.UndeploymenConditionType,
+						ZoneId:             "zone",
+						ZoneVersion:        "1",
+						Status:             string(v1.UndeploymentStatusUndeploy),
+						LastTransitionTime: fakeClock.NowTime(),
+					},
+				},
+			},
+		))
+
+		Expect(jobs.JobsToAdd).To(Equal(mo.None[types.AsyncJob]()))
 		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 
 	})

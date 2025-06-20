@@ -10,10 +10,14 @@ type NextJobs struct {
 	JobsToRemove mo.Option[AsyncJobType]
 }
 
+func (n NextJobs) Add(other NextJobs) {
+
+}
+
 type NextStateResult struct {
 	NextState          mo.Option[v1.GlobalState]
 	ConditionsToAdd    mo.Option[*v1.ConditionStatus]
-	ConditionsToRemove mo.Option[*v1.ConditionStatus]
+	ConditionsToRemove []*v1.ConditionStatus
 	Jobs               NextJobs
 }
 
@@ -25,5 +29,6 @@ type StatusResult struct {
 type GlobalApplication interface {
 	GetName() string
 	GetNamespace() string
+	IsDeployed() bool
 	DeriveNewStatus(jobConditions JobApplicationCondition, jobFactory AsyncJobFactory) StatusResult
 }

@@ -77,10 +77,6 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.addFinalizer(ctx, resource)
 	}
 
-	if !currentZone(resource, r.Config.ZoneId) {
-		return ctrl.Result{}, nil
-	}
-
 	globalApplication, err := r.SyncManager.LoadApplication(resource)
 	if err != nil {
 		r.Log.Error(err, "failed to load application state")
@@ -88,6 +84,10 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			Requeue:      true,
 			RequeueAfter: 1 * time.Second,
 		}, err
+	}
+
+	if !globalApplication.IsDeployed() && !currentZone(resource, r.Config.ZoneId) {
+		return ctrl.Result{}, nil
 	}
 
 	result := r.Reconciler.DoReconcile(globalApplication)
