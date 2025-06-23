@@ -90,7 +90,6 @@ var _ = Describe("UndeployJob", func() {
 		Expect(undeployJob.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.UndeploymenConditionType,
 			ZoneId:             "zone",
-			ZoneVersion:        "999",
 			Status:             string(v1.UndeploymentStatusUndeploy),
 			LastTransitionTime: fakeClock.NowTime(),
 		},
@@ -105,14 +104,19 @@ var _ = Describe("UndeployJob", func() {
 		result := &v1.AnyApplication{}
 		_ = kubeClient.Get(context.GetGoContext(), client.ObjectKeyFromObject(application), result)
 
-		Expect(result.Status.Conditions).To(Equal(
-			[]v1.ConditionStatus{
+		Expect(result.Status.Zones).To(Equal(
+			[]v1.ZoneStatus{
 				{
-					Type:               v1.UndeploymenConditionType,
-					ZoneId:             "zone",
-					ZoneVersion:        "1000",
-					Status:             string(v1.UndeploymentStatusDone),
-					LastTransitionTime: fakeClock.NowTime(),
+					ZoneId:      "zone",
+					ZoneVersion: 1000,
+					Conditions: []v1.ConditionStatus{
+						{
+							Type:               v1.UndeploymenConditionType,
+							ZoneId:             "zone",
+							Status:             string(v1.UndeploymentStatusDone),
+							LastTransitionTime: fakeClock.NowTime(),
+						},
+					},
 				},
 			},
 		))
@@ -121,7 +125,6 @@ var _ = Describe("UndeployJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.UndeploymenConditionType,
 				ZoneId:             "zone",
-				ZoneVersion:        "999",
 				Status:             string(v1.UndeploymentStatusDone),
 				LastTransitionTime: fakeClock.NowTime(),
 			},

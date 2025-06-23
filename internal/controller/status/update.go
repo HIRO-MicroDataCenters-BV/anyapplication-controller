@@ -2,7 +2,6 @@ package status
 
 import (
 	"context"
-	"strconv"
 	"sync/atomic"
 
 	"github.com/go-logr/logr"
@@ -43,7 +42,7 @@ func NewStatusUpdater(
 
 func (su *StatusUpdater) UpdateStatus(
 	stopRetrying *atomic.Bool,
-	statusUpdate func(status *v1.AnyApplicationStatus) (bool, events.Event),
+	statusUpdate func(status *v1.AnyApplicationStatus, zoneId string) (bool, events.Event),
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var application v1.AnyApplication
@@ -58,19 +57,21 @@ func (su *StatusUpdater) UpdateStatus(
 		updated := false
 		eventToSend := events.Event{}
 		if statusUpdate != nil {
-			updated, eventToSend = statusUpdate(&updatedApplication.Status)
+			updated, eventToSend = statusUpdate(&updatedApplication.Status, su.zoneId)
 		}
 		// Update or insert condition
 		if updated {
 			if stopRetrying != nil && stopRetrying.Load() {
 				return nil // stop retrying
 			}
-			incrementZoneVersion(updatedApplication, su.zoneId)
+			updatedApplication.IncrementZoneVersion(su.zoneId)
+
 			err := su.client.Status().Update(su.ctx, updatedApplication)
 			if err == nil {
 				su.events.Emit(updatedApplication, eventToSend)
+				updatedApplication.Status.LogStatus()
+				su.log.Info("Updating status", "status", updatedApplication.Status, "error", err)
 			}
-			su.log.Info("Updating status", "status", updatedApplication.Status, "error", err)
 			return err
 		}
 		return nil // no change needed
@@ -82,57 +83,8 @@ func (su *StatusUpdater) UpdateCondition(
 	conditionToUpdate v1.ConditionStatus,
 	event events.Event,
 ) error {
-	return su.UpdateStatus(stopRetrying, func(status *v1.AnyApplicationStatus) (bool, events.Event) {
-		updated := AddOrUpdate(status, &conditionToUpdate)
+	return su.UpdateStatus(stopRetrying, func(status *v1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
+		updated := status.AddOrUpdate(&conditionToUpdate, zoneId)
 		return updated, event
 	})
-}
-
-func AddOrUpdate(status *v1.AnyApplicationStatus, toAddOrUpdate *v1.ConditionStatus) bool {
-	existing := status.Conditions
-	updated := false
-	found := false
-
-	for i, cond := range existing {
-		if cond.Type == toAddOrUpdate.Type && cond.ZoneId == toAddOrUpdate.ZoneId {
-			found = true
-			if cond.Status != toAddOrUpdate.Status || cond.Reason != toAddOrUpdate.Reason || cond.Msg != toAddOrUpdate.Msg {
-				existing[i] = *toAddOrUpdate
-				updated = true
-			}
-			break
-		}
-	}
-
-	if !found {
-		status.Conditions = append(status.Conditions, *toAddOrUpdate)
-		updated = true
-	}
-	return updated
-}
-
-func incrementZoneVersion(application *v1.AnyApplication, ZoneId string) {
-	version, err := strconv.ParseInt(application.ResourceVersion, 10, 64)
-	if err != nil {
-		version = 0
-	}
-	latestVersion := version + 1
-	for _, condition := range application.Status.Conditions {
-		if condition.ZoneId == ZoneId {
-			conditionVersion, err := strconv.ParseInt(condition.ZoneVersion, 10, 64)
-			if err != nil {
-				conditionVersion = 0
-			}
-			if conditionVersion >= latestVersion {
-				latestVersion = conditionVersion + 1
-			}
-		}
-	}
-	latestVersionStr := strconv.FormatInt(latestVersion, 10)
-	for i, condition := range application.Status.Conditions {
-		if condition.ZoneId == ZoneId {
-			application.Status.Conditions[i].ZoneVersion = latestVersionStr
-		}
-	}
-
 }

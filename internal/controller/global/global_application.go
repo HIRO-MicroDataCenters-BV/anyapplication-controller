@@ -50,6 +50,10 @@ func (g *globalApplication) IsDeployed() bool {
 	return g.locaApplication.IsPresent()
 }
 
+func (g *globalApplication) HasZoneStatus() bool {
+	return g.application.HasZoneStatus(g.config.ZoneId)
+}
+
 func (g *globalApplication) DeriveNewStatus(
 	jobConditions types.JobApplicationCondition,
 	jobFactory types.AsyncJobFactory,
@@ -64,16 +68,16 @@ func (g *globalApplication) DeriveNewStatus(
 	runningJobType := jobConditions.GetJobType()
 
 	// Update local application status if exists
-	localConditionOpt := moutils.Map(g.locaApplication, func(l local.LocalApplication) v1.ConditionStatus {
+	localApplicationConditionOpt := moutils.Map(g.locaApplication, func(l local.LocalApplication) v1.ConditionStatus {
 		return l.GetCondition()
 	})
-	stateUpdated := moutils.Map(localConditionOpt, func(condition v1.ConditionStatus) bool {
+	stateUpdated := moutils.Map(localApplicationConditionOpt, func(condition v1.ConditionStatus) bool {
 		updateLocalCondition(current, &condition, g.config)
 		return true
 	}).OrElse(false)
 
 	// Update loca job conditions
-	stateUpdated = updateJobConditions(current, jobConditions) || stateUpdated
+	stateUpdated = updateJobConditions(current, jobConditions, g.config.ZoneId) || stateUpdated
 
 	// Update state
 	globalStateUpdated, nextJobs := updateState(g.application, g.config, jobFactory, g.IsDeployed(), runningJobType)
@@ -100,13 +104,23 @@ func updateState(
 	nextJobs := types.NextJobs{}
 	stateUpdated := false
 	if placementsContainZone(status, config.ZoneId) || applicationPresent {
-		stateUpdated, nextJobs = localStateMachine(applicationMut, config, jobFactory, applicationPresent, runningJobType)
-		// fmt.Printf("local fsm result: stateUpdated %v, nextJobs %v\n", stateUpdated, nextJobs)
+		stateUpdated, nextJobs = localStateMachine(
+			applicationMut,
+			config,
+			jobFactory,
+			applicationPresent,
+			runningJobType,
+		)
 	}
 
 	if status.Owner == config.ZoneId {
-		globalStateUpdated, globalJobs := globalStateMachine(applicationMut, config, jobFactory, applicationPresent, runningJobType)
-		// fmt.Printf("global fsm result: globalStateUpdated %v, nextJobs %v\n", globalStateUpdated, globalJobs)
+		globalStateUpdated, globalJobs := globalStateMachine(
+			applicationMut,
+			config,
+			jobFactory,
+			applicationPresent,
+			runningJobType,
+		)
 		stateUpdated = stateUpdated || globalStateUpdated
 		nextJobs.Add(globalJobs)
 	}
@@ -137,13 +151,13 @@ func globalStateMachine(
 
 	// TODO pick condition from jobs
 	for _, condition := range conditionsToRemove {
-		removeCondition(status, condition)
+		removeCondition(status, condition, config.ZoneId)
 		stateUpdated = true
 	}
 
 	// TODO pick condition from jobs
 	conditionsToAdd.ForEach(func(condition *v1.ConditionStatus) {
-		addOrUpdateCondition(status, condition)
+		addOrUpdateCondition(status, condition, config.ZoneId)
 		stateUpdated = true
 	})
 
@@ -163,7 +177,6 @@ func localStateMachine(
 	applicationPresent bool,
 	runningJobType mo.Option[types.AsyncJobType],
 ) (bool, types.NextJobs) {
-	status := &applicationMut.Status
 
 	stateUpdated := false
 
@@ -175,13 +188,13 @@ func localStateMachine(
 
 	// TODO pick condition from jobs
 	for _, condition := range conditionsToRemove {
-		removeCondition(status, condition)
+		removeCondition(&applicationMut.Status, condition, config.ZoneId)
 		stateUpdated = true
 	}
 
 	// TODO pick condition from jobs
 	conditionsToAdd.ForEach(func(condition *v1.ConditionStatus) {
-		addOrUpdateCondition(status, condition)
+		addOrUpdateCondition(&applicationMut.Status, condition, config.ZoneId)
 		stateUpdated = true
 	})
 
@@ -192,22 +205,24 @@ func localStateMachine(
 	return stateUpdated, jobs
 }
 
-func updateJobConditions(status *v1.AnyApplicationStatus, jobConditions types.JobApplicationCondition) bool {
+func updateJobConditions(status *v1.AnyApplicationStatus, jobConditions types.JobApplicationCondition, zoneId string) bool {
 	stateUpdated := false
 
 	for _, condition := range jobConditions.GetConditions() {
-		addOrUpdateCondition(status, condition)
+		addOrUpdateCondition(status, condition, zoneId)
 		stateUpdated = true
 	}
 	return stateUpdated
 }
 
 func updateLocalCondition(status *v1.AnyApplicationStatus, condition *v1.ConditionStatus, config *config.ApplicationRuntimeConfig) {
-	found, ok := lo.Find(status.Conditions, func(cond v1.ConditionStatus) bool {
-		return cond.ZoneId == config.ZoneId
+	zoneStatus := status.GetOrCreateStatusFor(config.ZoneId)
+
+	found, ok := lo.Find(zoneStatus.Conditions, func(cond v1.ConditionStatus) bool {
+		return cond.ZoneId == config.ZoneId && cond.Type == condition.Type
 	})
 	if !ok {
-		status.Conditions = append(status.Conditions, *condition)
+		zoneStatus.Conditions = append(zoneStatus.Conditions, *condition)
 	} else {
 		condition.DeepCopyInto(&found)
 	}

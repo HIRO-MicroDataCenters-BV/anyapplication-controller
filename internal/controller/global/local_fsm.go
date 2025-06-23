@@ -28,18 +28,20 @@ func NewLocalFSM(
 }
 
 func (g *LocalFSM) NextState() types.NextStateResult {
-	status := g.application.Status
+	status := &g.application.Status
 
-	if !placementsContainZone(&status, g.config.ZoneId) && g.applicationPresent {
+	if !placementsContainZone(status, g.config.ZoneId) && g.applicationPresent {
 		return g.handleUndeploy()
 	}
 
-	isDeploymentSucceeded := deploymentSuccessfull(status.Conditions, g.config.ZoneId)
-	if placementsContainZone(&status, g.config.ZoneId) && !isDeploymentSucceeded {
+	zoneStatus := status.GetOrCreateStatusFor(g.config.ZoneId)
+
+	isDeploymentSucceeded := deploymentSuccessfull(zoneStatus, g.config.ZoneId)
+	if placementsContainZone(status, g.config.ZoneId) && !isDeploymentSucceeded {
 		return g.handleDeploy()
 	}
 
-	if placementsContainZone(&status, g.config.ZoneId) {
+	if placementsContainZone(status, g.config.ZoneId) {
 		return g.handleOperation()
 	}
 
@@ -47,12 +49,13 @@ func (g *LocalFSM) NextState() types.NextStateResult {
 }
 
 func (g *LocalFSM) handleDeploy() types.NextStateResult {
-	status := &g.application.Status
+	status := g.application.Status.GetOrCreateStatusFor(g.config.ZoneId)
+
 	conditionsToRemove := make([]*v1.ConditionStatus, 0)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.LocalConditionType, g.config.ZoneId)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymenConditionType, g.config.ZoneId)
 
-	isDeploymentSucceeded := deploymentSuccessfull(status.Conditions, g.config.ZoneId)
+	isDeploymentSucceeded := deploymentSuccessfull(status, g.config.ZoneId)
 	if !g.applicationPresent && !isDeploymentSucceeded {
 		if !g.isRunning(types.AsyncJobTypeDeploy) {
 			deployJob := g.jobFactory.CreateDeploymentJob(g.application)
@@ -74,7 +77,8 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 }
 
 func (g *LocalFSM) handleUndeploy() types.NextStateResult {
-	status := &g.application.Status
+	status := g.application.Status.GetOrCreateStatusFor(g.config.ZoneId)
+
 	conditionsToRemove := make([]*v1.ConditionStatus, 0)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.LocalConditionType, g.config.ZoneId)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.DeploymenConditionType, g.config.ZoneId)
@@ -101,13 +105,12 @@ func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 }
 
 func (g *LocalFSM) handleOperation() types.NextStateResult {
-
-	status := &g.application.Status
+	status := g.application.Status.GetOrCreateStatusFor(g.config.ZoneId)
 
 	conditionsToRemove := make([]*v1.ConditionStatus, 0)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymenConditionType, g.config.ZoneId)
 
-	isDeploymentSucceeded := deploymentSuccessfull(status.Conditions, g.config.ZoneId)
+	isDeploymentSucceeded := deploymentSuccessfull(status, g.config.ZoneId)
 
 	if isDeploymentSucceeded && !g.isRunning(types.AsyncJobTypeLocalOperation) {
 		operationJob := g.jobFactory.CreateOperationJob(g.application)
@@ -122,7 +125,7 @@ func (g *LocalFSM) handleOperation() types.NextStateResult {
 	}
 
 	// By default remove deployment conditions
-	if g.isRunning(types.AsyncJobTypeLocalOperation) {
+	if g.isRunning(types.AsyncJobTypeLocalOperation) || len(conditionsToRemove) > 0 {
 		conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.DeploymenConditionType, g.config.ZoneId)
 	}
 
@@ -135,7 +138,8 @@ func (g *LocalFSM) isRunning(jobType types.AsyncJobType) bool {
 	return g.runningJobType.OrEmpty() == jobType
 }
 
-func deploymentSuccessfull(conditions []v1.ConditionStatus, zoneId string) bool {
+func deploymentSuccessfull(zoneStatus *v1.ZoneStatus, zoneId string) bool {
+	conditions := zoneStatus.Conditions
 	deploymentCondition, deploymentConditionFound := getCondition(conditions, v1.DeploymenConditionType, zoneId)
 	return deploymentConditionFound && deploymentCondition.Status == string(v1.DeploymentStatusDone)
 }

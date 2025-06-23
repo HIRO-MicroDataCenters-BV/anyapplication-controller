@@ -40,5 +40,6 @@ type GlobalApplication interface {
 	GetName() string
 	GetNamespace() string
 	IsDeployed() bool
+	HasZoneStatus() bool
 	DeriveNewStatus(jobConditions JobApplicationCondition, jobFactory AsyncJobFactory) StatusResult
 }

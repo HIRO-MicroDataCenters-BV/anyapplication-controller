@@ -66,12 +66,18 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 			Status: v1.AnyApplicationStatus{
 				Owner: "zone",
 				State: v1.PlacementGlobalState,
-				Conditions: []v1.ConditionStatus{
+				Zones: []v1.ZoneStatus{
 					{
-						Type:               v1.PlacementConditionType,
-						ZoneId:             "zone",
-						Status:             string(v1.PlacementStatusInProgress),
-						LastTransitionTime: fakeClock.NowTime(),
+						ZoneId:      "zone",
+						ZoneVersion: 0,
+						Conditions: []v1.ConditionStatus{
+							{
+								Type:               v1.LocalConditionType,
+								ZoneId:             "zone",
+								Status:             string(v1.PlacementStatusInProgress),
+								LastTransitionTime: fakeClock.NowTime(),
+							},
+						},
 					},
 				},
 			},
@@ -85,10 +91,41 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 		log = logf.Log.WithName("UndeployJob")
 	})
 
-	It("should add a new condition if it does not exist", func() {
+	It("should add a new zone and condition if zone does not exist", func() {
 		newCondition := v1.ConditionStatus{
 			Type:   v1.PlacementConditionType,
 			ZoneId: "zone2",
+			Status: string(v1.PlacementStatusDone),
+		}
+		oldCondition := v1.ConditionStatus{
+			Type:               v1.LocalConditionType,
+			ZoneId:             "zone",
+			Status:             string(v1.PlacementStatusInProgress),
+			LastTransitionTime: fakeClock.NowTime(),
+		}
+		stopRetrying := atomic.Bool{}
+		statusUpdater := NewStatusUpdater(ctx,
+			log, fakeClient, client.ObjectKeyFromObject(application), "zone2", &fakeEvents)
+		event := events.Event{}
+		err := statusUpdater.UpdateCondition(&stopRetrying, newCondition, event)
+
+		Expect(err).ToNot(HaveOccurred())
+
+		updatedApp := &v1.AnyApplication{}
+		err = fakeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
+		Expect(err).ToNot(HaveOccurred())
+
+		zoneStatus, _ := updatedApp.Status.GetStatusFor("zone")
+		Expect(zoneStatus.Conditions).To(ContainElement(oldCondition))
+
+		zone2Status, _ := updatedApp.Status.GetStatusFor("zone2")
+		Expect(zone2Status.Conditions).To(ContainElement(newCondition))
+	})
+
+	It("should add a new condition if it does not exist to existing zone", func() {
+		newCondition := v1.ConditionStatus{
+			Type:   v1.PlacementConditionType,
+			ZoneId: "zone",
 			Status: string(v1.PlacementStatusDone),
 		}
 		stopRetrying := atomic.Bool{}
@@ -101,14 +138,16 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 		updatedApp := &v1.AnyApplication{}
 		err = fakeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedApp.Status.Conditions).To(ContainElement(newCondition))
+
+		zoneStatus, _ := updatedApp.Status.GetStatusFor("zone")
+		Expect(zoneStatus.Conditions).To(ContainElement(newCondition))
 	})
 
 	It("should update an existing condition if it exists", func() {
 		updatedCondition := v1.ConditionStatus{
-			Type:   v1.PlacementConditionType,
+			Type:   v1.LocalConditionType,
 			ZoneId: "zone",
-			Status: string(v1.PlacementStatusDone),
+			Status: string(v1.PlacementStatusFailure),
 		}
 		stopRetrying := atomic.Bool{}
 		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
@@ -121,12 +160,12 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 		err = fakeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
 		Expect(err).ToNot(HaveOccurred())
 
-		updatedCondition.ZoneVersion = "1000"
-		Expect(updatedApp.Status.Conditions).To(ContainElement(updatedCondition))
+		zoneStatus, _ := updatedApp.Status.GetStatusFor("zone")
+		Expect(zoneStatus.Conditions).To(ContainElement(updatedCondition))
 	})
 
 	It("should not update if the condition is unchanged", func() {
-		existingCondition := *application.Status.Conditions[0].DeepCopy()
+		existingCondition := *application.Status.GetOrCreateStatusFor("zone").Conditions[0].DeepCopy()
 
 		stopRetrying := atomic.Bool{}
 
@@ -138,6 +177,8 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 		updatedApp := &v1.AnyApplication{}
 		err = fakeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedApp.Status.Conditions).To(Equal(application.Status.Conditions))
+
+		zoneStatus, _ := updatedApp.Status.GetStatusFor("zone")
+		Expect(zoneStatus.Conditions).To(ContainElement(existingCondition))
 	})
 })

@@ -88,13 +88,18 @@ var _ = Describe("Local Application FSM", func() {
 				State:      v1.UnknownGlobalState,
 				Placements: []v1.Placement{{Zone: "zone"}},
 				Owner:      "otherzone",
-				Conditions: []v1.ConditionStatus{
+				Zones: []v1.ZoneStatus{
 					{
-						Type:               v1.DeploymenConditionType,
-						ZoneId:             "zone",
-						ZoneVersion:        "1",
-						Status:             string(v1.DeploymentStatusPull),
-						LastTransitionTime: fakeClock.NowTime(),
+						ZoneId:      "zone",
+						ZoneVersion: 0,
+						Conditions: []v1.ConditionStatus{
+							{
+								Type:               v1.DeploymenConditionType,
+								ZoneId:             "zone",
+								Status:             string(v1.DeploymentStatusPull),
+								LastTransitionTime: fakeClock.NowTime(),
+							},
+						},
 					},
 				},
 			},
@@ -104,7 +109,6 @@ var _ = Describe("Local Application FSM", func() {
 		Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.DeploymenConditionType,
 			ZoneId:             "zone",
-			ZoneVersion:        "1",
 			Status:             string(v1.DeploymentStatusPull),
 			LastTransitionTime: fakeClock.NowTime(),
 		}))
@@ -116,13 +120,18 @@ var _ = Describe("Local Application FSM", func() {
 		deploymentCondition := v1.ConditionStatus{
 			Type:               v1.DeploymenConditionType,
 			ZoneId:             "zone",
-			ZoneVersion:        "1",
 			Status:             string(v1.DeploymentStatusPull),
 			LastTransitionTime: fakeClock.NowTime(),
 		}
 
 		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
-		application.Status.Conditions = []v1.ConditionStatus{deploymentCondition}
+		application.Status.Zones = []v1.ZoneStatus{
+			{
+				ZoneId:      "zone",
+				ZoneVersion: 1,
+				Conditions:  []v1.ConditionStatus{deploymentCondition},
+			},
+		}
 
 		statusResult := globalApplication.DeriveNewStatus(types.FromCondition(deploymentCondition, types.AsyncJobTypeDeploy), jobFactory)
 
@@ -133,13 +142,18 @@ var _ = Describe("Local Application FSM", func() {
 				State:      v1.UnknownGlobalState,
 				Placements: []v1.Placement{{Zone: "zone"}},
 				Owner:      "otherzone",
-				Conditions: []v1.ConditionStatus{
+				Zones: []v1.ZoneStatus{
 					{
-						Type:               v1.DeploymenConditionType,
-						ZoneId:             "zone",
-						ZoneVersion:        "1",
-						Status:             string(v1.DeploymentStatusPull),
-						LastTransitionTime: fakeClock.NowTime(),
+						ZoneId:      "zone",
+						ZoneVersion: 1,
+						Conditions: []v1.ConditionStatus{
+							{
+								Type:               v1.DeploymenConditionType,
+								ZoneId:             "zone",
+								Status:             string(v1.DeploymentStatusPull),
+								LastTransitionTime: fakeClock.NowTime(),
+							},
+						},
 					},
 				},
 			},
@@ -151,16 +165,23 @@ var _ = Describe("Local Application FSM", func() {
 
 	It("should create operational job once relocation is done", func() {
 		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
-		application.Status.Conditions = []v1.ConditionStatus{
+
+		application.Status.Zones = []v1.ZoneStatus{
 			{
-				Type:               v1.DeploymenConditionType,
-				ZoneId:             "zone",
-				ZoneVersion:        "1",
-				Status:             string(v1.DeploymentStatusDone),
-				LastTransitionTime: fakeClock.NowTime(),
+				ZoneId:      "zone",
+				ZoneVersion: 1,
+				Conditions: []v1.ConditionStatus{
+					{
+						Type:               v1.DeploymenConditionType,
+						ZoneId:             "zone",
+						Status:             string(v1.DeploymentStatusDone),
+						LastTransitionTime: fakeClock.NowTime(),
+					},
+				},
 			},
 		}
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig))
+
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 
@@ -171,20 +192,24 @@ var _ = Describe("Local Application FSM", func() {
 				State:      v1.UnknownGlobalState,
 				Placements: []v1.Placement{{Zone: "zone"}},
 				Owner:      "otherzone",
-				Conditions: []v1.ConditionStatus{
+				Zones: []v1.ZoneStatus{
 					{
-						Type:               v1.DeploymenConditionType,
-						ZoneId:             "zone",
-						ZoneVersion:        "1",
-						Status:             string(v1.DeploymentStatusDone),
-						LastTransitionTime: fakeClock.NowTime(),
-					},
-					{
-						Type:               v1.LocalConditionType,
-						ZoneId:             "zone",
-						ZoneVersion:        "1",
-						Status:             string(health.HealthStatusProgressing),
-						LastTransitionTime: fakeClock.NowTime(),
+						ZoneId:      "zone",
+						ZoneVersion: 1,
+						Conditions: []v1.ConditionStatus{
+							{
+								Type:               v1.DeploymenConditionType,
+								ZoneId:             "zone",
+								Status:             string(v1.DeploymentStatusDone),
+								LastTransitionTime: fakeClock.NowTime(),
+							},
+							{
+								Type:               v1.LocalConditionType,
+								ZoneId:             "zone",
+								Status:             string(health.HealthStatusProgressing),
+								LastTransitionTime: fakeClock.NowTime(),
+							},
+						},
 					},
 				},
 			},
@@ -194,7 +219,6 @@ var _ = Describe("Local Application FSM", func() {
 		Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.LocalConditionType,
 			ZoneId:             "zone",
-			ZoneVersion:        "1",
 			Status:             string(health.HealthStatusProgressing),
 			LastTransitionTime: fakeClock.NowTime(),
 		}))
@@ -206,23 +230,29 @@ var _ = Describe("Local Application FSM", func() {
 		operationalCondition := v1.ConditionStatus{
 			Type:               v1.LocalConditionType,
 			ZoneId:             "zone",
-			ZoneVersion:        "1",
 			Status:             string(health.HealthStatusProgressing),
 			LastTransitionTime: fakeClock.NowTime(),
 		}
 
 		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
-		application.Status.Conditions = []v1.ConditionStatus{
+
+		application.Status.Zones = []v1.ZoneStatus{
 			{
-				Type:               v1.DeploymenConditionType,
-				ZoneId:             "zone",
-				ZoneVersion:        "1",
-				Status:             string(v1.DeploymentStatusDone),
-				LastTransitionTime: fakeClock.NowTime(),
+				ZoneId:      "zone",
+				ZoneVersion: 1,
+				Conditions: []v1.ConditionStatus{
+					{
+						Type:               v1.DeploymenConditionType,
+						ZoneId:             "zone",
+						Status:             string(v1.DeploymentStatusDone),
+						LastTransitionTime: fakeClock.NowTime(),
+					},
+					operationalCondition,
+				},
 			},
-			operationalCondition,
 		}
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig))
+
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 		statusResult := globalApplication.DeriveNewStatus(types.FromCondition(operationalCondition, types.AsyncJobTypeLocalOperation), jobFactory)
 
@@ -233,13 +263,18 @@ var _ = Describe("Local Application FSM", func() {
 				State:      v1.UnknownGlobalState,
 				Placements: []v1.Placement{{Zone: "zone"}},
 				Owner:      "otherzone",
-				Conditions: []v1.ConditionStatus{
+				Zones: []v1.ZoneStatus{
 					{
-						Type:               v1.LocalConditionType,
-						ZoneId:             "zone",
-						ZoneVersion:        "1",
-						Status:             string(health.HealthStatusProgressing),
-						LastTransitionTime: fakeClock.NowTime(),
+						ZoneId:      "zone",
+						ZoneVersion: 1,
+						Conditions: []v1.ConditionStatus{
+							{
+								Type:               v1.LocalConditionType,
+								ZoneId:             "zone",
+								Status:             string(health.HealthStatusProgressing),
+								LastTransitionTime: fakeClock.NowTime(),
+							},
+						},
 					},
 				},
 			},
@@ -251,16 +286,23 @@ var _ = Describe("Local Application FSM", func() {
 
 	It("should undeploy the application when placement has changed", func() {
 		application.Status.Placements = []v1.Placement{{Zone: "otherzone"}}
-		application.Status.Conditions = []v1.ConditionStatus{
+
+		application.Status.Zones = []v1.ZoneStatus{
 			{
-				Type:               v1.LocalConditionType,
-				ZoneId:             "zone",
-				ZoneVersion:        "1",
-				Status:             string(health.HealthStatusProgressing),
-				LastTransitionTime: fakeClock.NowTime(),
+				ZoneId:      "zone",
+				ZoneVersion: 1,
+				Conditions: []v1.ConditionStatus{
+					{
+						Type:               v1.LocalConditionType,
+						ZoneId:             "zone",
+						Status:             string(health.HealthStatusProgressing),
+						LastTransitionTime: fakeClock.NowTime(),
+					},
+				},
 			},
 		}
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig))
+
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 
@@ -271,13 +313,18 @@ var _ = Describe("Local Application FSM", func() {
 				State:      v1.UnknownGlobalState,
 				Placements: []v1.Placement{{Zone: "otherzone"}},
 				Owner:      "otherzone",
-				Conditions: []v1.ConditionStatus{
+				Zones: []v1.ZoneStatus{
 					{
-						Type:               v1.UndeploymenConditionType,
-						ZoneId:             "zone",
-						ZoneVersion:        "1",
-						Status:             string(v1.UndeploymentStatusUndeploy),
-						LastTransitionTime: fakeClock.NowTime(),
+						ZoneId:      "zone",
+						ZoneVersion: 1,
+						Conditions: []v1.ConditionStatus{
+							{
+								Type:               v1.UndeploymenConditionType,
+								ZoneId:             "zone",
+								Status:             string(v1.UndeploymentStatusUndeploy),
+								LastTransitionTime: fakeClock.NowTime(),
+							},
+						},
 					},
 				},
 			},
@@ -287,7 +334,6 @@ var _ = Describe("Local Application FSM", func() {
 		Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.UndeploymenConditionType,
 			ZoneId:             "zone",
-			ZoneVersion:        "1",
 			Status:             string(v1.UndeploymentStatusUndeploy),
 			LastTransitionTime: fakeClock.NowTime(),
 		}))
@@ -300,23 +346,29 @@ var _ = Describe("Local Application FSM", func() {
 		undeployCondition := v1.ConditionStatus{
 			Type:               v1.UndeploymenConditionType,
 			ZoneId:             "zone",
-			ZoneVersion:        "1",
 			Status:             string(v1.UndeploymentStatusUndeploy),
 			LastTransitionTime: fakeClock.NowTime(),
 		}
 
 		application.Status.Placements = []v1.Placement{{Zone: "otherzone"}}
-		application.Status.Conditions = []v1.ConditionStatus{
+
+		application.Status.Zones = []v1.ZoneStatus{
 			{
-				Type:               v1.LocalConditionType,
-				ZoneId:             "zone",
-				ZoneVersion:        "1",
-				Status:             string(health.HealthStatusProgressing),
-				LastTransitionTime: fakeClock.NowTime(),
+				ZoneId:      "zone",
+				ZoneVersion: 1,
+				Conditions: []v1.ConditionStatus{
+					{
+						Type:               v1.LocalConditionType,
+						ZoneId:             "zone",
+						Status:             string(health.HealthStatusProgressing),
+						LastTransitionTime: fakeClock.NowTime(),
+					},
+					undeployCondition,
+				},
 			},
-			undeployCondition,
 		}
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig))
+
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 		statusResult := globalApplication.DeriveNewStatus(types.FromCondition(undeployCondition, types.AsyncJobTypeUndeploy), jobFactory)
 
@@ -327,13 +379,18 @@ var _ = Describe("Local Application FSM", func() {
 				State:      v1.UnknownGlobalState,
 				Placements: []v1.Placement{{Zone: "otherzone"}},
 				Owner:      "otherzone",
-				Conditions: []v1.ConditionStatus{
+				Zones: []v1.ZoneStatus{
 					{
-						Type:               v1.UndeploymenConditionType,
-						ZoneId:             "zone",
-						ZoneVersion:        "1",
-						Status:             string(v1.UndeploymentStatusUndeploy),
-						LastTransitionTime: fakeClock.NowTime(),
+						ZoneId:      "zone",
+						ZoneVersion: 1,
+						Conditions: []v1.ConditionStatus{
+							{
+								Type:               v1.UndeploymenConditionType,
+								ZoneId:             "zone",
+								Status:             string(v1.UndeploymentStatusUndeploy),
+								LastTransitionTime: fakeClock.NowTime(),
+							},
+						},
 					},
 				},
 			},

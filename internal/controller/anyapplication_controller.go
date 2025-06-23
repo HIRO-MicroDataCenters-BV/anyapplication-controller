@@ -86,13 +86,20 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}, err
 	}
 
-	if !globalApplication.IsDeployed() && !currentZone(resource, r.Config.ZoneId) {
+	shouldHandle := globalApplication.IsDeployed() ||
+		isNewApplication(resource) ||
+		globalApplication.HasZoneStatus() ||
+		isOwnerOrPlacementZone(resource, r.Config.ZoneId)
+
+	if !shouldHandle {
 		return ctrl.Result{}, nil
 	}
 
+	r.Log.Info("reconciler", "initial status", resource.Status)
+
 	result := r.Reconciler.DoReconcile(globalApplication)
 
-	r.Log.Info("reconciler result", result)
+	r.Log.Info("reconciler", "result status", result)
 	if result.Status.IsPresent() {
 		stopRetrying := atomic.Bool{}
 		newStatus := result.Status.OrEmpty()
@@ -106,8 +113,8 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			r.Events,
 		)
 
-		err = statusUpdater.UpdateStatus(&stopRetrying, func(applicationStatus *dcpv1.AnyApplicationStatus) (bool, events.Event) {
-			return mergeStatus(applicationStatus, &newStatus)
+		err = statusUpdater.UpdateStatus(&stopRetrying, func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
+			return mergeStatus(applicationStatus, &newStatus, zoneId)
 		})
 		if err != nil {
 			r.Log.Error(err, "failed to update status: requeuing")
@@ -186,7 +193,7 @@ func removeString(slice []string, s string) []string {
 	return result
 }
 
-func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.AnyApplicationStatus) (bool, events.Event) {
+func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.AnyApplicationStatus, zone string) (bool, events.Event) {
 	updated := false
 	reason := events.GlobalStateChangeReason
 	msg := ""
@@ -206,20 +213,25 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 		updated = true
 	}
 
-	if newStatus.Conditions != nil {
-		for _, newCondition := range newStatus.Conditions {
+	zoneStatus := currentStatus.GetOrCreateStatusFor(zone)
+	newZoneStatus := newStatus.GetOrCreateStatusFor(zone)
+
+	if newZoneStatus.Conditions != nil {
+		for _, newCondition := range newZoneStatus.Conditions {
 			found := false
-			for i, existingCondition := range currentStatus.Conditions {
+			for i, existingCondition := range zoneStatus.Conditions {
 				if existingCondition.Type == newCondition.Type && existingCondition.ZoneId == newCondition.ZoneId {
 					if existingCondition.LastTransitionTime.Time.Before(newCondition.LastTransitionTime.Time) {
-						currentStatus.Conditions[i] = newCondition
-						updated = true
+						if existingCondition.Status != newCondition.Status {
+							zoneStatus.Conditions[i] = newCondition
+							updated = true
+						}
 					}
 					found = true
 				}
 			}
 			if !found {
-				currentStatus.Conditions = append(currentStatus.Conditions, newCondition)
+				zoneStatus.Conditions = append(zoneStatus.Conditions, newCondition)
 				updated = true
 			}
 		}
@@ -228,10 +240,7 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 	return updated, event
 }
 
-func currentZone(resource *dcpv1.AnyApplication, zone string) bool {
-
-	isNewApplication := resource.Status.State == ""
-
+func isOwnerOrPlacementZone(resource *dcpv1.AnyApplication, zone string) bool {
 	isOwnerZone := resource.Status.Owner == zone
 	isPlacementZone := false
 	for _, placement := range resource.Status.Placements {
@@ -240,5 +249,9 @@ func currentZone(resource *dcpv1.AnyApplication, zone string) bool {
 		}
 	}
 
-	return isNewApplication || isOwnerZone || isPlacementZone
+	return isOwnerZone || isPlacementZone
+}
+
+func isNewApplication(resource *dcpv1.AnyApplication) bool {
+	return resource.Status.State == ""
 }
