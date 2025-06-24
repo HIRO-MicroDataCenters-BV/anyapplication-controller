@@ -44,7 +44,6 @@ func (g *LocalFSM) NextState() types.NextStateResult {
 	if placementsContainZone(status, g.config.ZoneId) {
 		return g.handleOperation()
 	}
-
 	return types.NextStateResult{}
 }
 
@@ -69,6 +68,8 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 				Jobs:               types.NextJobs{JobsToAdd: deployJobOpt},
 			}
 		}
+	} else if g.applicationPresent {
+		return g.handleOperation()
 	}
 
 	return types.NextStateResult{

@@ -2,6 +2,7 @@ package status
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 
 	v1 "hiro.io/anyapplication/api/v1"
@@ -107,7 +108,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 		statusUpdater := NewStatusUpdater(ctx,
 			log, fakeClient, client.ObjectKeyFromObject(application), "zone2", &fakeEvents)
 		event := events.Event{}
-		err := statusUpdater.UpdateCondition(&stopRetrying, newCondition, event)
+		err := statusUpdater.UpdateCondition(&stopRetrying, event, newCondition)
 
 		Expect(err).ToNot(HaveOccurred())
 
@@ -131,7 +132,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 		stopRetrying := atomic.Bool{}
 		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
 		event := events.Event{}
-		err := statusUpdater.UpdateCondition(&stopRetrying, newCondition, event)
+		err := statusUpdater.UpdateCondition(&stopRetrying, event, newCondition)
 
 		Expect(err).ToNot(HaveOccurred())
 
@@ -152,7 +153,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 		stopRetrying := atomic.Bool{}
 		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
 		event := events.Event{}
-		err := statusUpdater.UpdateCondition(&stopRetrying, updatedCondition, event)
+		err := statusUpdater.UpdateCondition(&stopRetrying, event, updatedCondition)
 
 		Expect(err).ToNot(HaveOccurred())
 
@@ -171,7 +172,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 
 		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
 		event := events.Event{}
-		err := statusUpdater.UpdateCondition(&stopRetrying, existingCondition, event)
+		err := statusUpdater.UpdateCondition(&stopRetrying, event, existingCondition)
 		Expect(err).ToNot(HaveOccurred())
 
 		updatedApp := &v1.AnyApplication{}
@@ -181,4 +182,131 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 		zoneStatus, _ := updatedApp.Status.GetStatusFor("zone")
 		Expect(zoneStatus.Conditions).To(ContainElement(existingCondition))
 	})
+
+	It("should remove a specified condition from a zone", func() {
+		// Add two conditions to the zone
+		condToKeep := v1.ConditionStatus{
+			Type:   v1.PlacementConditionType,
+			ZoneId: "zone",
+			Status: string(v1.PlacementStatusDone),
+		}
+		condToRemove := v1.ConditionStatus{
+			Type:   v1.LocalConditionType,
+			ZoneId: "zone",
+			Status: string(v1.PlacementStatusInProgress),
+		}
+		application.Status.GetOrCreateStatusFor("zone").Conditions = []v1.ConditionStatus{condToKeep, condToRemove}
+		Expect(fakeClient.Status().Update(ctx, application)).To(Succeed())
+
+		stopRetrying := atomic.Bool{}
+		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
+		event := events.Event{}
+		err := statusUpdater.UpdateCondition(&stopRetrying, event, condToKeep, v1.LocalConditionType)
+		Expect(err).ToNot(HaveOccurred())
+
+		updatedApp := &v1.AnyApplication{}
+		err = fakeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
+		Expect(err).ToNot(HaveOccurred())
+
+		zoneStatus, _ := updatedApp.Status.GetStatusFor("zone")
+		Expect(zoneStatus.Conditions).To(ContainElement(condToKeep))
+		for _, c := range zoneStatus.Conditions {
+			Expect(c.Type).NotTo(Equal(v1.LocalConditionType))
+		}
+	})
+
+	It("should remove multiple specified conditions from a zone", func() {
+		cond1 := v1.ConditionStatus{
+			Type:   v1.PlacementConditionType,
+			ZoneId: "zone",
+			Status: string(v1.PlacementStatusDone),
+		}
+		cond2 := v1.ConditionStatus{
+			Type:   v1.LocalConditionType,
+			ZoneId: "zone",
+			Status: string(v1.PlacementStatusInProgress),
+		}
+		cond3 := v1.ConditionStatus{
+			Type:   v1.DeploymenConditionType,
+			ZoneId: "zone",
+			Status: string(v1.PlacementStatusInProgress),
+		}
+		application.Status.GetOrCreateStatusFor("zone").Conditions = []v1.ConditionStatus{cond1, cond2, cond3}
+		Expect(fakeClient.Status().Update(ctx, application)).To(Succeed())
+
+		stopRetrying := atomic.Bool{}
+		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
+		event := events.Event{}
+		err := statusUpdater.UpdateCondition(&stopRetrying, event, cond1, v1.LocalConditionType, v1.DeploymenConditionType)
+		Expect(err).ToNot(HaveOccurred())
+
+		updatedApp := &v1.AnyApplication{}
+		err = fakeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
+		Expect(err).ToNot(HaveOccurred())
+
+		fmt.Printf("%v", updatedApp)
+
+		zoneStatus, _ := updatedApp.Status.GetStatusFor("zone")
+		Expect(zoneStatus.Conditions).To(ContainElement(cond1))
+		for _, c := range zoneStatus.Conditions {
+			Expect(c.Type).NotTo(Equal(v1.LocalConditionType))
+			Expect(c.Type).NotTo(Equal(v1.DeploymenConditionType))
+		}
+	})
+
+	It("should do nothing if conditionsToRemove are not present", func() {
+		cond := v1.ConditionStatus{
+			Type:   v1.PlacementConditionType,
+			ZoneId: "zone",
+			Status: string(v1.PlacementStatusDone),
+		}
+		application.Status.GetOrCreateStatusFor("zone").Conditions = []v1.ConditionStatus{cond}
+		Expect(fakeClient.Status().Update(ctx, application)).To(Succeed())
+
+		stopRetrying := atomic.Bool{}
+		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
+		event := events.Event{}
+		err := statusUpdater.UpdateCondition(&stopRetrying, event, cond, v1.LocalConditionType)
+		Expect(err).ToNot(HaveOccurred())
+
+		updatedApp := &v1.AnyApplication{}
+		err = fakeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
+		Expect(err).ToNot(HaveOccurred())
+
+		zoneStatus, _ := updatedApp.Status.GetStatusFor("zone")
+		Expect(zoneStatus.Conditions).To(ContainElement(cond))
+		Expect(zoneStatus.Conditions).To(HaveLen(1))
+	})
+
+	It("should add a new condition and remove an old one in a single call", func() {
+		oldCond := v1.ConditionStatus{
+			Type:   v1.LocalConditionType,
+			ZoneId: "zone",
+			Status: string(v1.PlacementStatusInProgress),
+		}
+		newCond := v1.ConditionStatus{
+			Type:   v1.PlacementConditionType,
+			ZoneId: "zone",
+			Status: string(v1.PlacementStatusDone),
+		}
+		application.Status.GetOrCreateStatusFor("zone").Conditions = []v1.ConditionStatus{oldCond}
+		Expect(fakeClient.Status().Update(ctx, application)).To(Succeed())
+
+		stopRetrying := atomic.Bool{}
+		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
+		event := events.Event{}
+		err := statusUpdater.UpdateCondition(&stopRetrying, event, newCond, v1.LocalConditionType)
+		Expect(err).ToNot(HaveOccurred())
+
+		updatedApp := &v1.AnyApplication{}
+		err = fakeClient.Get(ctx, client.ObjectKeyFromObject(application), updatedApp)
+		Expect(err).ToNot(HaveOccurred())
+
+		zoneStatus, _ := updatedApp.Status.GetStatusFor("zone")
+		Expect(zoneStatus.Conditions).To(ContainElement(newCond))
+		for _, c := range zoneStatus.Conditions {
+			Expect(c.Type).NotTo(Equal(v1.LocalConditionType))
+		}
+	})
+
 })

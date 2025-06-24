@@ -84,7 +84,7 @@ func (job *RelocationJob) Fail(context types.AsyncJobContext, msg string) {
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Deployment failure: " + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
+	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.UndeploymenConditionType, v1.LocalConditionType)
 	if err != nil {
 		job.status = v1.DeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -103,7 +103,7 @@ func (job *RelocationJob) Success(context types.AsyncJobContext, healthStatus *h
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Deployment state changed to '" + string(job.status) + "'. " + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
+	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.UndeploymenConditionType, v1.LocalConditionType)
 	if err != nil {
 		job.status = v1.DeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
