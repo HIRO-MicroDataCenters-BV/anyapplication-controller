@@ -280,7 +280,7 @@ func (m *syncManager) getInstanceId(application *v1.AnyApplication) string {
 func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.GlobalApplication, error) {
 	resources := m.findApplicationResources(application)
 	version := application.ResourceVersion
-	localApplication, err := local.NewFromUnstructured(version, resources, m.config)
+	localApplication, err := local.NewFromUnstructured(version, resources, m.config, m.clock)
 	if err != nil {
 		return nil, errors.Wrap(err, "Fail to create local application")
 	}

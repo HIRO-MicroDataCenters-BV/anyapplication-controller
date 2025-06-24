@@ -92,7 +92,6 @@ var _ = Describe("RelocationJob", func() {
 		Expect(relocationJob.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.DeploymenConditionType,
 			ZoneId:             "zone",
-			ZoneVersion:        "999",
 			Status:             string(v1.DeploymentStatusPull),
 			LastTransitionTime: fakeClock.NowTime(),
 		},
@@ -107,14 +106,19 @@ var _ = Describe("RelocationJob", func() {
 		result := &v1.AnyApplication{}
 		_ = kubeClient.Get(context.GetGoContext(), client.ObjectKeyFromObject(application), result)
 
-		Expect(result.Status.Conditions).To(Equal(
-			[]v1.ConditionStatus{
+		Expect(result.Status.Zones).To(Equal(
+			[]v1.ZoneStatus{
 				{
-					Type:               v1.DeploymenConditionType,
-					ZoneId:             "zone",
-					ZoneVersion:        "1000",
-					Status:             string(v1.DeploymentStatusDone),
-					LastTransitionTime: fakeClock.NowTime(),
+					ZoneId:      "zone",
+					ZoneVersion: 1000,
+					Conditions: []v1.ConditionStatus{
+						{
+							Type:               v1.DeploymenConditionType,
+							ZoneId:             "zone",
+							Status:             string(v1.DeploymentStatusDone),
+							LastTransitionTime: fakeClock.NowTime(),
+						},
+					},
 				},
 			},
 		))
@@ -123,7 +127,6 @@ var _ = Describe("RelocationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.DeploymenConditionType,
 				ZoneId:             "zone",
-				ZoneVersion:        "999",
 				Status:             string(v1.DeploymentStatusDone),
 				LastTransitionTime: fakeClock.NowTime(),
 			},

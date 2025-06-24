@@ -17,6 +17,9 @@ limitations under the License.
 package v1
 
 import (
+	"fmt"
+	"strconv"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -53,10 +56,16 @@ type RecoverStrategySpec struct {
 
 // AnyApplicationStatus defines the observed state of AnyApplication.
 type AnyApplicationStatus struct {
-	State      GlobalState       `json:"state"`
-	Placements []Placement       `json:"placements,omitempty"`
-	Owner      string            `json:"owner"`
-	Conditions []ConditionStatus `json:"conditions,omitempty"`
+	State      GlobalState  `json:"state"`
+	Owner      string       `json:"owner"`
+	Placements []Placement  `json:"placements,omitempty"`
+	Zones      []ZoneStatus `json:"zones,omitempty"`
+}
+
+type ZoneStatus struct {
+	ZoneId      string            `json:"zoneId"`
+	ZoneVersion int64             `json:"version"`
+	Conditions  []ConditionStatus `json:"conditions,omitempty"`
 }
 
 type Placement struct {
@@ -67,7 +76,6 @@ type Placement struct {
 type ConditionStatus struct {
 	Type               ApplicationConditionType `json:"type"`
 	ZoneId             string                   `json:"zoneId"`
-	ZoneVersion        string                   `json:"zoneVersion"`
 	Status             string                   `json:"status"`
 	LastTransitionTime metav1.Time              `json:"lastTransitionTime"`
 	Reason             string                   `json:"reason,omitempty"`
@@ -93,6 +101,15 @@ func (a *AnyApplication) GetNamespacedName() client.ObjectKey {
 	}
 }
 
+func (g *AnyApplication) HasZoneStatus(zoneId string) bool {
+	for _, zone := range g.Status.Zones {
+		if zone.ZoneId == zoneId {
+			return true
+		}
+	}
+	return false
+}
+
 // +kubebuilder:object:root=true
 
 // AnyApplicationList contains a list of AnyApplication.
@@ -104,4 +121,85 @@ type AnyApplicationList struct {
 
 func init() {
 	SchemeBuilder.Register(&AnyApplication{}, &AnyApplicationList{})
+}
+
+func (status *AnyApplicationStatus) GetStatusFor(zone string) (*ZoneStatus, bool) {
+	for i, zoneStatus := range status.Zones {
+		if zoneStatus.ZoneId == zone {
+			return &status.Zones[i], true
+		}
+	}
+	return nil, false
+}
+
+func (status *AnyApplicationStatus) GetOrCreateStatusFor(zone string) *ZoneStatus {
+	for i, zoneStatus := range status.Zones {
+		if zoneStatus.ZoneId == zone {
+			return &status.Zones[i]
+		}
+	}
+	newStatus := ZoneStatus{
+		ZoneId:      zone,
+		ZoneVersion: 0,
+		Conditions:  make([]ConditionStatus, 0),
+	}
+	status.Zones = append(status.Zones, newStatus)
+	for i, zoneStatus := range status.Zones {
+		if zoneStatus.ZoneId == zone {
+			return &status.Zones[i]
+		}
+	}
+	return nil
+}
+
+func (status *AnyApplicationStatus) AddOrUpdate(toAddOrUpdate *ConditionStatus, zoneId string) bool {
+	zoneStatus := status.GetOrCreateStatusFor(zoneId)
+
+	updated := false
+	found := false
+
+	for i, cond := range zoneStatus.Conditions {
+		if cond.Type == toAddOrUpdate.Type && cond.ZoneId == toAddOrUpdate.ZoneId {
+			found = true
+			if cond.Status != toAddOrUpdate.Status || cond.Reason != toAddOrUpdate.Reason || cond.Msg != toAddOrUpdate.Msg {
+				zoneStatus.Conditions[i] = *toAddOrUpdate
+				updated = true
+			}
+			break
+		}
+	}
+
+	if !found {
+		zoneStatus.Conditions = append(zoneStatus.Conditions, *toAddOrUpdate)
+		updated = true
+	}
+	return updated
+}
+
+func (application *AnyApplication) IncrementZoneVersion(zoneId string) {
+	zoneStatus := application.Status.GetOrCreateStatusFor(zoneId)
+	version, err := strconv.ParseInt(application.ResourceVersion, 10, 64)
+	if err != nil {
+		version = 0
+	}
+	latestVersion := version + 1
+	if zoneStatus.ZoneVersion >= latestVersion {
+		latestVersion = zoneStatus.ZoneVersion + 1
+	}
+
+	zoneStatus.ZoneVersion = latestVersion
+}
+
+func (status *AnyApplicationStatus) LogStatus() {
+	out := "- status update -\n"
+	for _, zone := range status.Zones {
+		out += fmt.Sprintf(" zone: %v\n", zone.ZoneId)
+		out += fmt.Sprintf("  - version: %v\n", zone.ZoneVersion)
+		out += "  - conditions:\n"
+		for _, cond := range zone.Conditions {
+			out += fmt.Sprintf("   -- %v, %v\n", cond.Type, cond.Status)
+		}
+	}
+	out += "\n"
+	fmt.Print(out)
 }

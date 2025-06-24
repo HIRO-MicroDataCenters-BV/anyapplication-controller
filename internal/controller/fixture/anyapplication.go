@@ -9,7 +9,6 @@ func Condition(condType v1.ApplicationConditionType, zoneId string, version stri
 	return v1.ConditionStatus{
 		Type:               condType,
 		ZoneId:             zoneId,
-		ZoneVersion:        version,
 		Status:             status,
 		LastTransitionTime: time,
 	}

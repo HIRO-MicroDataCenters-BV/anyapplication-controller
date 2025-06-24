@@ -1,6 +1,7 @@
 package job
 
 import (
+	"fmt"
 	"sync/atomic"
 
 	"github.com/go-logr/logr"
@@ -69,16 +70,22 @@ func (job *LocalPlacementJob) Run(context types.AsyncJobContext) {
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: events.LocalStateChangeReason, Msg: job.msg + " Placement set to zone '" + job.runtimeConfig.ZoneId + "'"}
-	err := statusUpdater.UpdateStatus(&job.stopped, func(applicationStatus *v1.AnyApplicationStatus) (bool, events.Event) {
-		applicationStatus.Placements = []v1.Placement{
-			{
-				Zone: job.runtimeConfig.ZoneId,
-			},
-		}
-		status.AddOrUpdate(applicationStatus, &condition)
-		return true, event
-	})
+	event := events.Event{
+		Reason: events.LocalStateChangeReason,
+		Msg:    job.msg + " Placement set to zone '" + job.runtimeConfig.ZoneId + "'",
+	}
+	err := statusUpdater.UpdateStatus(
+		&job.stopped,
+		func(applicationStatus *v1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
+			applicationStatus.Placements = []v1.Placement{
+				{
+					Zone: job.runtimeConfig.ZoneId,
+				},
+			}
+			applicationStatus.AddOrUpdate(&condition, zoneId)
+			fmt.Printf("status %v\n", applicationStatus)
+			return true, event
+		})
 
 	if err != nil {
 		job.status = v1.PlacementStatusFailure
@@ -101,7 +108,6 @@ func (job *LocalPlacementJob) GetStatus() v1.ConditionStatus {
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
-		ZoneVersion:        job.version,
 	}
 }
 

@@ -49,11 +49,17 @@ func (g *GlobalFSM) NextState() types.NextStateResult {
 }
 
 func (g *GlobalFSM) handlePlacementState() types.NextStateResult {
-	status := g.application.Status
 	spec := g.application.Spec
+	status := g.application.Status
+
+	zoneStatus, zoneStatusFound := status.GetStatusFor(g.config.ZoneId)
+	conditions := make([]v1.ConditionStatus, 0)
+	if zoneStatusFound {
+		conditions = zoneStatus.Conditions
+	}
 
 	if spec.PlacementStrategy.Strategy == v1.PlacementStrategyLocal {
-		condition, found := getCondition(status.Conditions, v1.PlacementConditionType, g.config.ZoneId)
+		condition, found := getCondition(conditions, v1.PlacementConditionType, g.config.ZoneId)
 		if !found || !g.isRunning(types.AsyncJobTypeLocalPlacement) {
 			placementJob := g.jobFactory.CreateLocalPlacementJob(g.application)
 			condition := placementJob.GetStatus()
@@ -61,9 +67,7 @@ func (g *GlobalFSM) handlePlacementState() types.NextStateResult {
 			return types.NextStateResult{
 				NextState:       mo.Some(v1.PlacementGlobalState),
 				ConditionsToAdd: mo.Some(&condition),
-				Jobs: types.NextJobs{
-					JobsToAdd: mo.Some(placementJob),
-				},
+				Jobs:            types.NextJobs{JobsToAdd: mo.Some(placementJob)},
 			}
 		} else {
 			if condition.Status == string(v1.PlacementStatusFailure) {
@@ -105,19 +109,26 @@ func (g *GlobalFSM) handleFailureState() types.NextStateResult {
 
 func getGlobalState(status *v1.AnyApplicationStatus) v1.GlobalState {
 	state := v1.OperationalGlobalState
+	// TODO state ordering
 	for _, placement := range status.Placements {
-		conditionOpt := getHighestZoneCondition(status.Conditions, placement.Zone)
-		condition, present := conditionOpt.Get()
-		if present && (condition.Type == v1.DeploymenConditionType || condition.Type == v1.UndeploymenConditionType) {
+		zoneStatus, zoneStatusFound := status.GetStatusFor(placement.Zone)
+		if !zoneStatusFound {
 			state = v1.RelocationGlobalState
-		} else if !present {
-			state = v1.RelocationGlobalState
+		} else {
+			conditionOpt := getHighestZoneCondition(zoneStatus, placement.Zone)
+			condition, present := conditionOpt.Get()
+			if present && (condition.Type == v1.DeploymenConditionType || condition.Type == v1.UndeploymenConditionType) {
+				state = v1.RelocationGlobalState
+			} else if !present {
+				state = v1.RelocationGlobalState
+			}
 		}
 	}
 	return state
 }
 
-func getHighestZoneCondition(conditions []v1.ConditionStatus, zoneId string) mo.Option[*v1.ConditionStatus] {
+func getHighestZoneCondition(zoneStatus *v1.ZoneStatus, zoneId string) mo.Option[*v1.ConditionStatus] {
+	conditions := zoneStatus.Conditions
 	conditionTypes := []v1.ApplicationConditionType{
 		v1.LocalConditionType,
 		v1.DeploymenConditionType,
@@ -146,19 +157,21 @@ func getCondition(conditions []v1.ConditionStatus, conditionType v1.ApplicationC
 	return &condition, ok
 }
 
-func addOrUpdateCondition(status *v1.AnyApplicationStatus, condition *v1.ConditionStatus) {
-	existing, ok := lo.Find(status.Conditions, func(existing v1.ConditionStatus) bool {
+func addOrUpdateCondition(status *v1.AnyApplicationStatus, condition *v1.ConditionStatus, zoneId string) {
+	zoneStatus := status.GetOrCreateStatusFor(zoneId)
+	existing, ok := lo.Find(zoneStatus.Conditions, func(existing v1.ConditionStatus) bool {
 		return existing.Type == condition.Type && existing.ZoneId == condition.ZoneId
 	})
 	if !ok {
-		status.Conditions = append(status.Conditions, *condition)
+		zoneStatus.Conditions = append(zoneStatus.Conditions, *condition)
 	} else {
 		condition.DeepCopyInto(&existing)
 	}
 }
 
-func removeCondition(status *v1.AnyApplicationStatus, toRemove *v1.ConditionStatus) {
-	status.Conditions = lo.Filter(status.Conditions, func(existing v1.ConditionStatus, _ int) bool {
+func removeCondition(status *v1.AnyApplicationStatus, toRemove *v1.ConditionStatus, zoneId string) {
+	zoneStatus := status.GetOrCreateStatusFor(zoneId)
+	zoneStatus.Conditions = lo.Filter(zoneStatus.Conditions, func(existing v1.ConditionStatus, _ int) bool {
 		equal := existing.Type == toRemove.Type && existing.ZoneId == toRemove.ZoneId
 		return !equal
 	})
@@ -169,10 +182,12 @@ func isFailureCondition(application *v1.AnyApplication) bool {
 	spec := &application.Spec
 
 	failedConditions := 0
-	for _, condition := range status.Conditions {
-		if condition.Type == v1.LocalConditionType {
-			if condition.Status == string(health.HealthStatusDegraded) || condition.Status == string(health.HealthStatusMissing) {
-				failedConditions++
+	for _, zoneStatus := range status.Zones {
+		for _, condition := range zoneStatus.Conditions {
+			if condition.Type == v1.LocalConditionType {
+				if condition.Status == string(health.HealthStatusDegraded) || condition.Status == string(health.HealthStatusMissing) {
+					failedConditions++
+				}
 			}
 		}
 	}

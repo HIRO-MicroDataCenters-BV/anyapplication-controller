@@ -65,12 +65,17 @@ var _ = Describe("Jobs", func() {
 			Status: v1.AnyApplicationStatus{
 				Owner: "zone",
 				State: v1.PlacementGlobalState,
-				Conditions: []v1.ConditionStatus{
+				Zones: []v1.ZoneStatus{
 					{
-						Type:               v1.PlacementConditionType,
-						ZoneId:             "zone",
-						Status:             string(v1.PlacementStatusInProgress),
-						LastTransitionTime: fakeClock.NowTime(),
+						ZoneVersion: 1,
+						Conditions: []v1.ConditionStatus{
+							{
+								Type:               v1.PlacementConditionType,
+								ZoneId:             "zone",
+								Status:             string(v1.PlacementStatusInProgress),
+								LastTransitionTime: fakeClock.NowTime(),
+							},
+						},
 					},
 				},
 			},

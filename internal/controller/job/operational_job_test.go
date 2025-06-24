@@ -109,7 +109,6 @@ var _ = Describe("LocalOperationJob", func() {
 		Expect(operationJob.GetStatus()).To(Equal(v1.ConditionStatus{
 			Type:               v1.LocalConditionType,
 			ZoneId:             "zone",
-			ZoneVersion:        "999",
 			Status:             string(health.HealthStatusProgressing),
 			LastTransitionTime: fakeClock.NowTime(),
 		},
@@ -145,7 +144,6 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				ZoneVersion:        "999",
 				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
@@ -159,7 +157,6 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				ZoneVersion:        "999",
 				Status:             string(health.HealthStatusUnknown),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
@@ -181,7 +178,6 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				ZoneVersion:        "999",
 				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: fakeClock.NowTime(),
 			},
@@ -195,7 +191,6 @@ var _ = Describe("LocalOperationJob", func() {
 			v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
 				ZoneId:             "zone",
-				ZoneVersion:        "999",
 				Status:             string(health.HealthStatusDegraded),
 				LastTransitionTime: fakeClock.NowTime(),
 				Msg:                "Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",
