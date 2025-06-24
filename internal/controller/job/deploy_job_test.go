@@ -23,7 +23,7 @@ import (
 
 var _ = Describe("RelocationJob", func() {
 	var (
-		relocationJob *RelocationJob
+		relocationJob *DeployJob
 		kubeClient    client.Client
 		helmClient    helm.FakeHelmClient
 		application   *v1.AnyApplication
@@ -85,7 +85,7 @@ var _ = Describe("RelocationJob", func() {
 		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
 		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
-		relocationJob = NewRelocationJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
+		relocationJob = NewDeployJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
 	})
 
 	It("should return initial status", func() {

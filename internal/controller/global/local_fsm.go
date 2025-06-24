@@ -57,7 +57,7 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 	isDeploymentSucceeded := deploymentSuccessfull(status, g.config.ZoneId)
 	if !g.applicationPresent && !isDeploymentSucceeded {
 		if !g.isRunning(types.AsyncJobTypeDeploy) {
-			deployJob := g.jobFactory.CreateDeploymentJob(g.application)
+			deployJob := g.jobFactory.CreateDeployJob(g.application)
 			deployJobOpt := mo.Some(deployJob)
 			deployCondition := deployJob.GetStatus()
 			deployConditionOpt := mo.EmptyableToOption(&deployCondition)
