@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -174,6 +175,20 @@ func (status *AnyApplicationStatus) AddOrUpdate(toAddOrUpdate *ConditionStatus, 
 		updated = true
 	}
 	return updated
+}
+
+func (status *AnyApplicationStatus) Remove(condType ApplicationConditionType, zoneId string) bool {
+	zoneStatus, found := status.GetStatusFor(zoneId)
+	if !found {
+		return false
+	}
+	originalSize := len(zoneStatus.Conditions)
+	zoneStatus.Conditions = lo.Filter(zoneStatus.Conditions, func(existing ConditionStatus, _ int) bool {
+		equal := existing.Type == condType && existing.ZoneId == zoneId
+		return !equal
+	})
+
+	return len(zoneStatus.Conditions) != originalSize
 }
 
 func (application *AnyApplication) IncrementZoneVersion(zoneId string) {

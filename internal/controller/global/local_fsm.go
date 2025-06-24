@@ -44,7 +44,6 @@ func (g *LocalFSM) NextState() types.NextStateResult {
 	if placementsContainZone(status, g.config.ZoneId) {
 		return g.handleOperation()
 	}
-
 	return types.NextStateResult{}
 }
 
@@ -58,7 +57,7 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 	isDeploymentSucceeded := deploymentSuccessfull(status, g.config.ZoneId)
 	if !g.applicationPresent && !isDeploymentSucceeded {
 		if !g.isRunning(types.AsyncJobTypeDeploy) {
-			deployJob := g.jobFactory.CreateDeploymentJob(g.application)
+			deployJob := g.jobFactory.CreateDeployJob(g.application)
 			deployJobOpt := mo.Some(deployJob)
 			deployCondition := deployJob.GetStatus()
 			deployConditionOpt := mo.EmptyableToOption(&deployCondition)
@@ -69,6 +68,8 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 				Jobs:               types.NextJobs{JobsToAdd: deployJobOpt},
 			}
 		}
+	} else if g.applicationPresent {
+		return g.handleOperation()
 	}
 
 	return types.NextStateResult{

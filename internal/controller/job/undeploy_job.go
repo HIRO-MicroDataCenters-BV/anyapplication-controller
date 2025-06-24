@@ -81,7 +81,7 @@ func (job *UndeployJob) Fail(context types.AsyncJobContext, msg string) {
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Undeploy failure: " + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
+	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.LocalConditionType, v1.DeploymenConditionType)
 	if err != nil {
 		job.status = v1.UndeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -100,7 +100,7 @@ func (job *UndeployJob) Success(context types.AsyncJobContext) {
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Undeploy state changed to '" + string(job.status) + "'" + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
+	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.LocalConditionType, v1.DeploymenConditionType)
 
 	if err != nil {
 		job.status = v1.UndeploymentStatusFailure

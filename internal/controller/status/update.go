@@ -80,11 +80,16 @@ func (su *StatusUpdater) UpdateStatus(
 
 func (su *StatusUpdater) UpdateCondition(
 	stopRetrying *atomic.Bool,
-	conditionToUpdate v1.ConditionStatus,
 	event events.Event,
+	conditionToUpdate v1.ConditionStatus,
+	conditionsToRemove ...v1.ApplicationConditionType,
 ) error {
 	return su.UpdateStatus(stopRetrying, func(status *v1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
 		updated := status.AddOrUpdate(&conditionToUpdate, zoneId)
+		for _, condType := range conditionsToRemove {
+			removed := status.Remove(condType, zoneId)
+			updated = updated || removed
+		}
 		return updated, event
 	})
 }

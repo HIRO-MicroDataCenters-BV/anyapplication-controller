@@ -128,14 +128,13 @@ func getGlobalState(status *v1.AnyApplicationStatus) v1.GlobalState {
 }
 
 func getHighestZoneCondition(zoneStatus *v1.ZoneStatus, zoneId string) mo.Option[*v1.ConditionStatus] {
-	conditions := zoneStatus.Conditions
 	conditionTypes := []v1.ApplicationConditionType{
 		v1.LocalConditionType,
 		v1.DeploymenConditionType,
 		v1.UndeploymenConditionType,
 	}
 	for _, conditionType := range conditionTypes {
-		condition, found := getCondition(conditions, conditionType, zoneId)
+		condition, found := getCondition(zoneStatus.Conditions, conditionType, zoneId)
 		if found {
 			return mo.Some(condition)
 		}

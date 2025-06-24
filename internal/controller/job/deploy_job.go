@@ -13,7 +13,7 @@ import (
 	"hiro.io/anyapplication/internal/controller/types"
 )
 
-type RelocationJob struct {
+type DeployJob struct {
 	application   *v1.AnyApplication
 	runtimeConfig *config.ApplicationRuntimeConfig
 	status        v1.DeploymentStatus
@@ -26,13 +26,13 @@ type RelocationJob struct {
 	events        *events.Events
 }
 
-func NewRelocationJob(
+func NewDeployJob(
 	application *v1.AnyApplication,
 	runtimeConfig *config.ApplicationRuntimeConfig,
 	clock clock.Clock,
 	log logr.Logger,
 	events *events.Events,
-) *RelocationJob {
+) *DeployJob {
 	jobId := types.JobId{
 		JobType: types.AsyncJobTypeLocalOperation,
 		ApplicationId: types.ApplicationId{
@@ -41,8 +41,8 @@ func NewRelocationJob(
 		},
 	}
 	version := application.ResourceVersion
-	log = log.WithName("RelocationJob")
-	return &RelocationJob{
+	log = log.WithName("DeployJob")
+	return &DeployJob{
 		status:        v1.DeploymentStatusPull,
 		application:   application,
 		runtimeConfig: runtimeConfig,
@@ -56,7 +56,7 @@ func NewRelocationJob(
 	}
 }
 
-func (job *RelocationJob) Run(context types.AsyncJobContext) {
+func (job *DeployJob) Run(context types.AsyncJobContext) {
 
 	syncManager := context.GetSyncManager()
 	ctx := context.GetGoContext()
@@ -72,7 +72,7 @@ func (job *RelocationJob) Run(context types.AsyncJobContext) {
 	}
 }
 
-func (job *RelocationJob) Fail(context types.AsyncJobContext, msg string) {
+func (job *DeployJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = v1.DeploymentStatusFailure
 	statusUpdater := status.NewStatusUpdater(
@@ -84,14 +84,14 @@ func (job *RelocationJob) Fail(context types.AsyncJobContext, msg string) {
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Deployment failure: " + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
+	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.UndeploymenConditionType, v1.LocalConditionType)
 	if err != nil {
 		job.status = v1.DeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
 	}
 }
 
-func (job *RelocationJob) Success(context types.AsyncJobContext, healthStatus *health.HealthStatus) {
+func (job *DeployJob) Success(context types.AsyncJobContext, healthStatus *health.HealthStatus) {
 	job.status = v1.DeploymentStatusDone
 
 	statusUpdater := status.NewStatusUpdater(
@@ -103,22 +103,22 @@ func (job *RelocationJob) Success(context types.AsyncJobContext, healthStatus *h
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Deployment state changed to '" + string(job.status) + "'. " + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, job.GetStatus(), event)
+	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.UndeploymenConditionType, v1.LocalConditionType)
 	if err != nil {
 		job.status = v1.DeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
 	}
 }
 
-func (job *RelocationJob) GetJobID() types.JobId {
+func (job *DeployJob) GetJobID() types.JobId {
 	return job.jobId
 }
 
-func (job *RelocationJob) GetType() types.AsyncJobType {
+func (job *DeployJob) GetType() types.AsyncJobType {
 	return types.AsyncJobTypeDeploy
 }
 
-func (job *RelocationJob) GetStatus() v1.ConditionStatus {
+func (job *DeployJob) GetStatus() v1.ConditionStatus {
 	return v1.ConditionStatus{
 		Type:               v1.DeploymenConditionType,
 		ZoneId:             job.runtimeConfig.ZoneId,
@@ -128,6 +128,6 @@ func (job *RelocationJob) GetStatus() v1.ConditionStatus {
 	}
 }
 
-func (job *RelocationJob) Stop() {
+func (job *DeployJob) Stop() {
 	job.stopped.Store(true)
 }
