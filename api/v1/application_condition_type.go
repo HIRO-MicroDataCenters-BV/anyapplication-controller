@@ -95,36 +95,6 @@ func (s PlacementStatus) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(s))
 }
 
-type RelocationStatus string
-
-const (
-	RelocationStatusPull     RelocationStatus = "Pull"
-	RelocationStatusUndeploy RelocationStatus = "Undeploy"
-	RelocationStatusDone     RelocationStatus = "Done"
-	RelocationStatusFailure  RelocationStatus = "Failure"
-)
-
-func (s *RelocationStatus) UnmarshalJSON(data []byte) error {
-	var str string
-	if err := json.Unmarshal(data, &str); err != nil {
-		return err
-	}
-
-	switch str {
-	case string(RelocationStatusPull),
-		string(RelocationStatusDone),
-		string(RelocationStatusFailure):
-		*s = RelocationStatus(str)
-		return nil
-	default:
-		return errors.New("invalid RelocationStatus: " + str)
-	}
-}
-
-func (s RelocationStatus) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(s))
-}
-
 type DeploymentStatus string
 
 const (

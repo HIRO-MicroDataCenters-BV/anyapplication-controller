@@ -192,7 +192,10 @@ func (status *AnyApplicationStatus) Remove(condType ApplicationConditionType, zo
 }
 
 func (application *AnyApplication) IncrementZoneVersion(zoneId string) {
-	zoneStatus := application.Status.GetOrCreateStatusFor(zoneId)
+	zoneStatus, found := application.Status.GetStatusFor(zoneId)
+	if !found {
+		return
+	}
 	version, err := strconv.ParseInt(application.ResourceVersion, 10, 64)
 	if err != nil {
 		version = 0
