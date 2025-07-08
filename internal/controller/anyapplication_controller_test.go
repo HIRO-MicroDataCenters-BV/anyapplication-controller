@@ -27,6 +27,7 @@ import (
 	"helm.sh/helm/v3/pkg/chartutil"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2/textlogger"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -164,6 +165,9 @@ var _ = Describe("AnyApplication Controller", func() {
 				SyncManager: syncManager,
 				Jobs:        jobs,
 				Reconciler:  reconciler,
+				Log:         logf.Log.WithName("controllers").WithName("AnyApplication"),
+				Recorder:    record.NewFakeRecorder(100),
+				Events:      &fakeEvents,
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
