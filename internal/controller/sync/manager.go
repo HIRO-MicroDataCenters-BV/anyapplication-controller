@@ -13,7 +13,6 @@ import (
 	"github.com/argoproj/gitops-engine/pkg/utils/kube"
 	"github.com/cockroachdb/errors"
 	"github.com/go-logr/logr"
-	"github.com/mittwald/go-helm-client/values"
 	"github.com/samber/lo"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
@@ -102,15 +101,14 @@ func (m *syncManager) render(application *v1.AnyApplication) (*cachedApp, error)
 		"dcp.hiro.io/instance-id": instanceId,
 	}
 
-	values := values.Options{}
 	template, err := m.helmClient.Template(&helm.TemplateArgs{
-		ReleaseName:   releaseName,
-		RepoUrl:       helmSelector.Repository,
-		ChartName:     helmSelector.Chart,
-		Namespace:     helmSelector.Namespace,
-		Version:       helmSelector.Version,
-		ValuesOptions: values,
-		Labels:        labels,
+		ReleaseName: releaseName,
+		RepoUrl:     helmSelector.Repository,
+		ChartName:   helmSelector.Chart,
+		Namespace:   helmSelector.Namespace,
+		Version:     helmSelector.Version,
+		ValuesYaml:  helmSelector.Values,
+		Labels:      labels,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "Helm template failure")
