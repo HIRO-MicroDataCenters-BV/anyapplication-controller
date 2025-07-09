@@ -198,7 +198,7 @@ var _ = Describe("GlobalApplication", func() {
 						{
 							Type:               v1.DeploymenConditionType,
 							ZoneId:             "zone",
-							Status:             string(v1.RelocationStatusDone),
+							Status:             string(v1.DeploymentStatusDone),
 							LastTransitionTime: fakeClock.NowTime(),
 						},
 					},
@@ -208,7 +208,7 @@ var _ = Describe("GlobalApplication", func() {
 			existingJobCondition := types.FromCondition(v1.ConditionStatus{
 				Type:               v1.DeploymenConditionType,
 				ZoneId:             "zone",
-				Status:             string(v1.RelocationStatusDone),
+				Status:             string(v1.DeploymentStatusDone),
 				LastTransitionTime: fakeClock.NowTime(),
 			}, types.AsyncJobTypeDeploy)
 
@@ -241,7 +241,7 @@ var _ = Describe("GlobalApplication", func() {
 								{
 									Type:               v1.DeploymenConditionType,
 									ZoneId:             "zone",
-									Status:             string(v1.RelocationStatusDone),
+									Status:             string(v1.DeploymentStatusDone),
 									LastTransitionTime: fakeClock.NowTime(),
 								},
 								{
@@ -397,7 +397,7 @@ var _ = Describe("GlobalApplication", func() {
 								{
 									Type:               v1.UndeploymenConditionType,
 									ZoneId:             "zone",
-									Status:             string(v1.RelocationStatusUndeploy),
+									Status:             string(v1.UndeploymentStatusUndeploy),
 									LastTransitionTime: fakeClock.NowTime(),
 								},
 							},
@@ -422,7 +422,7 @@ var _ = Describe("GlobalApplication", func() {
 			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
 				Type:               v1.UndeploymenConditionType,
 				ZoneId:             "zone",
-				Status:             string(v1.RelocationStatusUndeploy),
+				Status:             string(v1.UndeploymentStatusUndeploy),
 				LastTransitionTime: fakeClock.NowTime(),
 			}))
 			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))

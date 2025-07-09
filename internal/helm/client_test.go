@@ -47,12 +47,41 @@ var _ = Describe("HelmClient", func() {
 
 			actual, err := client.Template(&args)
 
-			// fixture.SaveStringFixture("nginx.yaml", actual)
-			expected := fixture.LoadStringFixture("nginx.yaml")
+			// fixture.SaveStringFixture("nginx-default.yaml", actual)
+			expected := fixture.LoadStringFixture("nginx-default.yaml")
 
 			Expect(actual).To(Equal(expected))
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		It("should template helm chart with values yaml", func() {
+			args := TemplateArgs{
+				ReleaseName: "test-release",
+				RepoUrl:     "https://helm.nginx.com/stable",
+				ChartName:   "nginx-ingress",
+				Namespace:   "default",
+				Version:     "2.0.1",
+				ValuesYaml: `
+controller:
+  name: test
+  image:
+    tag: 1.0.0
+  appprotect:
+    enable: false
+`,
+				Labels: map[string]string{
+					"dcp.hiro.io/test": "dcp",
+				},
+			}
+
+			actual, err := client.Template(&args)
+			// fixture.SaveStringFixture("nginx-values.yaml", actual)
+			expected := fixture.LoadStringFixture("nginx-values.yaml")
+
+			Expect(actual).To(Equal(expected))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 	})
 })
 

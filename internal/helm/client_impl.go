@@ -51,6 +51,7 @@ type TemplateArgs struct {
 	Namespace     string
 	Version       string
 	ValuesOptions values.Options
+	ValuesYaml    string
 	Labels        map[string]string
 }
 
@@ -74,15 +75,22 @@ func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 	}
 
 	chartSpec := helmclient.ChartSpec{
-		ReleaseName:   args.ReleaseName,
-		ChartName:     repoName + "/" + args.ChartName,
-		Version:       args.Version,
-		Namespace:     args.Namespace,
-		UpgradeCRDs:   h.options.UpgradeCRDs,
-		Wait:          true,
-		Timeout:       32 * time.Second,
-		ValuesOptions: args.ValuesOptions,
-		Labels:        args.Labels,
+		ReleaseName: args.ReleaseName,
+		ChartName:   repoName + "/" + args.ChartName,
+		Version:     args.Version,
+		Namespace:   args.Namespace,
+		UpgradeCRDs: h.options.UpgradeCRDs,
+		Wait:        true,
+		Timeout:     32 * time.Second,
+		Labels:      args.Labels,
+	}
+
+	if args.ValuesYaml != "" {
+		chartSpec.ValuesYaml = args.ValuesYaml
+		chartSpec.ValuesOptions = values.Options{}
+	} else {
+		chartSpec.ValuesYaml = ""
+		chartSpec.ValuesOptions = args.ValuesOptions
 	}
 
 	options := &helmclient.HelmTemplateOptions{

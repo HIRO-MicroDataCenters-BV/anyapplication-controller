@@ -24,10 +24,12 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	dcpv1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/config"
@@ -37,7 +39,7 @@ import (
 	"hiro.io/anyapplication/internal/controller/types"
 )
 
-const anyApplicationFinalizerName = "anyapplication.finalizers.hiro.io"
+const anyApplicationFinalizerName = "finalizers.dcp.hiro.io/anyapplication"
 
 // AnyApplicationReconciler reconciles a AnyApplication object
 type AnyApplicationReconciler struct {
@@ -60,12 +62,19 @@ type AnyApplicationReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.4/pkg/reconcile
 func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
+	r.Log.Info("Reconcile method")
 	resource := &dcpv1.AnyApplication{}
 	if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
+		if errors.IsNotFound(err) {
+			r.Log.Info("AnyApplication resource not found. Ignoring since object must be deleted", "name", req.Name, "namespace", req.Namespace)
+			return reconcile.Result{}, nil
+		}
 		r.Log.Error(err, "Unable to get AnyApplication ", "name", req.Name, "namespace", req.Namespace)
-		// TODO (user): handle error
 		return ctrl.Result{}, nil
+	}
+
+	if resource.Status.Owner == "" {
+		return r.InitializeState(ctx, resource.GetNamespacedName())
 	}
 
 	if !resource.DeletionTimestamp.IsZero() {
@@ -133,6 +142,35 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	})
 
 	return ctrl.Result{}, nil
+}
+
+func (r *AnyApplicationReconciler) InitializeState(ctx context.Context, resourceName client.ObjectKey) (ctrl.Result, error) {
+	stopRetrying := atomic.Bool{}
+	statusUpdater := status.NewStatusUpdater(
+		ctx,
+		r.Log.WithName("Controller StatusUpdater"),
+		r.Client,
+		resourceName,
+		r.Config.ZoneId,
+		r.Events,
+	)
+
+	err := statusUpdater.UpdateStatus(&stopRetrying, func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
+		if applicationStatus.State == "" {
+			applicationStatus.Owner = r.Config.ZoneId
+			applicationStatus.State = dcpv1.NewGlobalState
+			event := events.Event{
+				Reason: events.GlobalStateChangeReason,
+				Msg:    "Owner set to " + r.Config.ZoneId + ". Global State set to " + string(dcpv1.NewGlobalState),
+			}
+			return true, event
+		}
+		return false, events.Event{}
+	})
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{Requeue: true}, nil
 }
 
 func (r *AnyApplicationReconciler) addFinalizer(ctx context.Context, resource *dcpv1.AnyApplication) (ctrl.Result, error) {
