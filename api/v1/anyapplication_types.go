@@ -81,6 +81,7 @@ type ConditionStatus struct {
 	LastTransitionTime metav1.Time              `json:"lastTransitionTime"`
 	Reason             string                   `json:"reason,omitempty"`
 	Msg                string                   `json:"msg,omitempty"`
+	RetryAttempt       int                      `json:"retryAttempt,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -220,4 +221,13 @@ func (status *AnyApplicationStatus) LogStatus() {
 	}
 	out += "\n"
 	fmt.Print(out)
+}
+
+func (status *ZoneStatus) FindCondition(conditionType ApplicationConditionType) (*ConditionStatus, bool) {
+	for i, condition := range status.Conditions {
+		if condition.Type == conditionType {
+			return &status.Conditions[i], true
+		}
+	}
+	return nil, false
 }

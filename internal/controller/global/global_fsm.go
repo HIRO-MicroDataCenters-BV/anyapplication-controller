@@ -88,24 +88,10 @@ func (g *GlobalFSM) handlePlacementState() types.NextStateResult {
 }
 
 func (g *GlobalFSM) handleFailureState() types.NextStateResult {
-	// spec := g.application.Spec
-	// if spec.PlacementStrategy.Strategy == v1.PlacementStrategyLocal {
-	// 	// TODO handle local state
-	// }
-
 	return types.NextStateResult{
 		NextState: mo.Some(v1.FailureGlobalState),
 	}
 }
-
-// func operationalInAllPlacementZones(status *v1.AnyApplicationStatus) bool {
-// 	for _, placement := range status.Placements {
-// 		if !conditionExists(status, v1.LocalConditionType, placement.Zone) {
-// 			return false
-// 		}
-// 	}
-// 	return true
-// }
 
 func getGlobalState(status *v1.AnyApplicationStatus) v1.GlobalState {
 	state := v1.OperationalGlobalState
@@ -142,13 +128,6 @@ func getHighestZoneCondition(zoneStatus *v1.ZoneStatus, zoneId string) mo.Option
 	return mo.None[*v1.ConditionStatus]()
 }
 
-// func conditionExists(status *v1.AnyApplicationStatus, conditionType v1.ApplicationConditionType, zoneId string) bool {
-// 	_, ok := lo.Find(status.Conditions, func(condition v1.ConditionStatus) bool {
-// 		return condition.Type == conditionType && condition.ZoneId == zoneId
-// 	})
-// 	return ok
-// }
-
 func getCondition(conditions []v1.ConditionStatus, conditionType v1.ApplicationConditionType, zoneId string) (*v1.ConditionStatus, bool) {
 	condition, ok := lo.Find(conditions, func(condition v1.ConditionStatus) bool {
 		return condition.Type == conditionType && condition.ZoneId == zoneId
@@ -180,17 +159,30 @@ func isFailureCondition(application *v1.AnyApplication) bool {
 	status := &application.Status
 	spec := &application.Spec
 
-	failedConditions := 0
+	failedConditionCount := 0
 	for _, zoneStatus := range status.Zones {
+		zoneFailedConditions := false
 		for _, condition := range zoneStatus.Conditions {
-			if condition.Type == v1.LocalConditionType {
+			switch condition.Type {
+			case v1.LocalConditionType:
 				if condition.Status == string(health.HealthStatusDegraded) || condition.Status == string(health.HealthStatusMissing) {
-					failedConditions++
+					zoneFailedConditions = true
+				}
+			case v1.DeploymenConditionType:
+				if condition.Status == string(v1.DeploymentStatusFailure) {
+					zoneFailedConditions = true
+				}
+			case v1.UndeploymenConditionType:
+				if condition.Status == string(v1.UndeploymentStatusFailure) {
+					zoneFailedConditions = true
 				}
 			}
 		}
+		if zoneFailedConditions {
+			failedConditionCount++
+		}
 	}
-	return failedConditions > spec.RecoverStrategy.Tolerance
+	return failedConditionCount > spec.RecoverStrategy.Tolerance
 }
 
 func placementExists(status *v1.AnyApplicationStatus) bool {

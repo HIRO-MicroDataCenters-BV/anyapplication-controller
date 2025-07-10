@@ -9,6 +9,7 @@ import (
 
 type LocalFSM struct {
 	application        *v1.AnyApplication
+	recoverStrategy    *v1.RecoverStrategySpec
 	config             *config.ApplicationRuntimeConfig
 	jobFactory         types.AsyncJobFactory
 	applicationPresent bool
@@ -22,8 +23,14 @@ func NewLocalFSM(
 	applicationPresent bool,
 	runningJobType mo.Option[types.AsyncJobType],
 ) LocalFSM {
+	recoverStrategy := &application.Spec.RecoverStrategy
 	return LocalFSM{
-		application, config, jobFactory, applicationPresent, runningJobType,
+		application,
+		recoverStrategy,
+		config,
+		jobFactory,
+		applicationPresent,
+		runningJobType,
 	}
 }
 
@@ -96,6 +103,22 @@ func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 				ConditionsToAdd:    undeployConditionOpt,
 				ConditionsToRemove: conditionsToRemove,
 				Jobs:               types.NextJobs{JobsToAdd: undeployJobOpt},
+			}
+		}
+	} else {
+		undeploymentCondition, found := status.FindCondition(v1.UndeploymenConditionType)
+		if found && undeploymentCondition.Status == string(v1.UndeploymentStatusFailure) {
+			if undeploymentCondition.RetryAttempt < g.recoverStrategy.MaxRetries {
+				undeployJob := g.jobFactory.CreateUndeployJob(g.application)
+				undeployJobOpt := mo.Some(undeployJob)
+				undeployCondition := undeployJob.GetStatus()
+				undeployConditionOpt := mo.EmptyableToOption(&undeployCondition)
+
+				return types.NextStateResult{
+					ConditionsToAdd:    undeployConditionOpt,
+					ConditionsToRemove: conditionsToRemove,
+					Jobs:               types.NextJobs{JobsToAdd: undeployJobOpt},
+				}
 			}
 		}
 	}
