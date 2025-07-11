@@ -11,7 +11,8 @@ peers:
   - url: localhost:8080
 runtime:
   zone: zone
-  localPollDuration: 5s
+  operationalPollDuration: 5s
+  syncPollDuration: 10s
 `
 
 func TestLoadConfig(t *testing.T) {

@@ -9,11 +9,12 @@ import (
 )
 
 type SyncResult struct {
-	Status              *health.HealthStatus
-	OperationPhaseStats map[common.OperationPhase]int
-	SyncPhaseStats      map[common.SyncPhase]int
-	ResultCodeStats     map[common.ResultCode]int
-	Total               int
+	Status                       *health.HealthStatus
+	ApplicationResourcesDeployed bool
+	OperationPhaseStats          map[common.OperationPhase]int
+	SyncPhaseStats               map[common.SyncPhase]int
+	ResultCodeStats              map[common.ResultCode]int
+	Total                        int
 }
 
 type DeleteResult struct {
@@ -24,10 +25,11 @@ type DeleteResult struct {
 
 func NewSyncResult() *SyncResult {
 	return &SyncResult{
-		Status:              &health.HealthStatus{},
-		OperationPhaseStats: make(map[common.OperationPhase]int),
-		SyncPhaseStats:      make(map[common.SyncPhase]int),
-		ResultCodeStats:     make(map[common.ResultCode]int),
+		Status:                       &health.HealthStatus{},
+		OperationPhaseStats:          make(map[common.OperationPhase]int),
+		SyncPhaseStats:               make(map[common.SyncPhase]int),
+		ResultCodeStats:              make(map[common.ResultCode]int),
+		ApplicationResourcesDeployed: false,
 	}
 }
 
@@ -39,6 +41,7 @@ func (s *SyncResult) AddResult(r *common.ResourceSyncResult) {
 }
 
 type SyncManager interface {
+	GetAggregatedStatus(application *v1.AnyApplication) *health.HealthStatus
 	Sync(ctx context.Context, application *v1.AnyApplication) (*SyncResult, error)
 	Delete(ctx context.Context, application *v1.AnyApplication) (*DeleteResult, error)
 	LoadApplication(application *v1.AnyApplication) (GlobalApplication, error)

@@ -74,8 +74,8 @@ var _ = Describe("LocalOperationJob", func() {
 		}
 
 		runtimeConfig = config.ApplicationRuntimeConfig{
-			ZoneId:            "zone",
-			LocalPollInterval: 10000 * time.Millisecond,
+			ZoneId:                        "zone",
+			PollOperationalStatusInterval: 10000 * time.Millisecond,
 		}
 		gitOpsEngine = fixture.NewFakeGitopsEngine()
 		fakeClock = clock.NewFakeClock()

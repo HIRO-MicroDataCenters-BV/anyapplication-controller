@@ -148,7 +148,10 @@ func addOrUpdateCondition(status *v1.AnyApplicationStatus, condition *v1.Conditi
 }
 
 func removeCondition(status *v1.AnyApplicationStatus, toRemove *v1.ConditionStatus, zoneId string) {
-	zoneStatus := status.GetOrCreateStatusFor(zoneId)
+	zoneStatus, exists := status.GetStatusFor(zoneId)
+	if !exists {
+		return
+	}
 	zoneStatus.Conditions = lo.Filter(zoneStatus.Conditions, func(existing v1.ConditionStatus, _ int) bool {
 		equal := existing.Type == toRemove.Type && existing.ZoneId == toRemove.ZoneId
 		return !equal

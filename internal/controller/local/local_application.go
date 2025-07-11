@@ -20,14 +20,15 @@ type LocalApplication struct {
 
 func NewFromUnstructured(
 	version string,
-	resources []*unstructured.Unstructured,
+	availableResources []*unstructured.Unstructured,
+	expectedResources []*unstructured.Unstructured,
 	config *config.ApplicationRuntimeConfig,
 	clock clock.Clock,
 ) (mo.Option[LocalApplication], error) {
-	if len(resources) == 0 {
+	if len(availableResources) == 0 {
 		return mo.None[LocalApplication](), nil
 	}
-	bundle, err := LoadApplicationBundle(resources)
+	bundle, err := LoadApplicationBundle(availableResources, expectedResources)
 	if err != nil {
 		return mo.None[LocalApplication](), err
 	}
@@ -47,6 +48,10 @@ func NewFromUnstructured(
 
 func (l *LocalApplication) GetStatus() health.HealthStatusCode {
 	return l.status
+}
+
+func (l *LocalApplication) IsDeployed() bool {
+	return l.bundle.IsDeployed()
 }
 
 func (l *LocalApplication) GetMessages() []string {

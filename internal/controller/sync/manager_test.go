@@ -59,8 +59,8 @@ var _ = Describe("SyncManager", func() {
 		_ = v1.AddToScheme(scheme)
 
 		runtimeConfig = config.ApplicationRuntimeConfig{
-			ZoneId:            "zone",
-			LocalPollInterval: 100 * time.Millisecond,
+			ZoneId:                        "zone",
+			PollOperationalStatusInterval: 100 * time.Millisecond,
 		}
 
 		application = &v1.AnyApplication{

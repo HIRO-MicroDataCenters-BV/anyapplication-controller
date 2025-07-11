@@ -1,6 +1,7 @@
 package job
 
 import (
+	"sync"
 	"sync/atomic"
 
 	"github.com/go-logr/logr"
@@ -19,6 +20,7 @@ type UndeployJob struct {
 	clock         clock.Clock
 	msg           string
 	jobId         types.JobId
+	wg            sync.WaitGroup
 	stopped       atomic.Bool
 	log           logr.Logger
 	version       string
@@ -56,6 +58,15 @@ func NewUndeployJob(
 }
 
 func (job *UndeployJob) Run(context types.AsyncJobContext) {
+	job.wg.Add(1)
+
+	go func() {
+		defer job.wg.Done()
+		job.runInner(context)
+	}()
+}
+
+func (job *UndeployJob) runInner(context types.AsyncJobContext) {
 	ctx := context.GetGoContext()
 
 	syncManager := context.GetSyncManager()
@@ -63,7 +74,6 @@ func (job *UndeployJob) Run(context types.AsyncJobContext) {
 
 	if err != nil {
 		job.Fail(context, err.Error())
-		return
 	} else {
 		job.Success(context)
 	}
@@ -128,4 +138,5 @@ func (job *UndeployJob) GetStatus() v1.ConditionStatus {
 
 func (job *UndeployJob) Stop() {
 	job.stopped.Store(true)
+	job.wg.Wait()
 }

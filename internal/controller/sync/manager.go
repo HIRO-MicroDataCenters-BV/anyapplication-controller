@@ -14,6 +14,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
+	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
@@ -26,10 +27,11 @@ import (
 )
 
 type cachedApp struct {
-	resources  []*unstructured.Unstructured
-	revision   string
-	instanceId string
-	namespace  string
+	application *v1.AnyApplication
+	resources   []*unstructured.Unstructured
+	revision    string
+	instanceId  string
+	namespace   string
 }
 
 type syncManager struct {
@@ -119,10 +121,11 @@ func (m *syncManager) render(application *v1.AnyApplication) (*cachedApp, error)
 		return nil, errors.Wrap(err, "Fail to split YAML")
 	}
 	app := cachedApp{
-		resources:  objs,
-		revision:   helmSelector.Version,
-		instanceId: instanceId,
-		namespace:  helmSelector.Namespace,
+		resources:   objs,
+		revision:    helmSelector.Version,
+		instanceId:  instanceId,
+		namespace:   helmSelector.Namespace,
+		application: application.DeepCopy(),
 	}
 	return &app, nil
 }
@@ -146,6 +149,17 @@ func (m *syncManager) sync(ctx context.Context, app *cachedApp) (*types.SyncResu
 	m.addAndLogResults(resourceSyncResults, syncResult)
 
 	syncResult.Status = m.getAggregatedStatus(app)
+
+	localApplicationOpt, err := m.loadLocalApplication(app.application)
+	localApplication, exists := localApplicationOpt.Get()
+	if err == nil {
+		if exists {
+			syncResult.ApplicationResourcesDeployed = localApplication.IsDeployed()
+		}
+	} else {
+		m.log.Error(err, "Failed to load local application")
+		syncResult.ApplicationResourcesDeployed = false
+	}
 	return syncResult, nil
 }
 
@@ -163,6 +177,14 @@ func (m *syncManager) addAndLogResults(resourceSyncResults []common.ResourceSync
 			"SyncPhase", string(resourceSyncResult.SyncPhase),
 		)
 	}
+}
+
+func (m *syncManager) GetAggregatedStatus(application *v1.AnyApplication) *health.HealthStatus {
+	app, err := m.getOrRenderApp(application)
+	if err != nil {
+		m.log.Error(err, "Failed to get or render application")
+	}
+	return m.getAggregatedStatus(app)
 }
 
 func (m *syncManager) getAggregatedStatus(app *cachedApp) *health.HealthStatus {
@@ -245,7 +267,7 @@ func (m *syncManager) deleteApp(ctx context.Context, application *v1.AnyApplicat
 		}
 	}
 
-	remainingResources := m.findApplicationResources(application)
+	remainingResources := m.findAvailableApplicationResources(application)
 	syncResult.Total += len(remainingResources)
 
 	for _, obj := range remainingResources {
@@ -276,9 +298,7 @@ func (m *syncManager) getInstanceId(application *v1.AnyApplication) string {
 }
 
 func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.GlobalApplication, error) {
-	resources := m.findApplicationResources(application)
-	version := application.ResourceVersion
-	localApplication, err := local.NewFromUnstructured(version, resources, m.config, m.clock)
+	localApplication, err := m.loadLocalApplication(application)
 	if err != nil {
 		return nil, errors.Wrap(err, "Fail to create local application")
 	}
@@ -287,15 +307,31 @@ func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.Glo
 	return globalApplication, nil
 }
 
-func (m *syncManager) findApplicationResources(application *v1.AnyApplication) []*unstructured.Unstructured {
+func (m *syncManager) loadLocalApplication(application *v1.AnyApplication) (mo.Option[local.LocalApplication], error) {
+	app, err := m.getOrRenderApp(application)
+	if err != nil {
+		return mo.None[local.LocalApplication](), err
+	}
+	expectedResources := app.resources
+	availableResources := m.findAvailableApplicationResources(application)
+	version := application.ResourceVersion
+	localApplication, err := local.NewFromUnstructured(version, availableResources, expectedResources, m.config, m.clock)
+	if err != nil {
+		return mo.None[local.LocalApplication](), errors.Wrap(err, "Fail to create local application")
+	}
+	return localApplication, nil
+}
+
+func (m *syncManager) findAvailableApplicationResources(application *v1.AnyApplication) []*unstructured.Unstructured {
 	instanceId := m.getInstanceId(application)
-	cachedResources := m.clusterCache.FindResources(application.Spec.Application.HelmSelector.Namespace, func(r *cache.Resource) bool {
+	cachedResources := m.clusterCache.FindResources("", func(r *cache.Resource) bool {
 		if r.Resource == nil {
 			return false
 		}
 		labels := r.Resource.GetLabels()
 		return labels != nil && labels["dcp.hiro.io/instance-id"] == instanceId
 	})
+
 	resources := lo.Values(cachedResources)
 	return lo.Map(resources, func(r *cache.Resource, index int) *unstructured.Unstructured { return r.Resource })
 }
