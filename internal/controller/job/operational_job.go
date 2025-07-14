@@ -93,8 +93,19 @@ func (job *LocalOperationJob) runInner(context types.AsyncJobContext) {
 	switch healthStatus.Status {
 	case health.HealthStatusHealthy, health.HealthStatusProgressing:
 		job.Success(context)
-	case health.HealthStatusDegraded, health.HealthStatusUnknown, health.HealthStatusMissing:
+	case health.HealthStatusDegraded, health.HealthStatusUnknown:
 		job.Fail(context)
+	case health.HealthStatusMissing:
+		syncResult, err := syncManager.Sync(context.GetGoContext(), job.application)
+		if err != nil {
+			job.status = health.HealthStatusDegraded
+			job.msg = "Cannot sync application: " + err.Error()
+			job.Fail(context)
+		} else {
+			job.status = syncResult.Status.Status
+			job.msg = syncResult.Status.Message
+			job.Success(context)
+		}
 	}
 }
 

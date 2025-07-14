@@ -1,7 +1,6 @@
 package job
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -87,7 +86,6 @@ func (job *DeployJob) runInner(context types.AsyncJobContext) {
 	syncManager := context.GetSyncManager()
 
 	syncResult, err := syncManager.Sync(context.GetGoContext(), job.application)
-	fmt.Printf("Sync result %v \n", syncResult)
 	healthStatus := syncResult.Status
 
 	if err != nil {

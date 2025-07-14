@@ -26,7 +26,7 @@ var _ = Describe("ApplicationBundle", func() {
 		Expect(bundle.IsDeployed()).To(BeTrue())
 
 		state, msg, err := bundle.DetermineState()
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(state).To(Equal(health.HealthStatusHealthy))
 		Expect(msg).To(BeEmpty())
 
@@ -38,7 +38,7 @@ var _ = Describe("ApplicationBundle", func() {
 		Expect(bundle.IsDeployed()).To(BeTrue())
 
 		state, msg, err := bundle.DetermineState()
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(state).To(Equal(health.HealthStatusHealthy))
 		Expect(msg).To(BeEmpty())
 
@@ -48,14 +48,14 @@ var _ = Describe("ApplicationBundle", func() {
 		bundle := fixture.LoadJSONFixture[ApplicationBundle]("application_bundle.json")
 
 		Expect(bundle.IsDeployed()).To(BeTrue())
-		Expect(len(bundle.availableResources)).To(Equal(2))
+		Expect(bundle.availableResources).To(HaveLen(2))
 
 		bundle.availableResources = bundle.availableResources[:1] // Simulate partial deployment
 
 		Expect(bundle.IsDeployed()).To(BeFalse())
 
 		state, msg, err := bundle.DetermineState()
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(state).To(Equal(health.HealthStatusMissing))
 		Expect(msg).To(Equal([]string{"Resource is missing: apps/v1, Kind=Deployment kube-system/coredns"}))
 
