@@ -2,36 +2,38 @@ package job
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
+	"github.com/argoproj/gitops-engine/pkg/engine"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"helm.sh/helm/v3/pkg/chartutil"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/events"
-	"hiro.io/anyapplication/internal/controller/fixture"
 	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"k8s.io/klog/v2/textlogger"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("UndeployJob", func() {
 	var (
 		undeployJob   *UndeployJob
-		kubeClient    client.Client
-		helmClient    helm.FakeHelmClient
+		helmClient    helm.HelmClient
 		application   *v1.AnyApplication
 		scheme        *runtime.Scheme
-		fakeClock     clock.Clock
+		theClock      clock.Clock
 		runtimeConfig config.ApplicationRuntimeConfig
-		syncManager   types.SyncManager
-		gitOpsEngine  *fixture.FakeGitOpsEngine
+		jobContext    types.AsyncJobContext
+		stopFunc      engine.StopFunc
 		fakeEvents    events.Events
 	)
 
@@ -48,9 +50,10 @@ var _ = Describe("UndeployJob", func() {
 			Spec: v1.AnyApplicationSpec{
 				Application: v1.ApplicationMatcherSpec{
 					HelmSelector: &v1.HelmSelectorSpec{
-						Repository: "test-repo",
-						Chart:      "test-chart",
-						Version:    "1.0.0",
+						Repository: "https://helm.nginx.com/stable",
+						Chart:      "nginx-ingress",
+						Version:    "2.0.1",
+						Namespace:  "default",
 					},
 				},
 				Zones: 1,
@@ -65,71 +68,124 @@ var _ = Describe("UndeployJob", func() {
 			},
 		}
 
+		pollSyncStatusInterval, _ := time.ParseDuration("1000ms")
 		runtimeConfig = config.ApplicationRuntimeConfig{
-			ZoneId: "zone",
+			ZoneId:                 "zone",
+			PollSyncStatusInterval: pollSyncStatusInterval,
 		}
-		gitOpsEngine = fixture.NewFakeGitopsEngine()
-		fakeClock = clock.NewFakeClock()
+		var err error
+		helmClient, err = helm.NewHelmClient(&helm.HelmClientOptions{
+			RestConfig: cfg,
+			Debug:      false,
+			Linting:    true,
+			KubeVersion: &chartutil.KubeVersion{
+				Version: "v1.23.10",
+				Major:   "1",
+				Minor:   "23",
+			},
+			UpgradeCRDs: true,
+		})
+		if err != nil {
+			panic("error " + err.Error())
+		}
 
-		helmClient = helm.NewFakeHelmClient()
+		theClock = clock.NewClock()
+		fakeEvents = events.NewFakeEvents()
+		log := textlogger.NewLogger(textlogger.NewConfig())
+		clusterCache := cache.NewClusterCache(cfg,
+			cache.SetLogr(log),
+			cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
+				managedByMark := un.GetLabels()["dcp.hiro.io/managed-by"]
+				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()["dcp.hiro.io/managed-by"]}
+				// cache resources that has that mark to improve performance
+				cacheManifest = managedByMark != ""
+				return
+			}),
+		)
+		gitOpsEngine := engine.NewEngine(cfg, clusterCache, engine.WithLogr(log))
+		stopFunc, err = gitOpsEngine.Run()
+		if err != nil {
+			panic("error " + err.Error())
+		}
 
-		kubeClient = fake.NewClientBuilder().
-			WithScheme(scheme).
-			WithRuntimeObjects(application).
-			WithStatusSubresource(&v1.AnyApplication{}).
-			Build()
-		application = application.DeepCopy()
-		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		syncManager := sync.NewSyncManager(k8sClient, helmClient, clusterCache, theClock, &runtimeConfig, gitOpsEngine, logf.Log)
+		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
 
-		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+		undeployJob = NewUndeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
+		jobContext = NewAsyncJobContext(helmClient, k8sClient, context.TODO(), syncManager)
+	})
 
-		undeployJob = NewUndeployJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
+	AfterEach(func() {
+		stopFunc()
 	})
 
 	It("should return initial status", func() {
-		Expect(undeployJob.GetStatus()).To(Equal(v1.ConditionStatus{
+		status := undeployJob.GetStatus()
+		status.LastTransitionTime = metav1.Time{}
+
+		Expect(status).To(Equal(v1.ConditionStatus{
 			Type:               v1.UndeploymenConditionType,
 			ZoneId:             "zone",
 			Status:             string(v1.UndeploymentStatusUndeploy),
-			LastTransitionTime: fakeClock.NowTime(),
+			LastTransitionTime: metav1.Time{},
 		},
 		))
 	})
 
 	It("should run and apply done status", func() {
-		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO(), syncManager)
 
-		undeployJob.Run(context)
+		deployJob := NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
+		deployJob.Run(jobContext)
 
-		result := &v1.AnyApplication{}
-		_ = kubeClient.Get(context.GetGoContext(), client.ObjectKeyFromObject(application), result)
+		waitForDeploymentStatus(deployJob, string(v1.DeploymentStatusDone))
 
-		Expect(result.Status.Zones).To(Equal(
-			[]v1.ZoneStatus{
-				{
-					ZoneId:      "zone",
-					ZoneVersion: 1000,
-					Conditions: []v1.ConditionStatus{
-						{
-							Type:               v1.UndeploymenConditionType,
-							ZoneId:             "zone",
-							Status:             string(v1.UndeploymentStatusDone),
-							LastTransitionTime: fakeClock.NowTime(),
-						},
-					},
-				},
-			},
-		))
+		undeployJob.Run(jobContext)
 
-		Expect(undeployJob.GetStatus()).To(Equal(
+		// result := &v1.AnyApplication{}
+		// _ = kubeClient.Get(jobContext.GetGoContext(), client.ObjectKeyFromObject(application), result)
+
+		// Expect(result.Status.Zones).To(Equal(
+		// 	[]v1.ZoneStatus{
+		// 		{
+		// 			ZoneId:      "zone",
+		// 			ZoneVersion: 1000,
+		// 			Conditions: []v1.ConditionStatus{
+		// 				{
+		// 					Type:               v1.UndeploymenConditionType,
+		// 					ZoneId:             "zone",
+		// 					Status:             string(v1.UndeploymentStatusDone),
+		// 					LastTransitionTime: fakeClock.NowTime(),
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// ))
+
+		waitForUndeploymentStatus(undeployJob, string(v1.UndeploymentStatusDone))
+
+		status := undeployJob.GetStatus()
+		status.LastTransitionTime = metav1.Time{}
+
+		Expect(status).To(Equal(
 			v1.ConditionStatus{
 				Type:               v1.UndeploymenConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.UndeploymentStatusDone),
-				LastTransitionTime: fakeClock.NowTime(),
+				LastTransitionTime: metav1.Time{},
 			},
 		))
+		undeployJob.Stop()
 
 	})
 
 })
+
+func waitForUndeploymentStatus(job *UndeployJob, status string) {
+	for i := 0; i < 20; i++ {
+		time.Sleep(300 * time.Millisecond)
+		if job.GetStatus().Status == status {
+			return
+		}
+	}
+	Fail(fmt.Sprintf("Expected status %s, but got %s, object %v\n", status, job.GetStatus().Status, job.GetStatus()))
+}

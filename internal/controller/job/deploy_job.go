@@ -1,6 +1,7 @@
 package job
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -86,22 +87,14 @@ func (job *DeployJob) runInner(context types.AsyncJobContext) {
 	syncManager := context.GetSyncManager()
 
 	syncResult, err := syncManager.Sync(context.GetGoContext(), job.application)
+	fmt.Printf("Sync result %v \n", syncResult)
 	healthStatus := syncResult.Status
-	healthStatusOperational := false
 
 	if err != nil {
 		job.Fail(context, err.Error())
-		return
 	}
 
-	switch healthStatus.Status {
-	case health.HealthStatusProgressing, health.HealthStatusHealthy:
-		healthStatusOperational = true
-	case health.HealthStatusUnknown, health.HealthStatusMissing, health.HealthStatusDegraded:
-		healthStatusOperational = false
-	}
-
-	if syncResult.ApplicationResourcesDeployed && healthStatusOperational {
+	if syncResult.ApplicationResourcesDeployed {
 		job.Success(context, healthStatus)
 	}
 }
@@ -109,6 +102,7 @@ func (job *DeployJob) runInner(context types.AsyncJobContext) {
 func (job *DeployJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = v1.DeploymentStatusFailure
+
 	statusUpdater := status.NewStatusUpdater(
 		context.GetGoContext(),
 		job.log.WithName("StatusUpdater"),

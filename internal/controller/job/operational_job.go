@@ -1,7 +1,6 @@
 package job
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
