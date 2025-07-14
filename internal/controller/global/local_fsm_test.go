@@ -79,6 +79,9 @@ var _ = Describe("Local Application FSM", func() {
 	It("should start deployment once placement is done", func() {
 		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
 
+		Expect(globalApplication.IsDeployed()).To(BeFalse())
+		Expect(globalApplication.IsPresent()).To(BeFalse())
+
 		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 
 		status := statusResult.Status.OrEmpty()
@@ -133,7 +136,11 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		statusResult := globalApplication.DeriveNewStatus(types.FromCondition(deploymentCondition, types.AsyncJobTypeDeploy), jobFactory)
+		Expect(globalApplication.IsDeployed()).To(BeFalse())
+		Expect(globalApplication.IsPresent()).To(BeFalse())
+
+		statusResult := globalApplication.DeriveNewStatus(
+			types.FromCondition(deploymentCondition, types.AsyncJobTypeDeploy), jobFactory)
 
 		status := statusResult.Status.OrEmpty()
 		jobs := statusResult.Jobs
@@ -163,7 +170,7 @@ var _ = Describe("Local Application FSM", func() {
 		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 	})
 
-	It("should create operational job once relocation is done", func() {
+	It("should create operational job once deployement is done", func() {
 		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
 
 		application.Status.Zones = []v1.ZoneStatus{
@@ -183,6 +190,10 @@ var _ = Describe("Local Application FSM", func() {
 
 		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
+
+		Expect(globalApplication.IsDeployed()).To(BeTrue())
+		Expect(globalApplication.IsPresent()).To(BeTrue())
+
 		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 
 		status := statusResult.Status.OrEmpty()
@@ -254,6 +265,10 @@ var _ = Describe("Local Application FSM", func() {
 
 		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
+
+		Expect(globalApplication.IsDeployed()).To(BeTrue())
+		Expect(globalApplication.IsPresent()).To(BeTrue())
+
 		statusResult := globalApplication.DeriveNewStatus(types.FromCondition(operationalCondition, types.AsyncJobTypeLocalOperation), jobFactory)
 
 		status := statusResult.Status.OrEmpty()
@@ -304,6 +319,10 @@ var _ = Describe("Local Application FSM", func() {
 
 		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
+
+		Expect(globalApplication.IsDeployed()).To(BeTrue())
+		Expect(globalApplication.IsPresent()).To(BeTrue())
+
 		statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 
 		status := statusResult.Status.OrEmpty()
@@ -370,6 +389,10 @@ var _ = Describe("Local Application FSM", func() {
 
 		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
+
+		Expect(globalApplication.IsDeployed()).To(BeTrue())
+		Expect(globalApplication.IsPresent()).To(BeTrue())
+
 		statusResult := globalApplication.DeriveNewStatus(types.FromCondition(undeployCondition, types.AsyncJobTypeUndeploy), jobFactory)
 
 		status := statusResult.Status.OrEmpty()

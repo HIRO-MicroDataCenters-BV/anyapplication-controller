@@ -1,7 +1,9 @@
 package job
 
 import (
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/health"
 	"github.com/go-logr/logr"
@@ -21,6 +23,8 @@ type DeployJob struct {
 	msg           string
 	jobId         types.JobId
 	stopped       atomic.Bool
+	stopCh        chan struct{}
+	wg            sync.WaitGroup
 	log           logr.Logger
 	version       string
 	events        *events.Events
@@ -50,6 +54,7 @@ func NewDeployJob(
 		msg:           "",
 		jobId:         jobId,
 		stopped:       atomic.Bool{},
+		stopCh:        make(chan struct{}),
 		log:           log,
 		version:       version,
 		events:        events,
@@ -57,17 +62,37 @@ func NewDeployJob(
 }
 
 func (job *DeployJob) Run(context types.AsyncJobContext) {
+	job.wg.Add(1)
 
+	go func() {
+		defer job.wg.Done()
+
+		job.runInner(context)
+
+		ticker := time.NewTicker(job.runtimeConfig.PollSyncStatusInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				job.runInner(context)
+			case <-job.stopCh:
+				return
+			}
+		}
+	}()
+}
+func (job *DeployJob) runInner(context types.AsyncJobContext) {
 	syncManager := context.GetSyncManager()
-	ctx := context.GetGoContext()
 
-	syncResult, err := syncManager.Sync(ctx, job.application)
+	syncResult, err := syncManager.Sync(context.GetGoContext(), job.application)
 	healthStatus := syncResult.Status
 
 	if err != nil {
 		job.Fail(context, err.Error())
-		return
-	} else {
+	}
+
+	if syncResult.ApplicationResourcesDeployed {
 		job.Success(context, healthStatus)
 	}
 }
@@ -75,6 +100,7 @@ func (job *DeployJob) Run(context types.AsyncJobContext) {
 func (job *DeployJob) Fail(context types.AsyncJobContext, msg string) {
 	job.msg = msg
 	job.status = v1.DeploymentStatusFailure
+
 	statusUpdater := status.NewStatusUpdater(
 		context.GetGoContext(),
 		job.log.WithName("StatusUpdater"),
@@ -130,4 +156,6 @@ func (job *DeployJob) GetStatus() v1.ConditionStatus {
 
 func (job *DeployJob) Stop() {
 	job.stopped.Store(true)
+	job.stopCh <- struct{}{}
+	job.wg.Wait()
 }

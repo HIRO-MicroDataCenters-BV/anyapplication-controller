@@ -81,6 +81,7 @@ type ConditionStatus struct {
 	LastTransitionTime metav1.Time              `json:"lastTransitionTime"`
 	Reason             string                   `json:"reason,omitempty"`
 	Msg                string                   `json:"msg,omitempty"`
+	RetryAttempt       int                      `json:"retryAttempt,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -153,6 +154,13 @@ func (status *AnyApplicationStatus) GetOrCreateStatusFor(zone string) *ZoneStatu
 	return nil
 }
 
+func (status *AnyApplicationStatus) RemoveZone(zone string) {
+	status.Zones = lo.Filter(status.Zones, func(existing ZoneStatus, _ int) bool {
+		equal := existing.ZoneId == zone
+		return !equal
+	})
+}
+
 func (status *AnyApplicationStatus) AddOrUpdate(toAddOrUpdate *ConditionStatus, zoneId string) bool {
 	zoneStatus := status.GetOrCreateStatusFor(zoneId)
 
@@ -220,4 +228,22 @@ func (status *AnyApplicationStatus) LogStatus() {
 	}
 	out += "\n"
 	fmt.Print(out)
+}
+
+func (status *AnyApplicationStatus) ZoneExists(zone string) bool {
+	_, exists := status.GetStatusFor(zone)
+	return exists
+}
+
+func (status *ZoneStatus) FindCondition(conditionType ApplicationConditionType) (*ConditionStatus, bool) {
+	for i, condition := range status.Conditions {
+		if condition.Type == conditionType {
+			return &status.Conditions[i], true
+		}
+	}
+	return nil, false
+}
+
+func (status *ZoneStatus) EmptyConditions() bool {
+	return len(status.Conditions) == 0
 }

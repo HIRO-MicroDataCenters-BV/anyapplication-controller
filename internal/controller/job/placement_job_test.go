@@ -21,7 +21,7 @@ var _ = Describe("PlacementJob", func() {
 	var (
 		placementJob  *LocalPlacementJob
 		kubeClient    client.Client
-		helmClient    helm.FakeHelmClient
+		helmClient    *helm.FakeHelmClient
 		application   *v1.AnyApplication
 		scheme        *runtime.Scheme
 		fakeClock     clock.Clock

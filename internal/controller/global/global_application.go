@@ -9,7 +9,6 @@ import (
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/local"
 	"hiro.io/anyapplication/internal/controller/types"
-	"hiro.io/anyapplication/internal/moutils"
 )
 
 type globalApplication struct {
@@ -47,7 +46,16 @@ func (g *globalApplication) GetNamespace() string {
 }
 
 func (g *globalApplication) IsDeployed() bool {
-	return g.locaApplication.IsPresent()
+	localApplication, present := g.locaApplication.Get()
+	if present {
+		return localApplication.IsDeployed()
+	}
+	return false
+}
+
+func (g *globalApplication) IsPresent() bool {
+	_, present := g.locaApplication.Get()
+	return present
 }
 
 func (g *globalApplication) HasZoneStatus() bool {
@@ -67,20 +75,22 @@ func (g *globalApplication) DeriveNewStatus(
 	}
 	runningJobType := jobConditions.GetJobType()
 
-	// Update local application status if exists
-	localApplicationConditionOpt := moutils.Map(g.locaApplication, func(l local.LocalApplication) v1.ConditionStatus {
-		return l.GetCondition()
-	})
-	stateUpdated := moutils.Map(localApplicationConditionOpt, func(condition v1.ConditionStatus) bool {
-		updateLocalCondition(current, &condition, g.config)
-		return true
-	}).OrElse(false)
+	stateUpdated := false
 
-	// Update loca job conditions
+	// Update local application status if exists
+	if localApp, exists := g.locaApplication.Get(); exists {
+		if localApp.IsDeployed() {
+			localAppCondition := localApp.GetCondition()
+			updateLocalCondition(current, &localAppCondition, g.config)
+			stateUpdated = true
+		}
+	}
+
+	// Update local job conditions
 	stateUpdated = updateJobConditions(current, jobConditions, g.config.ZoneId) || stateUpdated
 
 	// Update state
-	globalStateUpdated, nextJobs := updateState(g.application, g.config, jobFactory, g.IsDeployed(), runningJobType)
+	globalStateUpdated, nextJobs := updateState(g.application, g.config, jobFactory, g.IsDeployed(), g.IsPresent(), runningJobType)
 
 	stateUpdated = globalStateUpdated || stateUpdated
 
@@ -97,17 +107,20 @@ func updateState(
 	applicationMut *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
 	jobFactory types.AsyncJobFactory,
+	applicationDeployed bool,
 	applicationPresent bool,
 	runningJobType mo.Option[types.AsyncJobType],
 ) (bool, types.NextJobs) {
 	status := &applicationMut.Status
 	nextJobs := types.NextJobs{}
 	stateUpdated := false
-	if placementsContainZone(status, config.ZoneId) || applicationPresent {
+
+	if placementsContainZone(status, config.ZoneId) || applicationPresent || status.ZoneExists(config.ZoneId) {
 		stateUpdated, nextJobs = localStateMachine(
 			applicationMut,
 			config,
 			jobFactory,
+			applicationDeployed,
 			applicationPresent,
 			runningJobType,
 		)
@@ -118,11 +131,19 @@ func updateState(
 			applicationMut,
 			config,
 			jobFactory,
-			applicationPresent,
+			applicationDeployed,
 			runningJobType,
 		)
 		stateUpdated = stateUpdated || globalStateUpdated
 		nextJobs.Add(globalJobs)
+	}
+
+	zoneStatus, exists := applicationMut.Status.GetStatusFor(config.ZoneId)
+	if exists {
+		if zoneStatus.EmptyConditions() {
+			applicationMut.Status.RemoveZone(config.ZoneId)
+			stateUpdated = true
+		}
 	}
 
 	return stateUpdated, nextJobs
@@ -132,14 +153,14 @@ func globalStateMachine(
 	application *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
 	jobFactory types.AsyncJobFactory,
-	applicationPresent bool,
+	applicationResourcesAvailable bool,
 	runningJobType mo.Option[types.AsyncJobType],
 ) (bool, types.NextJobs) {
 	status := &application.Status
 
 	stateUpdated := false
 
-	fsm := NewGlobalFSM(application, config, jobFactory, applicationPresent, runningJobType)
+	fsm := NewGlobalFSM(application, config, jobFactory, applicationResourcesAvailable, runningJobType)
 	nextStateResult := fsm.NextState()
 
 	maybeNextState, conditionsToAdd, conditionsToRemove := nextStateResult.NextState, nextStateResult.ConditionsToAdd, nextStateResult.ConditionsToRemove
@@ -174,13 +195,14 @@ func localStateMachine(
 	applicationMut *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
 	jobFactory types.AsyncJobFactory,
-	applicationPresent bool,
+	applicationDeployed bool,
+	applicationResourcesPresent bool,
 	runningJobType mo.Option[types.AsyncJobType],
 ) (bool, types.NextJobs) {
 
 	stateUpdated := false
 
-	fsm := NewLocalFSM(applicationMut, config, jobFactory, applicationPresent, runningJobType)
+	fsm := NewLocalFSM(applicationMut, config, jobFactory, applicationResourcesPresent, applicationDeployed, runningJobType)
 	nextStateResult := fsm.NextState()
 
 	conditionsToAdd, conditionsToRemove := nextStateResult.ConditionsToAdd, nextStateResult.ConditionsToRemove

@@ -3,17 +3,27 @@ apiVersion: dcp.hiro.io/v1
 kind: AnyApplication
 metadata:
   name: nginx-app
-  namespace: default
+  namespace: test
+  finalizers:
+  - finalizers.dcp.hiro.io/anyapplication
 spec:
   application: 
     helm:
       repository: https://helm.nginx.com/stable
       chart: nginx-ingress
       version: 2.0.1
-      namespace: nginx
+      namespace: test
+      values: |-
+        controller:
+          name: blabla
+          # image:
+          #   tag: 1.0.0
+          appprotect:
+            enable: false
   zones: 1
   placement-strategy: 
-    strategy: Local
+    # strategy: Local
+    strategy: Global
   recover-strategy:
     tolerance: 1
     max-retries: 3

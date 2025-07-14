@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"testing"
 )
 
 func SaveStringFixture(filename string, value string) error {
@@ -22,18 +21,18 @@ func LoadStringFixture(filename string) string {
 	return string(raw)
 }
 
-func LoadJSONFixture[T any](t *testing.T, filename string) T {
-	t.Helper()
+func LoadJSONFixture[T any](filename string) T {
+
 	var data T
 
 	path := filepath.Join("testdata", filename)
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("failed to read fixture file %s: %v", filename, err)
+		panic(fmt.Sprintf("failed to read fixture file %s: %v", filename, err))
 	}
 
 	if err := json.Unmarshal(raw, &data); err != nil {
-		t.Fatalf("failed to unmarshal JSON fixture %s: %v", filename, err)
+		panic(fmt.Sprintf("failed to unmarshal JSON fixture %s: %v", filename, err))
 	}
 
 	return data

@@ -119,6 +119,8 @@ spec:
                             type: string
                           reason:
                             type: string
+                          retryAttempt:
+                            type: integer
                           status:
                             type: string
                           type:

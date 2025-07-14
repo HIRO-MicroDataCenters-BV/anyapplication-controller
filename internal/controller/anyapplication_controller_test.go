@@ -72,8 +72,8 @@ var _ = Describe("AnyApplication Controller", func() {
 			By("creating the custom resource for the Kind AnyApplication")
 
 			runtimeConfig = config.ApplicationRuntimeConfig{
-				ZoneId:            "zone",
-				LocalPollInterval: time.Duration(60000),
+				ZoneId:                        "zone",
+				PollOperationalStatusInterval: time.Duration(60000),
 			}
 
 			helmClient, err := helm.NewHelmClient(&helm.HelmClientOptions{

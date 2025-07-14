@@ -62,7 +62,8 @@ configuration:
   peers: []
   runtime:
     zone: zone
-    localPollDuration: 30s
+    operationalPollDuration: 5s
+    syncPollDuration: 60s
   logging:
     default_level: info
     components:

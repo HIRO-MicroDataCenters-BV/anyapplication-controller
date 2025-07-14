@@ -11,8 +11,9 @@ import (
 )
 
 type ApplicationRuntimeConfig struct {
-	ZoneId            string        `yaml:"zone"`
-	LocalPollInterval time.Duration `yaml:"localPollDuration"`
+	ZoneId                        string        `yaml:"zone"`
+	PollOperationalStatusInterval time.Duration `yaml:"operationalPollDuration"`
+	PollSyncStatusInterval        time.Duration `yaml:"syncPollDuration"`
 }
 
 // Define a struct to match the YAML structure

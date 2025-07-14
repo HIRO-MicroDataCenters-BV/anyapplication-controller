@@ -1,45 +1,24 @@
 package job
 
 import (
-	"context"
-
-	"github.com/argoproj/gitops-engine/pkg/cache"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "hiro.io/anyapplication/api/v1"
-	"hiro.io/anyapplication/internal/clock"
-	"hiro.io/anyapplication/internal/config"
-	"hiro.io/anyapplication/internal/controller/events"
-	"hiro.io/anyapplication/internal/controller/fixture"
-	"hiro.io/anyapplication/internal/controller/sync"
-	"hiro.io/anyapplication/internal/controller/types"
-	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var _ = Describe("RelocationJob", func() {
+var _ = Describe("DeployJob", func() {
 	var (
-		relocationJob *DeployJob
-		kubeClient    client.Client
-		helmClient    helm.FakeHelmClient
-		application   *v1.AnyApplication
-		scheme        *runtime.Scheme
-		fakeClock     clock.Clock
-		runtimeConfig config.ApplicationRuntimeConfig
-		syncManager   types.SyncManager
-		gitOpsEngine  *fixture.FakeGitOpsEngine
-		fakeEvents    events.Events
+		deployJob   *DeployJob
+		application *v1.AnyApplication
+		scheme      *runtime.Scheme
 	)
 
 	BeforeEach(func() {
 		scheme = runtime.NewScheme()
 		_ = v1.AddToScheme(scheme)
-
-		fakeEvents = events.NewFakeEvents()
 
 		application = &v1.AnyApplication{
 			ObjectMeta: metav1.ObjectMeta{
@@ -52,7 +31,7 @@ var _ = Describe("RelocationJob", func() {
 						Repository: "https://helm.nginx.com/stable",
 						Chart:      "nginx-ingress",
 						Version:    "2.0.1",
-						Namespace:  "nginx",
+						Namespace:  "default",
 					},
 				},
 				Zones: 1,
@@ -67,70 +46,70 @@ var _ = Describe("RelocationJob", func() {
 			},
 		}
 
-		runtimeConfig = config.ApplicationRuntimeConfig{
-			ZoneId: "zone",
-		}
-		gitOpsEngine = fixture.NewFakeGitopsEngine()
-
-		fakeClock = clock.NewFakeClock()
-
-		helmClient = helm.NewFakeHelmClient()
-
-		kubeClient = fake.NewClientBuilder().
-			WithScheme(scheme).
-			WithRuntimeObjects(application).
-			WithStatusSubresource(&v1.AnyApplication{}).
-			Build()
-		application = application.DeepCopy()
-		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
-		syncManager = sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
-
-		relocationJob = NewDeployJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
+		deployJob = NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
 	})
 
 	It("should return initial status", func() {
-		Expect(relocationJob.GetStatus()).To(Equal(v1.ConditionStatus{
+		status := deployJob.GetStatus()
+		status.LastTransitionTime = metav1.Time{}
+		Expect(status).To(Equal(v1.ConditionStatus{
 			Type:               v1.DeploymenConditionType,
 			ZoneId:             "zone",
 			Status:             string(v1.DeploymentStatusPull),
-			LastTransitionTime: fakeClock.NowTime(),
+			LastTransitionTime: metav1.Time{},
 		},
 		))
 	})
 
-	It("Relocation should run and apply done status", func() {
-		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO(), syncManager)
+	It("Deployment should run and apply done status", func() {
+		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
 
-		relocationJob.Run(context)
+		deployJob.Run(jobContext)
+		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
 
-		result := &v1.AnyApplication{}
-		_ = kubeClient.Get(context.GetGoContext(), client.ObjectKeyFromObject(application), result)
+		status := deployJob.GetStatus()
+		status.LastTransitionTime = metav1.Time{}
 
-		Expect(result.Status.Zones).To(Equal(
-			[]v1.ZoneStatus{
-				{
-					ZoneId:      "zone",
-					ZoneVersion: 1000,
-					Conditions: []v1.ConditionStatus{
-						{
-							Type:               v1.DeploymenConditionType,
-							ZoneId:             "zone",
-							Status:             string(v1.DeploymentStatusDone),
-							LastTransitionTime: fakeClock.NowTime(),
-						},
-					},
-				},
-			},
-		))
-
-		Expect(relocationJob.GetStatus()).To(Equal(
+		Expect(status).To(Equal(
 			v1.ConditionStatus{
 				Type:               v1.DeploymenConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.DeploymentStatusDone),
-				LastTransitionTime: fakeClock.NowTime(),
+				LastTransitionTime: metav1.Time{},
 			},
 		))
+
+		deployJob.Stop()
+
+	})
+
+	It("should sync report failure", func() {
+		application.Spec.Application.HelmSelector = &v1.HelmSelectorSpec{
+			Repository: "test-repo",
+			Chart:      "test-chart",
+			Version:    "1.0.0",
+		}
+		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+		deployJob = NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
+
+		deployJob.Run(jobContext)
+
+		waitForJobStatus(deployJob, string(v1.DeploymentStatusFailure))
+
+		status := deployJob.GetStatus()
+		status.LastTransitionTime = metav1.Time{}
+
+		Expect(status).To(Equal(
+			v1.ConditionStatus{
+				Type:               v1.DeploymenConditionType,
+				ZoneId:             "zone",
+				Status:             string(v1.DeploymentStatusFailure),
+				LastTransitionTime: metav1.Time{},
+				Msg:                "Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",
+			},
+		))
+
+		deployJob.Stop()
 
 	})
 

@@ -69,7 +69,7 @@ func (job *LocalOperationJob) Run(context types.AsyncJobContext) {
 
 		job.runInner(context)
 
-		ticker := time.NewTicker(job.runtimeConfig.LocalPollInterval)
+		ticker := time.NewTicker(job.runtimeConfig.PollOperationalStatusInterval)
 		defer ticker.Stop()
 
 		for {
@@ -86,27 +86,36 @@ func (job *LocalOperationJob) Run(context types.AsyncJobContext) {
 func (job *LocalOperationJob) runInner(context types.AsyncJobContext) {
 	syncManager := context.GetSyncManager()
 
-	syncResult, err := syncManager.Sync(context.GetGoContext(), job.application)
-	healthStatus := syncResult.Status
+	healthStatus := syncManager.GetAggregatedStatus(job.application)
+	job.status = healthStatus.Status
+	job.msg = healthStatus.Message
 
-	if err != nil {
-		job.Fail(context, err.Error())
-		return
-	} else {
-		job.Success(context, healthStatus)
+	switch healthStatus.Status {
+	case health.HealthStatusHealthy, health.HealthStatusProgressing:
+		job.Success(context)
+	case health.HealthStatusDegraded, health.HealthStatusUnknown:
+		job.Fail(context)
+	case health.HealthStatusMissing:
+		syncResult, err := syncManager.Sync(context.GetGoContext(), job.application)
+		if err != nil {
+			job.status = health.HealthStatusDegraded
+			job.msg = "Cannot sync application: " + err.Error()
+			job.Fail(context)
+		} else {
+			job.status = syncResult.Status.Status
+			job.msg = syncResult.Status.Message
+			job.Success(context)
+		}
 	}
 }
 
 func (job *LocalOperationJob) Stop() {
 	job.stopped.Store(true)
-	close(job.stopCh)
+	job.stopCh <- struct{}{}
 	job.wg.Wait()
 }
 
-func (job *LocalOperationJob) Fail(context types.AsyncJobContext, msg string) {
-	job.msg = msg
-	job.status = health.HealthStatusDegraded
-
+func (job *LocalOperationJob) Fail(context types.AsyncJobContext) {
 	statusUpdater := status.NewStatusUpdater(
 		context.GetGoContext(),
 		job.log.WithName("StatusUpdater"),
@@ -123,8 +132,7 @@ func (job *LocalOperationJob) Fail(context types.AsyncJobContext, msg string) {
 	}
 }
 
-func (job *LocalOperationJob) Success(context types.AsyncJobContext, healthStatus *health.HealthStatus) {
-	job.status = healthStatus.Status
+func (job *LocalOperationJob) Success(context types.AsyncJobContext) {
 	statusUpdater := status.NewStatusUpdater(
 		context.GetGoContext(),
 		job.log.WithName("StatusUpdater"),

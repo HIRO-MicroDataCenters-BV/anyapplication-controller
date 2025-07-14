@@ -109,6 +109,19 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	result := r.Reconciler.DoReconcile(globalApplication)
 
 	r.Log.Info("reconciler", "result status", result)
+
+	result.JobsToAdd.ForEach(func(newJob types.AsyncJob) {
+		applicationId := newJob.GetJobID().ApplicationId
+		currentJobOpt := r.Jobs.GetCurrent(applicationId)
+		if currentJob, exists := currentJobOpt.Get(); exists {
+			r.Log.Info("Stopping job", "jobId", currentJob.GetJobID())
+			r.Jobs.Stop(applicationId)
+		}
+	})
+
+	ctrlResult := ctrl.Result{}
+	err = nil
+
 	if result.Status.IsPresent() {
 		stopRetrying := atomic.Bool{}
 		newStatus := result.Status.OrEmpty()
@@ -127,21 +140,20 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		})
 		if err != nil {
 			r.Log.Error(err, "failed to update status: requeuing")
-			return ctrl.Result{
+			ctrlResult = ctrl.Result{
 				Requeue:      true,
 				RequeueAfter: 1 * time.Second,
-			}, err
+			}
+
 		}
 	}
 
 	result.JobsToAdd.ForEach(func(newJob types.AsyncJob) {
-		applicationId := newJob.GetJobID().ApplicationId
-		r.Jobs.Stop(applicationId)
 		r.Log.Info("Starting job", "jobId", newJob.GetJobID())
 		r.Jobs.Execute(newJob)
 	})
 
-	return ctrl.Result{}, nil
+	return ctrlResult, err
 }
 
 func (r *AnyApplicationReconciler) InitializeState(ctx context.Context, resourceName client.ObjectKey) (ctrl.Result, error) {
@@ -251,28 +263,35 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 		updated = true
 	}
 
-	zoneStatus := currentStatus.GetOrCreateStatusFor(zone)
-	newZoneStatus := newStatus.GetOrCreateStatusFor(zone)
+	zoneStatus, currentExists := currentStatus.GetStatusFor(zone)
+	newZoneStatus, exists := newStatus.GetStatusFor(zone)
 
-	if newZoneStatus.Conditions != nil {
-		for _, newCondition := range newZoneStatus.Conditions {
-			found := false
-			for i, existingCondition := range zoneStatus.Conditions {
-				if existingCondition.Type == newCondition.Type && existingCondition.ZoneId == newCondition.ZoneId {
-					if existingCondition.LastTransitionTime.Time.Before(newCondition.LastTransitionTime.Time) {
-						if existingCondition.Status != newCondition.Status {
-							zoneStatus.Conditions[i] = newCondition
-							updated = true
+	if exists {
+		if !currentExists {
+			zoneStatus = currentStatus.GetOrCreateStatusFor(zone)
+		}
+		if newZoneStatus.Conditions != nil {
+			for _, newCondition := range newZoneStatus.Conditions {
+				found := false
+				for i, existingCondition := range zoneStatus.Conditions {
+					if existingCondition.Type == newCondition.Type && existingCondition.ZoneId == newCondition.ZoneId {
+						if existingCondition.LastTransitionTime.Time.Before(newCondition.LastTransitionTime.Time) {
+							if existingCondition.Status != newCondition.Status {
+								zoneStatus.Conditions[i] = newCondition
+								updated = true
+							}
 						}
+						found = true
 					}
-					found = true
+				}
+				if !found {
+					zoneStatus.Conditions = append(zoneStatus.Conditions, newCondition)
+					updated = true
 				}
 			}
-			if !found {
-				zoneStatus.Conditions = append(zoneStatus.Conditions, newCondition)
-				updated = true
-			}
 		}
+	} else {
+		currentStatus.RemoveZone(zone)
 	}
 	event := events.Event{Reason: reason, Msg: msg}
 	return updated, event
