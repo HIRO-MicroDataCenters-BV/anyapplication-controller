@@ -2,13 +2,16 @@ package job
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	dcpv1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/controller/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -97,4 +100,14 @@ func getFirstFoundEnvTestBinaryDir() string {
 		}
 	}
 	return ""
+}
+
+func waitForJobStatus(job types.AsyncJob, status string) {
+	for i := 0; i < 40; i++ {
+		time.Sleep(300 * time.Millisecond)
+		if job.GetStatus().Status == status {
+			return
+		}
+	}
+	Fail(fmt.Sprintf("Expected status %s, but got %s, object %v\n", status, job.GetStatus().Status, job.GetStatus()))
 }

@@ -2,7 +2,6 @@ package job
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
@@ -137,31 +136,11 @@ var _ = Describe("UndeployJob", func() {
 		deployJob := NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
 		deployJob.Run(jobContext)
 
-		waitForDeploymentStatus(deployJob, string(v1.DeploymentStatusDone))
+		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
 
 		undeployJob.Run(jobContext)
 
-		// result := &v1.AnyApplication{}
-		// _ = kubeClient.Get(jobContext.GetGoContext(), client.ObjectKeyFromObject(application), result)
-
-		// Expect(result.Status.Zones).To(Equal(
-		// 	[]v1.ZoneStatus{
-		// 		{
-		// 			ZoneId:      "zone",
-		// 			ZoneVersion: 1000,
-		// 			Conditions: []v1.ConditionStatus{
-		// 				{
-		// 					Type:               v1.UndeploymenConditionType,
-		// 					ZoneId:             "zone",
-		// 					Status:             string(v1.UndeploymentStatusDone),
-		// 					LastTransitionTime: fakeClock.NowTime(),
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// ))
-
-		waitForUndeploymentStatus(undeployJob, string(v1.UndeploymentStatusDone))
+		waitForJobStatus(undeployJob, string(v1.UndeploymentStatusDone))
 
 		status := undeployJob.GetStatus()
 		status.LastTransitionTime = metav1.Time{}
@@ -179,13 +158,3 @@ var _ = Describe("UndeployJob", func() {
 	})
 
 })
-
-func waitForUndeploymentStatus(job *UndeployJob, status string) {
-	for i := 0; i < 20; i++ {
-		time.Sleep(300 * time.Millisecond)
-		if job.GetStatus().Status == status {
-			return
-		}
-	}
-	Fail(fmt.Sprintf("Expected status %s, but got %s, object %v\n", status, job.GetStatus().Status, job.GetStatus()))
-}

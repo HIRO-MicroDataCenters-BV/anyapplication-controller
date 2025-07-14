@@ -1,7 +1,6 @@
 package job
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
@@ -137,12 +136,12 @@ var _ = Describe("LocalOperationJob", func() {
 
 		deployJob := NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
 		deployJob.Run(jobContext)
-		waitForDeploymentStatus(deployJob, string(v1.DeploymentStatusDone))
+		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
 		deployJob.Stop()
 
 		operationJob.Run(jobContext)
 
-		waitForStatus(operationJob, health.HealthStatusProgressing)
+		waitForJobStatus(operationJob, string(health.HealthStatusProgressing))
 
 		status := operationJob.GetStatus()
 		status.LastTransitionTime = metav1.Time{}
@@ -162,13 +161,3 @@ var _ = Describe("LocalOperationJob", func() {
 	})
 
 })
-
-func waitForStatus(job *LocalOperationJob, status health.HealthStatusCode) {
-	for i := 0; i < 20; i++ {
-		time.Sleep(100 * time.Millisecond)
-		if job.GetStatus().Status == string(status) {
-			return
-		}
-	}
-	Fail(fmt.Sprintf("Expected status %s, but got %s", status, job.GetStatus().Status))
-}

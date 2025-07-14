@@ -1,7 +1,6 @@
 package job
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
@@ -131,7 +130,7 @@ var _ = Describe("DeployJob", func() {
 		context := NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
 
 		deployJob.Run(context)
-		waitForDeploymentStatus(deployJob, string(v1.DeploymentStatusDone))
+		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
 
 		status := deployJob.GetStatus()
 		status.LastTransitionTime = metav1.Time{}
@@ -160,7 +159,7 @@ var _ = Describe("DeployJob", func() {
 
 		deployJob.Run(jobContext)
 
-		waitForDeploymentStatus(deployJob, string(v1.DeploymentStatusFailure))
+		waitForJobStatus(deployJob, string(v1.DeploymentStatusFailure))
 
 		status := deployJob.GetStatus()
 		status.LastTransitionTime = metav1.Time{}
@@ -180,14 +179,3 @@ var _ = Describe("DeployJob", func() {
 	})
 
 })
-
-func waitForDeploymentStatus(job *DeployJob, status string) {
-	for i := 0; i < 20; i++ {
-		time.Sleep(300 * time.Millisecond)
-		fmt.Printf("status %v \n", job.GetStatus().Status)
-		if job.GetStatus().Status == status {
-			return
-		}
-	}
-	Fail(fmt.Sprintf("Expected status %s, but got %s", status, job.GetStatus().Status))
-}
