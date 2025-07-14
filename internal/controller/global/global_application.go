@@ -1,8 +1,6 @@
 package global
 
 import (
-	"fmt"
-
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
@@ -55,6 +53,11 @@ func (g *globalApplication) IsDeployed() bool {
 	return false
 }
 
+func (g *globalApplication) IsPresent() bool {
+	_, present := g.locaApplication.Get()
+	return present
+}
+
 func (g *globalApplication) HasZoneStatus() bool {
 	return g.application.HasZoneStatus(g.config.ZoneId)
 }
@@ -65,7 +68,7 @@ func (g *globalApplication) DeriveNewStatus(
 ) types.StatusResult {
 
 	current := &g.application.Status
-	fmt.Printf("## Reconciler: before DeriveNewStatus status %v\n", current)
+
 	if current.State == "" {
 		current.Owner = g.config.ZoneId
 		current.State = v1.NewGlobalState
@@ -73,6 +76,7 @@ func (g *globalApplication) DeriveNewStatus(
 	runningJobType := jobConditions.GetJobType()
 
 	stateUpdated := false
+
 	// Update local application status if exists
 	if localApp, exists := g.locaApplication.Get(); exists {
 		if localApp.IsDeployed() {
@@ -82,11 +86,11 @@ func (g *globalApplication) DeriveNewStatus(
 		}
 	}
 
-	// Update loca job conditions
+	// Update local job conditions
 	stateUpdated = updateJobConditions(current, jobConditions, g.config.ZoneId) || stateUpdated
 
 	// Update state
-	globalStateUpdated, nextJobs := updateState(g.application, g.config, jobFactory, g.IsDeployed(), runningJobType)
+	globalStateUpdated, nextJobs := updateState(g.application, g.config, jobFactory, g.IsDeployed(), g.IsPresent(), runningJobType)
 
 	stateUpdated = globalStateUpdated || stateUpdated
 
@@ -103,29 +107,31 @@ func updateState(
 	applicationMut *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
 	jobFactory types.AsyncJobFactory,
-	applicationResourcesAvailable bool,
+	applicationDeployed bool,
+	applicationPresent bool,
 	runningJobType mo.Option[types.AsyncJobType],
 ) (bool, types.NextJobs) {
 	status := &applicationMut.Status
 	nextJobs := types.NextJobs{}
 	stateUpdated := false
-	fmt.Printf("## global app: before local: applicationResourcesAvailable %v, status: %v \n", applicationResourcesAvailable, status)
-	if placementsContainZone(status, config.ZoneId) || applicationResourcesAvailable || status.ZoneExists(config.ZoneId) {
+
+	if placementsContainZone(status, config.ZoneId) || applicationPresent || status.ZoneExists(config.ZoneId) {
 		stateUpdated, nextJobs = localStateMachine(
 			applicationMut,
 			config,
 			jobFactory,
-			applicationResourcesAvailable,
+			applicationDeployed,
+			applicationPresent,
 			runningJobType,
 		)
 	}
-	fmt.Printf("## global app: after local, status %v\n", applicationMut.Status)
+
 	if status.Owner == config.ZoneId {
 		globalStateUpdated, globalJobs := globalStateMachine(
 			applicationMut,
 			config,
 			jobFactory,
-			applicationResourcesAvailable,
+			applicationDeployed,
 			runningJobType,
 		)
 		stateUpdated = stateUpdated || globalStateUpdated
@@ -189,19 +195,18 @@ func localStateMachine(
 	applicationMut *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
 	jobFactory types.AsyncJobFactory,
-	applicationResourcesAvailable bool,
+	applicationDeployed bool,
+	applicationResourcesPresent bool,
 	runningJobType mo.Option[types.AsyncJobType],
 ) (bool, types.NextJobs) {
 
 	stateUpdated := false
 
-	fsm := NewLocalFSM(applicationMut, config, jobFactory, applicationResourcesAvailable, runningJobType)
+	fsm := NewLocalFSM(applicationMut, config, jobFactory, applicationResourcesPresent, applicationDeployed, runningJobType)
 	nextStateResult := fsm.NextState()
 
 	conditionsToAdd, conditionsToRemove := nextStateResult.ConditionsToAdd, nextStateResult.ConditionsToRemove
 	jobs := nextStateResult.Jobs
-	c, ok := conditionsToAdd.Get()
-	fmt.Printf("## localStateMachine conditionsToAdd: %v, %v \n", c, ok)
 
 	// TODO pick condition from jobs
 	for _, condition := range conditionsToRemove {

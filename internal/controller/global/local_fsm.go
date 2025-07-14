@@ -8,12 +8,13 @@ import (
 )
 
 type LocalFSM struct {
-	application        *v1.AnyApplication
-	recoverStrategy    *v1.RecoverStrategySpec
-	config             *config.ApplicationRuntimeConfig
-	jobFactory         types.AsyncJobFactory
-	applicationPresent bool
-	runningJobType     mo.Option[types.AsyncJobType]
+	application         *v1.AnyApplication
+	recoverStrategy     *v1.RecoverStrategySpec
+	config              *config.ApplicationRuntimeConfig
+	jobFactory          types.AsyncJobFactory
+	applicationPresent  bool
+	applicationDeployed bool
+	runningJobType      mo.Option[types.AsyncJobType]
 }
 
 func NewLocalFSM(
@@ -21,6 +22,7 @@ func NewLocalFSM(
 	config *config.ApplicationRuntimeConfig,
 	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
+	applicationDeployed bool,
 	runningJobType mo.Option[types.AsyncJobType],
 ) LocalFSM {
 	recoverStrategy := &application.Spec.RecoverStrategy
@@ -30,6 +32,7 @@ func NewLocalFSM(
 		config,
 		jobFactory,
 		applicationPresent,
+		applicationDeployed,
 		runningJobType,
 	}
 }
@@ -37,19 +40,29 @@ func NewLocalFSM(
 func (g *LocalFSM) NextState() types.NextStateResult {
 	status := &g.application.Status
 
-	if !placementsContainZone(status, g.config.ZoneId) && g.applicationPresent {
+	placementsContainZone := placementsContainZone(status, g.config.ZoneId)
+
+	if !placementsContainZone && g.applicationPresent {
 		return g.handleUndeploy()
 	}
 
-	zoneStatus := status.GetOrCreateStatusFor(g.config.ZoneId)
-
-	isDeploymentSucceeded := deploymentSuccessfull(zoneStatus, g.config.ZoneId)
-	if placementsContainZone(status, g.config.ZoneId) && !isDeploymentSucceeded {
-		return g.handleDeploy()
+	if placementsContainZone {
+		if !g.applicationDeployed {
+			return g.handleDeploy()
+		} else {
+			return g.handleOperation()
+		}
 	}
 
-	if placementsContainZone(status, g.config.ZoneId) {
-		return g.handleOperation()
+	if !placementsContainZone && !g.applicationDeployed && !g.applicationPresent {
+		if zoneStatus, exists := status.GetStatusFor(g.config.ZoneId); exists {
+			conditionsToRemove := make([]*v1.ConditionStatus, 0)
+			for _, condition := range zoneStatus.Conditions {
+				conditionsToRemove = append(conditionsToRemove, &condition)
+			}
+			return types.NextStateResult{ConditionsToRemove: conditionsToRemove}
+
+		}
 	}
 	return types.NextStateResult{}
 }
@@ -61,8 +74,7 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.LocalConditionType, g.config.ZoneId)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymenConditionType, g.config.ZoneId)
 
-	isDeploymentSucceeded := deploymentSuccessfull(status, g.config.ZoneId)
-	if !g.applicationPresent && !isDeploymentSucceeded {
+	if !g.applicationPresent && !g.applicationDeployed {
 		if !g.isRunning(types.AsyncJobTypeDeploy) {
 			deployJob := g.jobFactory.CreateDeployJob(g.application)
 			deployJobOpt := mo.Some(deployJob)
@@ -120,6 +132,8 @@ func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 					Jobs:               types.NextJobs{JobsToAdd: undeployJobOpt},
 				}
 			}
+		} else if found && undeploymentCondition.Status == string(v1.UndeploymentStatusDone) {
+			conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymenConditionType, g.config.ZoneId)
 		}
 	}
 
@@ -134,9 +148,7 @@ func (g *LocalFSM) handleOperation() types.NextStateResult {
 	conditionsToRemove := make([]*v1.ConditionStatus, 0)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymenConditionType, g.config.ZoneId)
 
-	isDeploymentSucceeded := deploymentSuccessfull(status, g.config.ZoneId)
-
-	if isDeploymentSucceeded && !g.isRunning(types.AsyncJobTypeLocalOperation) {
+	if g.applicationDeployed && !g.isRunning(types.AsyncJobTypeLocalOperation) {
 		operationJob := g.jobFactory.CreateOperationJob(g.application)
 		operationCondition := operationJob.GetStatus()
 
@@ -160,12 +172,6 @@ func (g *LocalFSM) handleOperation() types.NextStateResult {
 
 func (g *LocalFSM) isRunning(jobType types.AsyncJobType) bool {
 	return g.runningJobType.OrEmpty() == jobType
-}
-
-func deploymentSuccessfull(zoneStatus *v1.ZoneStatus, zoneId string) bool {
-	conditions := zoneStatus.Conditions
-	deploymentCondition, deploymentConditionFound := getCondition(conditions, v1.DeploymenConditionType, zoneId)
-	return deploymentConditionFound && deploymentCondition.Status == string(v1.DeploymentStatusDone)
 }
 
 func addConditionToRemoveList(

@@ -33,6 +33,9 @@ var _ = Describe("GlobalApplication", func() {
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
 			jobFactory := job.NewAsyncJobFactory(runtimeConfig, fakeClock, logf.Log, &events)
 
+			Expect(globalApplication.IsDeployed()).To(BeFalse())
+			Expect(globalApplication.IsPresent()).To(BeFalse())
+
 			statusResult := globalApplication.DeriveNewStatus(types.EmptyJobConditions(), jobFactory)
 			status := statusResult.Status.OrEmpty()
 			jobs := statusResult.Jobs
@@ -76,6 +79,10 @@ var _ = Describe("GlobalApplication", func() {
 			localApplication := mo.None[local.LocalApplication]()
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
 			existingJobCondition := types.EmptyJobConditions()
+
+			Expect(globalApplication.IsDeployed()).To(BeFalse())
+			Expect(globalApplication.IsPresent()).To(BeFalse())
+
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 
 			status := statusResult.Status.OrEmpty()
@@ -134,6 +141,9 @@ var _ = Describe("GlobalApplication", func() {
 
 			localApplication := mo.None[local.LocalApplication]()
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+
+			Expect(globalApplication.IsDeployed()).To(BeFalse())
+			Expect(globalApplication.IsPresent()).To(BeFalse())
 
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 
@@ -215,6 +225,9 @@ var _ = Describe("GlobalApplication", func() {
 			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock))
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
 
+			Expect(globalApplication.IsDeployed()).To(BeTrue())
+			Expect(globalApplication.IsPresent()).To(BeTrue())
+
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 
 			status := statusResult.Status.OrEmpty()
@@ -290,6 +303,9 @@ var _ = Describe("GlobalApplication", func() {
 
 			localApplication := mo.None[local.LocalApplication]()
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+
+			Expect(globalApplication.IsDeployed()).To(BeFalse())
+			Expect(globalApplication.IsPresent()).To(BeFalse())
 
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 
@@ -376,6 +392,9 @@ var _ = Describe("GlobalApplication", func() {
 
 			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock))
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+
+			Expect(globalApplication.IsDeployed()).To(BeTrue())
+			Expect(globalApplication.IsPresent()).To(BeTrue())
 
 			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
 

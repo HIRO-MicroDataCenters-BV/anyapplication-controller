@@ -2,7 +2,8 @@ peers:
   - url: localhost:8080
 runtime:
   zone: kind-kind-cluster1
-  localPollDuration: 10s
+  operationalPollDuration: 5s
+  syncPollDuration: 10s
 cache:
   excludes:
     - projectcalico.org/FelixConfiguration
