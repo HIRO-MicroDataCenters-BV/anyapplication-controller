@@ -11,6 +11,7 @@ import (
 type SyncResult struct {
 	Status                       *health.HealthStatus
 	ApplicationResourcesDeployed bool
+	ApplicationResourcesPresent  bool
 	OperationPhaseStats          map[common.OperationPhase]int
 	SyncPhaseStats               map[common.SyncPhase]int
 	ResultCodeStats              map[common.ResultCode]int
@@ -30,6 +31,7 @@ func NewSyncResult() *SyncResult {
 		SyncPhaseStats:               make(map[common.SyncPhase]int),
 		ResultCodeStats:              make(map[common.ResultCode]int),
 		ApplicationResourcesDeployed: false,
+		ApplicationResourcesPresent:  false,
 	}
 }
 

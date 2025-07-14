@@ -115,7 +115,6 @@ func (m *syncManager) render(application *v1.AnyApplication) (*cachedApp, error)
 	if err != nil {
 		return nil, errors.Wrap(err, "Helm template failure")
 	}
-
 	objs, err := kube.SplitYAML([]byte(template))
 	if err != nil {
 		return nil, errors.Wrap(err, "Fail to split YAML")
@@ -153,12 +152,14 @@ func (m *syncManager) sync(ctx context.Context, app *cachedApp) (*types.SyncResu
 	localApplicationOpt, err := m.loadLocalApplication(app.application)
 	localApplication, exists := localApplicationOpt.Get()
 	if err == nil {
+		syncResult.ApplicationResourcesPresent = exists
 		if exists {
 			syncResult.ApplicationResourcesDeployed = localApplication.IsDeployed()
 		}
 	} else {
 		m.log.Error(err, "Failed to load local application")
 		syncResult.ApplicationResourcesDeployed = false
+		syncResult.ApplicationResourcesPresent = false
 	}
 	return syncResult, nil
 }
@@ -315,7 +316,7 @@ func (m *syncManager) loadLocalApplication(application *v1.AnyApplication) (mo.O
 	expectedResources := app.resources
 	availableResources := m.findAvailableApplicationResources(application)
 	version := application.ResourceVersion
-	localApplication, err := local.NewFromUnstructured(version, availableResources, expectedResources, m.config, m.clock)
+	localApplication, err := local.NewFromUnstructured(version, availableResources, expectedResources, m.config, m.clock, m.log)
 	if err != nil {
 		return mo.None[local.LocalApplication](), errors.Wrap(err, "Fail to create local application")
 	}
