@@ -5,11 +5,13 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 type LogFetcher interface {
 	FetchLogs(ctx context.Context, namespace, podName, containerName string, previous bool) (string, error)
+	FetchEvents(ctx context.Context, namespace string) (*corev1.EventList, error)
 }
 
 type RealLogFetcher struct {
@@ -18,6 +20,16 @@ type RealLogFetcher struct {
 
 func NewRealLogFetcher(client kubernetes.Interface) *RealLogFetcher {
 	return &RealLogFetcher{client: client}
+}
+
+func (r *RealLogFetcher) FetchEvents(
+	ctx context.Context, namespace string,
+) (*corev1.EventList, error) {
+	events, err := r.client.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return events, nil
 }
 
 func (r *RealLogFetcher) FetchLogs(
