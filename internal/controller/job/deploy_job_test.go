@@ -1,38 +1,19 @@
 package job
 
 import (
-	"time"
-
-	"github.com/argoproj/gitops-engine/pkg/cache"
-	"github.com/argoproj/gitops-engine/pkg/engine"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"helm.sh/helm/v3/pkg/chartutil"
 	v1 "hiro.io/anyapplication/api/v1"
-	"hiro.io/anyapplication/internal/clock"
-	"hiro.io/anyapplication/internal/config"
-	"hiro.io/anyapplication/internal/controller/events"
-	"hiro.io/anyapplication/internal/controller/sync"
-	types "hiro.io/anyapplication/internal/controller/types"
-	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2/textlogger"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("DeployJob", func() {
 	var (
-		deployJob     *DeployJob
-		helmClient    helm.HelmClient
-		application   *v1.AnyApplication
-		scheme        *runtime.Scheme
-		theClock      clock.Clock
-		runtimeConfig config.ApplicationRuntimeConfig
-		syncManager   types.SyncManager
-		fakeEvents    events.Events
-		stopFunc      engine.StopFunc
+		deployJob   *DeployJob
+		application *v1.AnyApplication
+		scheme      *runtime.Scheme
 	)
 
 	BeforeEach(func() {
@@ -65,53 +46,7 @@ var _ = Describe("DeployJob", func() {
 			},
 		}
 
-		pollSyncStatusInterval, _ := time.ParseDuration("1000ms")
-		runtimeConfig = config.ApplicationRuntimeConfig{
-			ZoneId:                 "zone",
-			PollSyncStatusInterval: pollSyncStatusInterval,
-		}
-		var err error
-		helmClient, err = helm.NewHelmClient(&helm.HelmClientOptions{
-			RestConfig: cfg,
-			Debug:      false,
-			Linting:    true,
-			KubeVersion: &chartutil.KubeVersion{
-				Version: "v1.23.10",
-				Major:   "1",
-				Minor:   "23",
-			},
-			UpgradeCRDs: true,
-		})
-		if err != nil {
-			panic("error " + err.Error())
-		}
-
-		theClock = clock.NewClock()
-		fakeEvents = events.NewFakeEvents()
-		log := textlogger.NewLogger(textlogger.NewConfig())
-		clusterCache := cache.NewClusterCache(cfg,
-			cache.SetLogr(log),
-			cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
-				managedByMark := un.GetLabels()["dcp.hiro.io/managed-by"]
-				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()["dcp.hiro.io/managed-by"]}
-				// cache resources that has that mark to improve performance
-				cacheManifest = managedByMark != ""
-				return
-			}),
-		)
-		gitOpsEngine := engine.NewEngine(cfg, clusterCache, engine.WithLogr(log))
-		stopFunc, err = gitOpsEngine.Run()
-		if err != nil {
-			panic("error " + err.Error())
-		}
-
-		syncManager = sync.NewSyncManager(k8sClient, helmClient, clusterCache, theClock, &runtimeConfig, gitOpsEngine, logf.Log)
-
 		deployJob = NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
-	})
-
-	AfterEach(func() {
-		stopFunc()
 	})
 
 	It("should return initial status", func() {
@@ -127,9 +62,9 @@ var _ = Describe("DeployJob", func() {
 	})
 
 	It("Deployment should run and apply done status", func() {
-		context := NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
 
-		deployJob.Run(context)
+		deployJob.Run(jobContext)
 		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
 
 		status := deployJob.GetStatus()
@@ -154,7 +89,7 @@ var _ = Describe("DeployJob", func() {
 			Chart:      "test-chart",
 			Version:    "1.0.0",
 		}
-		jobContext := NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
 		deployJob = NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
 
 		deployJob.Run(jobContext)
