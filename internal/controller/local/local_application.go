@@ -2,6 +2,7 @@ package local
 
 import (
 	"github.com/argoproj/gitops-engine/pkg/health"
+	"github.com/go-logr/logr"
 	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
@@ -24,11 +25,12 @@ func NewFromUnstructured(
 	expectedResources []*unstructured.Unstructured,
 	config *config.ApplicationRuntimeConfig,
 	clock clock.Clock,
+	log logr.Logger,
 ) (mo.Option[LocalApplication], error) {
 	if len(availableResources) == 0 {
 		return mo.None[LocalApplication](), nil
 	}
-	bundle, err := LoadApplicationBundle(availableResources, expectedResources)
+	bundle, err := LoadApplicationBundle(availableResources, expectedResources, log)
 	if err != nil {
 		return mo.None[LocalApplication](), err
 	}

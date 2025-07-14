@@ -5,16 +5,27 @@ import (
 	"log"
 
 	health "github.com/argoproj/gitops-engine/pkg/health"
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type ApplicationBundle struct {
-	resources []*unstructured.Unstructured
+	availableResources []*unstructured.Unstructured
+	expectedResources  []*unstructured.Unstructured
+	log                logr.Logger
 }
 
-func LoadApplicationBundle(resources []*unstructured.Unstructured) (ApplicationBundle, error) {
+func LoadApplicationBundle(
+	availableResources []*unstructured.Unstructured,
+	expectedResources []*unstructured.Unstructured,
+	log logr.Logger,
+) (ApplicationBundle, error) {
 	return ApplicationBundle{
-		resources: resources,
+		availableResources: availableResources,
+		expectedResources:  expectedResources,
+		log:                log,
 	}, nil
 }
 
@@ -31,7 +42,8 @@ func Deserialize(data string) (ApplicationBundle, error) {
 func (bundle *ApplicationBundle) UnmarshalJSON(data []byte) error {
 	type Alias ApplicationBundle
 	aux := &struct {
-		Resources []unstructured.Unstructured `json:"resources"`
+		AvailableResources []unstructured.Unstructured `json:"availableResources"`
+		ExpectedResources  []unstructured.Unstructured `json:"expectedResources"`
 		*Alias
 	}{
 		Alias: (*Alias)(bundle),
@@ -39,7 +51,10 @@ func (bundle *ApplicationBundle) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	bundle.resources = Map(aux.Resources, func(r unstructured.Unstructured) *unstructured.Unstructured {
+	bundle.availableResources = Map(aux.AvailableResources, func(r unstructured.Unstructured) *unstructured.Unstructured {
+		return &r
+	})
+	bundle.expectedResources = Map(aux.ExpectedResources, func(r unstructured.Unstructured) *unstructured.Unstructured {
 		return &r
 	})
 	return nil
@@ -57,10 +72,14 @@ func (bundle *ApplicationBundle) Serialize() (string, error) {
 func (bundle ApplicationBundle) MarshalJSON() ([]byte, error) {
 	type Alias ApplicationBundle
 	return json.Marshal(&struct {
-		Resources []unstructured.Unstructured `json:"resources"`
+		AvailableResources []unstructured.Unstructured `json:"availableResources"`
+		ExpectedResources  []unstructured.Unstructured `json:"expectedResources"`
 		*Alias
 	}{
-		Resources: Map(bundle.resources, func(r *unstructured.Unstructured) unstructured.Unstructured {
+		AvailableResources: Map(bundle.availableResources, func(r *unstructured.Unstructured) unstructured.Unstructured {
+			return *r
+		}),
+		ExpectedResources: Map(bundle.expectedResources, func(r *unstructured.Unstructured) unstructured.Unstructured {
 			return *r
 		}),
 		Alias: (*Alias)(&bundle),
@@ -75,9 +94,42 @@ func Map[T any, R any](slice []T, f func(T) R) []R {
 	return result
 }
 
+func (bundle *ApplicationBundle) IsDeployed() bool {
+	// Check if all expected resources are present in the available resources
+	availableResourceMap := bundle.toResourceMap(bundle.availableResources)
+	for _, expectedItem := range bundle.expectedResources {
+		gvk := expectedItem.GetObjectKind().GroupVersionKind()
+		name := types.NamespacedName{
+			Namespace: expectedItem.GetNamespace(),
+			Name:      expectedItem.GetName(),
+		}
+		if _, exists := availableResourceMap[gvk][name]; !exists {
+			bundle.log.Info("Resource is missing: {gvk} {namespace}/{name}\n",
+				"gvk", gvk.String(), "namespace", name.Namespace, "name", name.Name)
+			return false // Resource is missing
+		}
+	}
+	return true // All expected resources are present
+}
+
 func (bundle *ApplicationBundle) DetermineState() (health.HealthStatusCode, []string, error) {
-	resourceStatuses, err := foldLeft(bundle.resources, make([]health.HealthStatus, 0),
-		func(acc []health.HealthStatus, item *unstructured.Unstructured) ([]health.HealthStatus, error) {
+	availableResourceMap := bundle.toResourceMap(bundle.availableResources)
+	resourceStatuses, err := foldLeft(bundle.expectedResources, make([]health.HealthStatus, 0),
+		func(acc []health.HealthStatus, expectedItem *unstructured.Unstructured) ([]health.HealthStatus, error) {
+			gvk := expectedItem.GetObjectKind().GroupVersionKind()
+			name := types.NamespacedName{
+				Namespace: expectedItem.GetNamespace(),
+				Name:      expectedItem.GetName(),
+			}
+			item, exists := availableResourceMap[gvk][name]
+			if !exists {
+				// Resource is missing, return an error status
+				acc = append(acc, health.HealthStatus{
+					Status:  health.HealthStatusMissing,
+					Message: "Resource is missing: " + gvk.String() + " " + name.String(),
+				})
+				return acc, nil
+			}
 			status, err := determineResourceState(item)
 			if err != nil {
 				return acc, err
@@ -87,6 +139,7 @@ func (bundle *ApplicationBundle) DetermineState() (health.HealthStatusCode, []st
 			}
 			return acc, nil
 		})
+
 	if err != nil {
 		return health.HealthStatusUnknown, nil, err
 	}
@@ -110,6 +163,29 @@ func (bundle *ApplicationBundle) DetermineState() (health.HealthStatusCode, []st
 	)
 
 	return healthStatus, messages, nil
+}
+
+func (bundle *ApplicationBundle) toResourceMap(
+	availableResources []*unstructured.Unstructured,
+) map[schema.GroupVersionKind]map[types.NamespacedName]*unstructured.Unstructured {
+
+	availableResourceMap := make(map[schema.GroupVersionKind]map[types.NamespacedName]*unstructured.Unstructured)
+	for _, resource := range availableResources {
+		gvk := resource.GetObjectKind().GroupVersionKind()
+		name := types.NamespacedName{
+			Namespace: resource.GetNamespace(),
+			Name:      resource.GetName(),
+		}
+		if _, exists := availableResourceMap[gvk]; !exists {
+			availableResourceMap[gvk] = make(map[types.NamespacedName]*unstructured.Unstructured)
+		}
+		if _, exists := availableResourceMap[gvk][name]; exists {
+			bundle.log.Info("Duplicate resource found: %s %s/%s", gvk.String(), name.Namespace, name.Name)
+			continue // Skip duplicates
+		}
+		availableResourceMap[gvk][name] = resource
+	}
+	return availableResourceMap
 }
 
 func determineResourceState(resource *unstructured.Unstructured) (*health.HealthStatus, error) {
