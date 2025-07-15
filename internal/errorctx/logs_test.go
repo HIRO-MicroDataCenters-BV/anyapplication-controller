@@ -2,7 +2,6 @@ package errorctx
 
 import (
 	"context"
-	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -60,7 +59,6 @@ var _ = Describe("RealLogFetcher", func() {
 	It("should return event contents successfully", func() {
 		events, err := fetcher.FetchEvents(ctx, "default")
 
-		fmt.Printf("Fetched events: %+v\n", events)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(events).To(Equal(eventData))
 	})
