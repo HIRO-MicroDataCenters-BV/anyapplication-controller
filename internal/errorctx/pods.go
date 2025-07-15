@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
-	dcpv1 "hiro.io/anyapplication/api/v1"
+	httpapi "hiro.io/anyapplication/internal/httpapi"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -19,22 +19,22 @@ func NewK8sReportService(clusterCache cache.ClusterCache, logFetcher LogFetcher)
 	return &K8sReportService{clusterCache: clusterCache, logFetcher: logFetcher}
 }
 
-func (s *K8sReportService) GeneratePodReport(ctx context.Context, instanceId string, namespace string) (*dcpv1.PodReport, error) {
+func (s *K8sReportService) GeneratePodReport(ctx context.Context, instanceId string, namespace string) (*httpapi.PodReport, error) {
 
 	pods := s.getPods(instanceId)
 	events, err := s.logFetcher.FetchEvents(ctx, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("fetching events: %w", err)
 	}
-	report := &dcpv1.PodReport{}
+	report := &httpapi.PodReport{}
 
 	for _, pod := range pods {
-		podInfo := dcpv1.PodInfo{
+		podInfo := httpapi.PodInfo{
 			Name:     pod.Name,
 			Status:   string(pod.Status.Phase),
 			Restarts: 0,
-			Events:   []dcpv1.PodEvent{},
-			Logs:     []dcpv1.LogInfo{},
+			Events:   []httpapi.PodEvent{},
+			Logs:     []httpapi.LogInfo{},
 		}
 
 		for _, cs := range pod.Status.ContainerStatuses {
@@ -50,7 +50,7 @@ func (s *K8sReportService) GeneratePodReport(ctx context.Context, instanceId str
 			if logErr != nil {
 				logStr = fmt.Sprintf("Error fetching logs: %v", logErr)
 			}
-			podInfo.Logs = append(podInfo.Logs, dcpv1.LogInfo{
+			podInfo.Logs = append(podInfo.Logs, httpapi.LogInfo{
 				Container: cs.Name,
 				Log:       truncate(logStr, 1000),
 			})
@@ -58,7 +58,7 @@ func (s *K8sReportService) GeneratePodReport(ctx context.Context, instanceId str
 
 		for _, e := range events.Items {
 			if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == pod.Name && e.Type == "Warning" {
-				podInfo.Events = append(podInfo.Events, dcpv1.PodEvent{
+				podInfo.Events = append(podInfo.Events, httpapi.PodEvent{
 					Reason:    e.Reason,
 					Message:   e.Message,
 					Timestamp: e.FirstTimestamp.String(),

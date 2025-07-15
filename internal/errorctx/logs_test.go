@@ -16,7 +16,7 @@ import (
 var _ = Describe("RealLogFetcher", func() {
 	var (
 		fakeClient *k8sfake.Clientset
-		fetcher    *RealLogFetcher
+		fetcher    *logFetcher
 		ctx        context.Context
 		logData    = "fake logs"
 		eventData  *corev1.EventList

@@ -1,4 +1,4 @@
-package v1
+package httpapi
 
 type PodEvent struct {
 	Reason    string `json:"reason"`

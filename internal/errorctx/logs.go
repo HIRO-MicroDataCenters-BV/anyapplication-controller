@@ -14,15 +14,15 @@ type LogFetcher interface {
 	FetchEvents(ctx context.Context, namespace string) (*corev1.EventList, error)
 }
 
-type RealLogFetcher struct {
+type logFetcher struct {
 	client kubernetes.Interface
 }
 
-func NewRealLogFetcher(client kubernetes.Interface) *RealLogFetcher {
-	return &RealLogFetcher{client: client}
+func NewRealLogFetcher(client kubernetes.Interface) *logFetcher {
+	return &logFetcher{client: client}
 }
 
-func (r *RealLogFetcher) FetchEvents(
+func (r *logFetcher) FetchEvents(
 	ctx context.Context, namespace string,
 ) (*corev1.EventList, error) {
 	events, err := r.client.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
@@ -32,7 +32,7 @@ func (r *RealLogFetcher) FetchEvents(
 	return events, nil
 }
 
-func (r *RealLogFetcher) FetchLogs(
+func (r *logFetcher) FetchLogs(
 	ctx context.Context, namespace, podName, containerName string,
 	previous bool,
 ) (string, error) {
