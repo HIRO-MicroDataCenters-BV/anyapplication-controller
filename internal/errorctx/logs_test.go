@@ -38,11 +38,11 @@ var _ = Describe("RealLogFetcher", func() {
 			},
 		}
 
-		fakeClient.Fake.PrependReactor("get", "pods", func(action testing.Action) (handled bool, ret runtime.Object, err error) {
+		fakeClient.PrependReactor("get", "pods", func(action testing.Action) (handled bool, ret runtime.Object, err error) {
 			return false, nil, nil // Allow GetLogs to continue
 		})
 
-		fakeClient.Fake.PrependReactor("list", "events", func(action testing.Action) (handled bool, ret runtime.Object, err error) {
+		fakeClient.PrependReactor("list", "events", func(action testing.Action) (handled bool, ret runtime.Object, err error) {
 			return true, eventData, nil
 		})
 

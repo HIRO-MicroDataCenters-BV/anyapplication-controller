@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	types "hiro.io/anyapplication/internal/types"
 )
 
 type ApplicationApiOptions struct {
@@ -11,15 +13,17 @@ type ApplicationApiOptions struct {
 }
 
 type Server struct {
-	mux     *http.ServeMux
-	options ApplicationApiOptions
+	mux                *http.ServeMux
+	options            ApplicationApiOptions
+	applicationReports types.ApplicationReports
 }
 
 // NewServer creates and configures a new Server
-func NewHttpServer(options ApplicationApiOptions) *Server {
+func NewHttpServer(options ApplicationApiOptions, applicationReports types.ApplicationReports) *Server {
 	s := &Server{
-		mux:     http.NewServeMux(),
-		options: options,
+		mux:                http.NewServeMux(),
+		options:            options,
+		applicationReports: applicationReports,
 	}
 	s.routes()
 	return s
@@ -27,23 +31,25 @@ func NewHttpServer(options ApplicationApiOptions) *Server {
 
 // routes sets up the HTTP routes
 func (s *Server) routes() {
-	s.mux.HandleFunc("/application", s.handleGetApplication)
+	s.mux.HandleFunc("/status", s.handleGetApplicationErrorContext)
 }
 
-func (s *Server) handleGetApplication(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetApplicationErrorContext(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	obj := ApplicationBundle{
-		ID:   1,
-		Name: "Sample Object",
+	report, err := s.applicationReports.Fetch(r.Context(), "instanceId", "namespace")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
+	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(obj); err != nil {
+	if err := json.NewEncoder(w).Encode(report); err != nil {
 		log.Printf("failed to encode: %s", err)
 	}
 }

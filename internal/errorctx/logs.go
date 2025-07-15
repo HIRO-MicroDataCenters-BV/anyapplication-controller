@@ -2,6 +2,7 @@ package errorctx
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -44,7 +45,12 @@ func (r *logFetcher) FetchLogs(
 	if err != nil {
 		return "", err
 	}
-	defer stream.Close()
+	defer func() {
+		err := stream.Close()
+		if err != nil {
+			fmt.Printf("Error closing log stream: %v\n", err)
+		}
+	}()
 
 	var sb strings.Builder
 	buf := make([]byte, 2048)

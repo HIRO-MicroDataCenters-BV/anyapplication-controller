@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/go-logr/logr"
 	"go.uber.org/zap/zapcore"
 	"helm.sh/helm/v3/pkg/chartutil"
+	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -55,7 +57,9 @@ import (
 	"hiro.io/anyapplication/internal/controller/reconciler"
 	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/controller/types"
+	"hiro.io/anyapplication/internal/errorctx"
 	"hiro.io/anyapplication/internal/helm"
+	"hiro.io/anyapplication/internal/httpapi"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -317,16 +321,20 @@ func main() {
 	failIfError(mgr.AddReadyzCheck("readyz", healthz.Ping), setupLog, "unable to set up ready check")
 	setupLog.Info("starting Application API Server")
 
-	// TODO enable this when the API server is implemented
-	// options := httpapi.ApplicationApiOptions{
-	// 	Address: "0.0.0.0:9000",
-	// }
-	// httpServer := httpapi.NewHttpServer(options)
-	// go func() {
-	// 	if err := httpServer.Start(); err != nil {
-	// 		log.Fatalf("Http Server start error: %v", err)
-	// 	}
-	// }()
+	options := httpapi.ApplicationApiOptions{
+		Address: "0.0.0.0:9000",
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	failIfError(err, setupLog, "unable to create kubernetes clientset for log fetcher")
+	logFetcher := errorctx.NewRealLogFetcher(clientset)
+	applicationReports := errorctx.NewApplicationReports(clusterCache, logFetcher)
+	httpServer := httpapi.NewHttpServer(options, applicationReports)
+
+	go func() {
+		if err := httpServer.Start(); err != nil {
+			log.Fatalf("Http Server start error: %v", err)
+		}
+	}()
 
 	setupLog.Info("starting manager")
 	failIfError(mgr.Start(ctrl.SetupSignalHandler()), setupLog, "problem running manager")
