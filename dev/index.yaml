@@ -2,6 +2,20 @@ apiVersion: v1
 entries:
   anyapplication:
   - apiVersion: v2
+    appVersion: 0.1.0-dev.18.handling-failure.315a5017
+    created: "2025-07-16T13:42:33.351216795Z"
+    description: Decentralized Control Plane Application Controller
+    digest: 7234a1efe5671de582a0970cde3a55acae41a7a50143a0dfab290180e64cbe9e
+    home: https://github.com/HIRO-MicroDataCenters-BV/anyapplication-controller
+    maintainers:
+    - name: HIRO-Microdatacenters
+      url: https://hiro-microdatacenters.nl
+    name: anyapplication
+    type: application
+    urls:
+    - https://HIRO-MicroDataCenters-BV.github.io/anyapplication-controller/dev/anyapplication-0.1.0-dev.18.handling-failure.315a5017.tgz
+    version: 0.1.0-dev.18.handling-failure.315a5017
+  - apiVersion: v2
     appVersion: 0.1.0-dev.17.handling-failure.b2c6f6df
     created: "2025-07-15T11:43:34.752530908Z"
     description: Decentralized Control Plane Application Controller
@@ -743,4 +757,4 @@ entries:
     urls:
     - https://HIRO-MicroDataCenters-BV.github.io/anyapplication-controller/dev/anyapplication-0.0.1-dev.1.state-management.d36ec583.tgz
     version: 0.0.1-dev.1.state-management.d36ec583
-generated: "2025-07-15T11:43:34.750800826Z"
+generated: "2025-07-16T13:42:33.350434798Z"
