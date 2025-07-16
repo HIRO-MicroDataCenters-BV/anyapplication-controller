@@ -154,7 +154,7 @@ func AddLabelsToManifest(manifest string, newLabels map[string]string) (string, 
 		obj.SetLabels(labels)
 
 		if obj.GetKind() == "Deployment" || obj.GetKind() == "StatefulSet" || obj.GetKind() == "DaemonSet" {
-			//add labels to the spec template
+			// add labels to the spec template
 			spec, found, err := unstructured.NestedMap(obj.Object, "spec", "template", "metadata")
 			if err != nil {
 				return "", errors.Wrap(err, "Failed to get spec template metadata")
