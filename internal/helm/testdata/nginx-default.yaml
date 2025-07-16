@@ -5093,6 +5093,7 @@ spec:
       labels:
         app.kubernetes.io/instance: test-release
         app.kubernetes.io/name: nginx-ingress
+        dcp.hiro.io/test: dcp
     spec:
       automountServiceAccountToken: true
       containers:

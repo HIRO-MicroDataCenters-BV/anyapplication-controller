@@ -96,7 +96,7 @@ func (m *syncManager) getOrRenderApp(application *v1.AnyApplication) (*cachedApp
 func (m *syncManager) render(application *v1.AnyApplication) (*cachedApp, error) {
 	releaseName := application.Name
 	helmSelector := application.Spec.Application.HelmSelector
-	instanceId := m.getInstanceId(application)
+	instanceId := m.GetInstanceId(application)
 
 	labels := map[string]string{
 		"dcp.hiro.io/managed-by":  "dcp",
@@ -292,7 +292,7 @@ func (m *syncManager) getCacheKey(application *v1.AnyApplication) string {
 	return fmt.Sprintf("%s-%s-%s", application.Name, application.Namespace, version)
 }
 
-func (m *syncManager) getInstanceId(application *v1.AnyApplication) string {
+func (m *syncManager) GetInstanceId(application *v1.AnyApplication) string {
 	releaseName := application.Name
 	helmSelector := application.Spec.Application.HelmSelector
 	return fmt.Sprintf("%s-%s-%s", helmSelector.Chart, helmSelector.Version, releaseName)
@@ -324,7 +324,7 @@ func (m *syncManager) loadLocalApplication(application *v1.AnyApplication) (mo.O
 }
 
 func (m *syncManager) findAvailableApplicationResources(application *v1.AnyApplication) []*unstructured.Unstructured {
-	instanceId := m.getInstanceId(application)
+	instanceId := m.GetInstanceId(application)
 	cachedResources := m.clusterCache.FindResources("", func(r *cache.Resource) bool {
 		if r.Resource == nil {
 			return false

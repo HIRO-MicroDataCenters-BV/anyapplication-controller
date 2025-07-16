@@ -29,13 +29,12 @@ tolerations: []
 
 services:
   type: ClusterIP
-  # the port for the p2p networking endpoint
-  network:
-    port: 9102
-    # nodePort: 31001
+  # the port for the API endpoint
+  api:
+    port: 9000
   # the port for the HTTP health endpoint
   health:
-    port: 8080
+    port: 8081
 
 resources: {}
 
@@ -64,6 +63,8 @@ configuration:
     zone: zone
     operationalPollDuration: 5s
     syncPollDuration: 60s
+  api:
+    bind_address: :9000
   logging:
     default_level: info
     components:

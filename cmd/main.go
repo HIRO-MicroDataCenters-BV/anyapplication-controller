@@ -321,14 +321,13 @@ func main() {
 	failIfError(mgr.AddReadyzCheck("readyz", healthz.Ping), setupLog, "unable to set up ready check")
 	setupLog.Info("starting Application API Server")
 
-	options := httpapi.ApplicationApiOptions{
-		Address: "0.0.0.0:9000",
-	}
 	clientset, err := kubernetes.NewForConfig(config)
 	failIfError(err, setupLog, "unable to create kubernetes clientset for log fetcher")
 	logFetcher := errorctx.NewRealLogFetcher(clientset)
 	applicationReports := errorctx.NewApplicationReports(clusterCache, logFetcher)
-	httpServer := httpapi.NewHttpServer(options, applicationReports)
+
+	options := httpapi.ApplicationApiOptions{Address: controllerConfig.Api.BindAddress}
+	httpServer := httpapi.NewHttpServer(options, applicationReports, &syncManager, kubeClient)
 
 	go func() {
 		if err := httpServer.Start(); err != nil {
