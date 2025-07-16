@@ -153,6 +153,25 @@ func AddLabelsToManifest(manifest string, newLabels map[string]string) (string, 
 		}
 		obj.SetLabels(labels)
 
+		if obj.GetKind() == "Deployment" || obj.GetKind() == "StatefulSet" || obj.GetKind() == "DaemonSet" {
+			// add labels to the spec template
+			spec, found, err := unstructured.NestedMap(obj.Object, "spec", "template", "metadata")
+			if err != nil {
+				return "", errors.Wrap(err, "Failed to get spec template metadata")
+			}
+			if found {
+				if spec["labels"] == nil {
+					spec["labels"] = make(map[string]interface{})
+				}
+				for k, v := range newLabels {
+					spec["labels"].(map[string]interface{})[k] = v
+				}
+				if err := unstructured.SetNestedMap(obj.Object, spec, "spec", "template", "metadata"); err != nil {
+					return "", errors.Wrap(err, "Failed to set spec template metadata")
+				}
+			}
+		}
+
 		// Marshal back to YAML
 		modifiedYAML, err := yaml.Marshal(obj.Object)
 		if err != nil {

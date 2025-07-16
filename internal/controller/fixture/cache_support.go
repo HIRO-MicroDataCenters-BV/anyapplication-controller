@@ -43,6 +43,10 @@ func NewTestClusterCacheWithOptions(opts []cache.UpdateSettingsFunc, objs ...run
 		GroupVersionResource: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"},
 		Meta:                 metav1.APIResource{Namespaced: true},
 	}, {
+		GroupKind:            schema.GroupKind{Group: "apps", Kind: "DaemonSet"},
+		GroupVersionResource: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"},
+		Meta:                 metav1.APIResource{Namespaced: true},
+	}, {
 		GroupKind:            schema.GroupKind{Group: "extensions", Kind: "ReplicaSet"},
 		GroupVersionResource: schema.GroupVersionResource{Group: "extensions", Version: "v1beta1", Resource: "replicasets"},
 		Meta:                 metav1.APIResource{Namespaced: true},

@@ -46,6 +46,7 @@ type SyncManager interface {
 	GetAggregatedStatus(application *v1.AnyApplication) *health.HealthStatus
 	Sync(ctx context.Context, application *v1.AnyApplication) (*SyncResult, error)
 	Delete(ctx context.Context, application *v1.AnyApplication) (*DeleteResult, error)
+	GetInstanceId(application *v1.AnyApplication) string
 	LoadApplication(application *v1.AnyApplication) (GlobalApplication, error)
 }
 

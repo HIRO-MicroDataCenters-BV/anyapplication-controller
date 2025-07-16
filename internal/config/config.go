@@ -22,6 +22,7 @@ type Config struct {
 		Url string `yaml:"url"`
 	} `yaml:"peers"`
 	Runtime ApplicationRuntimeConfig `yaml:"runtime"`
+	Api     ApiConfig                `yaml:"api"`
 	Cache   CacheConfig              `yaml:"cache"`
 	Logging LoggingConfig            `yaml:"logging"`
 }
@@ -41,6 +42,10 @@ func (c *CacheConfig) ExcludesSet() map[string]bool {
 type LoggingConfig struct {
 	DefaultLevel string            `yaml:"default_level"`
 	Components   map[string]string `yaml:"components"`
+}
+
+type ApiConfig struct {
+	BindAddress string `yaml:"bind_address"`
 }
 
 func LoadConfig(filePath string) (*Config, error) {

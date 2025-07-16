@@ -4,6 +4,13 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
+
+	v1 "hiro.io/anyapplication/api/v1"
+	ctrltypes "hiro.io/anyapplication/internal/controller/types"
+	types "hiro.io/anyapplication/internal/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type ApplicationApiOptions struct {
@@ -11,15 +18,26 @@ type ApplicationApiOptions struct {
 }
 
 type Server struct {
-	mux     *http.ServeMux
-	options ApplicationApiOptions
+	mux                *http.ServeMux
+	options            ApplicationApiOptions
+	applicationReports types.ApplicationReports
+	syncManager        ctrltypes.SyncManager
+	kubeClient         client.Client
 }
 
 // NewServer creates and configures a new Server
-func NewHttpServer(options ApplicationApiOptions) *Server {
+func NewHttpServer(
+	options ApplicationApiOptions,
+	applicationReports types.ApplicationReports,
+	syncManager *ctrltypes.SyncManager,
+	kubeClient client.Client,
+) *Server {
 	s := &Server{
-		mux:     http.NewServeMux(),
-		options: options,
+		mux:                http.NewServeMux(),
+		options:            options,
+		applicationReports: applicationReports,
+		syncManager:        *syncManager,
+		kubeClient:         kubeClient,
 	}
 	s.routes()
 	return s
@@ -27,23 +45,36 @@ func NewHttpServer(options ApplicationApiOptions) *Server {
 
 // routes sets up the HTTP routes
 func (s *Server) routes() {
-	s.mux.HandleFunc("/application", s.handleGetApplication)
+	router := chi.NewRouter()
+	router.Get("/status/{namespace}/{name}", s.handleGetApplicationErrorContext)
+	s.mux.Handle("/", router)
 }
 
-func (s *Server) handleGetApplication(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+func (s *Server) handleGetApplicationErrorContext(w http.ResponseWriter, r *http.Request) {
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+	if namespace == "" || name == "" {
+		http.Error(w, "Namespace and name are required", http.StatusBadRequest)
 		return
 	}
 
-	obj := ApplicationBundle{
-		ID:   1,
-		Name: "Sample Object",
+	application := &v1.AnyApplication{}
+	if err := s.kubeClient.Get(r.Context(), client.ObjectKey{Namespace: namespace, Name: name}, application); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	instanceId := s.syncManager.GetInstanceId(application)
+
+	report, err := s.applicationReports.Fetch(r.Context(), instanceId, namespace)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
+	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(obj); err != nil {
+	if err := json.NewEncoder(w).Encode(report); err != nil {
 		log.Printf("failed to encode: %s", err)
 	}
 }

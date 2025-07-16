@@ -7,13 +7,13 @@ metadata:
 spec:
   type: {{ .Values.services.type }}
   ports:
-    # the port for the p2p networking endpoint
-    - port: {{ .Values.services.network.port }}
-      {{- if .Values.services.network.nodePort }}
-      nodePort: {{ .Values.services.network.nodePort }}
+    # the port for the API endpoint
+    - port: {{ .Values.services.api.port }}
+      {{- if .Values.services.api.nodePort }}
+      nodePort: {{ .Values.services.api.nodePort }}
       {{- end }}
-      protocol: UDP
-      name: network
+      protocol: TCP
+      name: api
     # the port for the HTTP health endpoint
     - port: {{ .Values.services.health.port }}
       targetPort: http

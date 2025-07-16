@@ -40,10 +40,9 @@ spec:
             - --health-probe-bind-address=:8081
             - --config=/etc/dcp/application-controller.yaml
           ports:
-          # the port for the p2p networking endpoint
-          - name: network
-            containerPort: {{ .Values.services.network.port }}
-            protocol: UDP
+          - name: api
+            containerPort: {{ .Values.services.api.port }}
+            protocol: TCP
           # the port for the HTTP health endpoint
           - name: health
             containerPort: {{ .Values.services.health.port }}
