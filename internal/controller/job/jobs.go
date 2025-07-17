@@ -10,19 +10,22 @@ import (
 )
 
 type jobs struct {
-	jobs    sync.Map
-	context types.AsyncJobContext
+	jobs       sync.Map
+	jobContext types.AsyncJobContext
+	cancel     context.CancelFunc
 }
 
-func NewJobs(context types.AsyncJobContext) *jobs {
+func NewJobs(jobContext types.AsyncJobContext) *jobs {
+	jobContext, cancel := jobContext.WithCancel()
 	return &jobs{
-		context: context,
-		jobs:    sync.Map{},
+		jobContext: jobContext,
+		jobs:       sync.Map{},
+		cancel:     cancel,
 	}
 }
 
 func (j *jobs) StopAll() {
-	panic("not implemented")
+	j.cancel()
 }
 
 func (j *jobs) Execute(job types.AsyncJob) {
@@ -30,7 +33,7 @@ func (j *jobs) Execute(job types.AsyncJob) {
 	id := jobId.ApplicationId
 	worker := NewJobWorker(job)
 	j.jobs.Store(id, worker)
-	go worker.Run(j.context)
+	go worker.Run(j.jobContext)
 }
 
 func (j *jobs) GetCurrent(id types.ApplicationId) mo.Option[types.AsyncJob] {
