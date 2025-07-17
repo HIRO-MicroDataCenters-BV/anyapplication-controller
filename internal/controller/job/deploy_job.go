@@ -26,8 +26,9 @@ type DeployJob struct {
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
 	log           logr.Logger
-	version       string
 	events        *events.Events
+	startTime     time.Time
+	timeout       time.Duration
 }
 
 func NewDeployJob(
@@ -44,7 +45,8 @@ func NewDeployJob(
 			Namespace: application.Namespace,
 		},
 	}
-	version := application.ResourceVersion
+
+	syncTimeout := config.GetSyncTimeout(application.Spec.SyncPolicy.SyncOptions, runtimeConfig.DefaultSyncTimeout)
 	log = log.WithName("DeployJob")
 	return &DeployJob{
 		status:        v1.DeploymentStatusPull,
@@ -56,8 +58,9 @@ func NewDeployJob(
 		stopped:       atomic.Bool{},
 		stopCh:        make(chan struct{}),
 		log:           log,
-		version:       version,
 		events:        events,
+		startTime:     clock.NowTime().Time,
+		timeout:       syncTimeout,
 	}
 }
 
