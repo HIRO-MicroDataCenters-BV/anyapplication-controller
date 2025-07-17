@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -123,7 +122,6 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	err = nil
 
 	if result.Status.IsPresent() {
-		stopRetrying := atomic.Bool{}
 		newStatus := result.Status.OrEmpty()
 
 		statusUpdater := status.NewStatusUpdater(
@@ -135,7 +133,7 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			r.Events,
 		)
 
-		err = statusUpdater.UpdateStatus(&stopRetrying, func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
+		err = statusUpdater.UpdateStatus(func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
 			return mergeStatus(applicationStatus, &newStatus, zoneId)
 		})
 		if err != nil {
@@ -157,7 +155,6 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 func (r *AnyApplicationReconciler) InitializeState(ctx context.Context, resourceName client.ObjectKey) (ctrl.Result, error) {
-	stopRetrying := atomic.Bool{}
 	statusUpdater := status.NewStatusUpdater(
 		ctx,
 		r.Log.WithName("Controller StatusUpdater"),
@@ -167,7 +164,7 @@ func (r *AnyApplicationReconciler) InitializeState(ctx context.Context, resource
 		r.Events,
 	)
 
-	err := statusUpdater.UpdateStatus(&stopRetrying, func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
+	err := statusUpdater.UpdateStatus(func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
 		if applicationStatus.State == "" {
 			applicationStatus.Owner = r.Config.ZoneId
 			applicationStatus.State = dcpv1.NewGlobalState

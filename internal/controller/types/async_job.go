@@ -9,15 +9,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type AsyncJobType int
+type AsyncJobType string
 
 const (
-	AsyncJobTypeUnknown AsyncJobType = iota
-	AsyncJobTypeDeploy
-	AsyncJobTypeOwnershipTransfer
-	AsyncJobTypeLocalPlacement
-	AsyncJobTypeLocalOperation
-	AsyncJobTypeUndeploy
+	AsyncJobTypeUnknown           AsyncJobType = "Unknown"
+	AsyncJobTypeDeploy            AsyncJobType = "Deployment"
+	AsyncJobTypeOwnershipTransfer AsyncJobType = "OwnershipTransfer"
+	AsyncJobTypeLocalPlacement    AsyncJobType = "Placement"
+	AsyncJobTypeLocalOperation    AsyncJobType = "Local"
+	AsyncJobTypeUndeploy          AsyncJobType = "Undeployment"
 )
 
 type JobId struct {
@@ -35,6 +35,7 @@ type AsyncJobContext interface {
 	GetKubeClient() client.Client
 	GetGoContext() context.Context
 	GetSyncManager() SyncManager
+	WithCancel() (AsyncJobContext, context.CancelFunc)
 }
 
 type AsyncJob interface {
@@ -42,7 +43,6 @@ type AsyncJob interface {
 	GetType() AsyncJobType
 	GetStatus() v1.ConditionStatus
 	Run(context AsyncJobContext)
-	Stop()
 }
 
 type AsyncJobFactory interface {
@@ -57,4 +57,15 @@ type AsyncJobs interface {
 	Execute(job AsyncJob)
 	GetCurrent(id ApplicationId) mo.Option[AsyncJob]
 	Stop(id ApplicationId)
+}
+
+func IsCancelled(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		// Context is canceled
+		return true
+	default:
+		// Context is still active
+		return false
+	}
 }

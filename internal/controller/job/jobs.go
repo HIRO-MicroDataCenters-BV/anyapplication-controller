@@ -1,7 +1,9 @@
 package job
 
 import (
+	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/samber/mo"
 	"hiro.io/anyapplication/internal/controller/types"
@@ -26,30 +28,66 @@ func (j *jobs) StopAll() {
 func (j *jobs) Execute(job types.AsyncJob) {
 	jobId := job.GetJobID()
 	id := jobId.ApplicationId
-	j.jobs.Store(id, job)
-	go job.Run(j.context)
+	worker := NewJobWorker(job)
+	j.jobs.Store(id, worker)
+	go worker.Run(j.context)
 }
 
 func (j *jobs) GetCurrent(id types.ApplicationId) mo.Option[types.AsyncJob] {
-	job, found := j.jobs.Load(id)
+	worker, found := j.jobs.Load(id)
 	if !found {
 		return mo.None[types.AsyncJob]()
 	}
-	asyncJob, ok := job.(types.AsyncJob)
+	jobWorker, ok := worker.(*JobWorker)
 	if !ok {
 		panic("Unexpected type")
 	}
-	return mo.Some(asyncJob)
+	return mo.Some(jobWorker.getJob())
 }
 
 func (j *jobs) Stop(id types.ApplicationId) {
-	job, found := j.jobs.LoadAndDelete(id)
+	worker, found := j.jobs.LoadAndDelete(id)
 	if !found {
 		return
 	}
-	asyncJob, ok := job.(types.AsyncJob)
+	jobWorker, ok := worker.(*JobWorker)
 	if !ok {
 		panic("Unexpected type")
 	}
-	asyncJob.Stop()
+	jobWorker.Stop()
+}
+
+type JobWorker struct {
+	job                types.AsyncJob
+	stopped            atomic.Bool
+	stopConfirmChannel chan struct{}
+	cancelFunc         *context.CancelFunc
+}
+
+func NewJobWorker(job types.AsyncJob) *JobWorker {
+	return &JobWorker{
+		job:                job,
+		stopped:            atomic.Bool{},
+		stopConfirmChannel: make(chan struct{}),
+	}
+}
+
+func (w *JobWorker) Run(jobContext types.AsyncJobContext) {
+	jobContext, cancel := jobContext.WithCancel()
+	w.cancelFunc = &cancel
+	w.job.Run(jobContext)
+	close(w.stopConfirmChannel)
+}
+
+func (w *JobWorker) getJob() types.AsyncJob {
+	return w.job
+}
+
+func (w *JobWorker) Stop() {
+	if w.stopped.CompareAndSwap(false, true) {
+		if w.cancelFunc != nil {
+			(*w.cancelFunc)()
+		}
+		<-w.stopConfirmChannel
+	}
 }

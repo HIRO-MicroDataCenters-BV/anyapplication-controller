@@ -64,13 +64,18 @@ var _ = Describe("UndeployJob", func() {
 	})
 
 	It("should run and apply done status", func() {
+		jobContextDeploy, cancelDeploy := jobContext.WithCancel()
+		defer cancelDeploy()
 
 		deployJob := NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
-		deployJob.Run(jobContext)
+		go deployJob.Run(jobContextDeploy)
 
 		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
 
-		undeployJob.Run(jobContext)
+		jobContextUndeploy, cancelUndeploy := jobContext.WithCancel()
+		defer cancelUndeploy()
+
+		go undeployJob.Run(jobContextUndeploy)
 
 		waitForJobStatus(undeployJob, string(v1.UndeploymentStatusDone))
 

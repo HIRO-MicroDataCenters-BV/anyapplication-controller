@@ -7,7 +7,7 @@ metadata:
   finalizers:
   - finalizers.dcp.hiro.io/anyapplication
 spec:
-  application: 
+  source: 
     helm:
       repository: https://helm.nginx.com/stable
       chart: nginx-ingress
@@ -21,10 +21,10 @@ spec:
           appprotect:
             enable: false
   zones: 1
-  placement-strategy: 
-    # strategy: Local
-    strategy: Global
-  recover-strategy:
-    tolerance: 1
-    max-retries: 3
+  placementStrategy: 
+    strategy: Local
+    # strategy: Global
+  recoverStrategy:
+    tolerance: 0
+    maxRetries: 3
 

@@ -63,8 +63,10 @@ var _ = Describe("DeployJob", func() {
 
 	It("Deployment should run and apply done status", func() {
 		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+		jobContext, cancel := jobContext.WithCancel()
+		defer cancel()
 
-		deployJob.Run(jobContext)
+		go deployJob.Run(jobContext)
 		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
 
 		status := deployJob.GetStatus()
@@ -79,8 +81,6 @@ var _ = Describe("DeployJob", func() {
 			},
 		))
 
-		deployJob.Stop()
-
 	})
 
 	It("should sync report failure", func() {
@@ -90,9 +90,12 @@ var _ = Describe("DeployJob", func() {
 			Version:    "1.0.0",
 		}
 		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+		jobContext, cancel := jobContext.WithCancel()
+		defer cancel()
+
 		deployJob = NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
 
-		deployJob.Run(jobContext)
+		go deployJob.Run(jobContext)
 
 		waitForJobStatus(deployJob, string(v1.DeploymentStatusFailure))
 
@@ -108,8 +111,6 @@ var _ = Describe("DeployJob", func() {
 				Msg:                "Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",
 			},
 		))
-
-		deployJob.Stop()
 
 	})
 

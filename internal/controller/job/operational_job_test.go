@@ -64,11 +64,13 @@ var _ = Describe("LocalOperationJob", func() {
 	})
 
 	It("should sync periodically and report status", func() {
-
 		deployJob := NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
-		deployJob.Run(jobContext)
+		jobContext, cancel := jobContext.WithCancel()
+		defer cancel()
+
+		go deployJob.Run(jobContext)
+
 		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
-		deployJob.Stop()
 
 		operationJob.Run(jobContext)
 

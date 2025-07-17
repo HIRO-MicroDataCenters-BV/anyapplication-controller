@@ -1,7 +1,6 @@
 package job
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -16,18 +15,18 @@ import (
 )
 
 type LocalOperationJob struct {
-	application   *v1.AnyApplication
-	runtimeConfig *config.ApplicationRuntimeConfig
-	clock         clock.Clock
-	status        health.HealthStatusCode
-	msg           string
-	stopCh        chan struct{}
-	wg            sync.WaitGroup
-	jobId         types.JobId
-	stopped       atomic.Bool
-	log           logr.Logger
-	events        *events.Events
-	version       string
+	application        *v1.AnyApplication
+	runtimeConfig      *config.ApplicationRuntimeConfig
+	clock              clock.Clock
+	status             health.HealthStatusCode
+	msg                string
+	stopCh             chan struct{}
+	stopConfirmChannel chan struct{}
+	jobId              types.JobId
+	stopped            atomic.Bool
+	log                logr.Logger
+	events             *events.Events
+	version            string
 }
 
 func NewLocalOperationJob(
@@ -48,24 +47,23 @@ func NewLocalOperationJob(
 	version := application.ResourceVersion
 
 	return &LocalOperationJob{
-		application:   application,
-		runtimeConfig: runtimeConfig,
-		clock:         clock,
-		status:        health.HealthStatusProgressing,
-		stopCh:        make(chan struct{}),
-		jobId:         jobId,
-		stopped:       atomic.Bool{},
-		log:           log,
-		version:       version,
-		events:        events,
+		application:        application,
+		runtimeConfig:      runtimeConfig,
+		clock:              clock,
+		status:             health.HealthStatusProgressing,
+		stopCh:             make(chan struct{}),
+		stopConfirmChannel: make(chan struct{}),
+		jobId:              jobId,
+		stopped:            atomic.Bool{},
+		log:                log,
+		version:            version,
+		events:             events,
 	}
 }
 
 func (job *LocalOperationJob) Run(context types.AsyncJobContext) {
-	job.wg.Add(1)
-
 	go func() {
-		defer job.wg.Done()
+		defer close(job.stopConfirmChannel)
 
 		job.runInner(context)
 
@@ -112,7 +110,7 @@ func (job *LocalOperationJob) runInner(context types.AsyncJobContext) {
 func (job *LocalOperationJob) Stop() {
 	job.stopped.Store(true)
 	job.stopCh <- struct{}{}
-	job.wg.Wait()
+	<-job.stopConfirmChannel
 }
 
 func (job *LocalOperationJob) Fail(context types.AsyncJobContext) {
@@ -125,7 +123,7 @@ func (job *LocalOperationJob) Fail(context types.AsyncJobContext) {
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Operation Failure: " + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.DeploymenConditionType, v1.UndeploymenConditionType)
+	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.DeploymenConditionType, v1.UndeploymenConditionType)
 	if err != nil {
 		job.status = health.HealthStatusDegraded
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -142,7 +140,7 @@ func (job *LocalOperationJob) Success(context types.AsyncJobContext) {
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Operation state change to " + string(job.status) + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.DeploymenConditionType, v1.UndeploymenConditionType)
+	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.DeploymenConditionType, v1.UndeploymenConditionType)
 	if err != nil {
 		job.status = health.HealthStatusDegraded
 		job.msg = "Cannot Update Application Condition. " + err.Error()

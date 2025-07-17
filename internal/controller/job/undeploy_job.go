@@ -1,7 +1,6 @@
 package job
 
 import (
-	"sync"
 	"sync/atomic"
 
 	"github.com/go-logr/logr"
@@ -14,17 +13,17 @@ import (
 )
 
 type UndeployJob struct {
-	application   *v1.AnyApplication
-	runtimeConfig *config.ApplicationRuntimeConfig
-	status        v1.UndeploymentStatus
-	clock         clock.Clock
-	msg           string
-	jobId         types.JobId
-	wg            sync.WaitGroup
-	stopped       atomic.Bool
-	log           logr.Logger
-	version       string
-	events        *events.Events
+	application        *v1.AnyApplication
+	runtimeConfig      *config.ApplicationRuntimeConfig
+	status             v1.UndeploymentStatus
+	clock              clock.Clock
+	msg                string
+	jobId              types.JobId
+	stopConfirmChannel chan struct{}
+	stopped            atomic.Bool
+	log                logr.Logger
+	version            string
+	events             *events.Events
 }
 
 func NewUndeployJob(
@@ -44,24 +43,23 @@ func NewUndeployJob(
 	version := application.ResourceVersion
 	log = log.WithName("UndeployJob")
 	return &UndeployJob{
-		status:        v1.UndeploymentStatusUndeploy,
-		application:   application,
-		runtimeConfig: runtimeConfig,
-		clock:         clock,
-		msg:           "",
-		jobId:         jobId,
-		stopped:       atomic.Bool{},
-		log:           log,
-		version:       version,
-		events:        events,
+		status:             v1.UndeploymentStatusUndeploy,
+		application:        application,
+		runtimeConfig:      runtimeConfig,
+		clock:              clock,
+		msg:                "",
+		jobId:              jobId,
+		stopConfirmChannel: make(chan struct{}),
+		stopped:            atomic.Bool{},
+		log:                log,
+		version:            version,
+		events:             events,
 	}
 }
 
 func (job *UndeployJob) Run(context types.AsyncJobContext) {
-	job.wg.Add(1)
-
 	go func() {
-		defer job.wg.Done()
+		defer close(job.stopConfirmChannel)
 		job.runInner(context)
 	}()
 }
@@ -91,7 +89,7 @@ func (job *UndeployJob) Fail(context types.AsyncJobContext, msg string) {
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Undeploy failure: " + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.LocalConditionType, v1.DeploymenConditionType)
+	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.LocalConditionType, v1.DeploymenConditionType)
 	if err != nil {
 		job.status = v1.UndeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -110,7 +108,7 @@ func (job *UndeployJob) Success(context types.AsyncJobContext) {
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Undeploy state changed to '" + string(job.status) + "'" + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.LocalConditionType, v1.DeploymenConditionType)
+	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.LocalConditionType, v1.DeploymenConditionType)
 
 	if err != nil {
 		job.status = v1.UndeploymentStatusFailure
@@ -138,5 +136,5 @@ func (job *UndeployJob) GetStatus() v1.ConditionStatus {
 
 func (job *UndeployJob) Stop() {
 	job.stopped.Store(true)
-	job.wg.Wait()
+	<-job.stopConfirmChannel
 }

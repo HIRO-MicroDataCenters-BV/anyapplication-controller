@@ -75,7 +75,6 @@ func (job *LocalPlacementJob) Run(context types.AsyncJobContext) {
 		Msg:    job.msg + " Placement set to zone '" + job.runtimeConfig.ZoneId + "'",
 	}
 	err := statusUpdater.UpdateStatus(
-		&job.stopped,
 		func(applicationStatus *v1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
 			applicationStatus.Placements = []v1.Placement{
 				{

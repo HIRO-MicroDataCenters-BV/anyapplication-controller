@@ -1,8 +1,6 @@
 package job
 
 import (
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/health"
@@ -22,13 +20,12 @@ type DeployJob struct {
 	clock         clock.Clock
 	msg           string
 	jobId         types.JobId
-	stopped       atomic.Bool
-	stopCh        chan struct{}
-	wg            sync.WaitGroup
 	log           logr.Logger
 	events        *events.Events
 	startTime     time.Time
 	timeout       time.Duration
+	retryAttempts int
+	attempt       int
 }
 
 func NewDeployJob(
@@ -55,35 +52,30 @@ func NewDeployJob(
 		clock:         clock,
 		msg:           "",
 		jobId:         jobId,
-		stopped:       atomic.Bool{},
-		stopCh:        make(chan struct{}),
 		log:           log,
 		events:        events,
 		startTime:     clock.NowTime().Time,
 		timeout:       syncTimeout,
+		retryAttempts: 3,
+		attempt:       1,
 	}
 }
 
-func (job *DeployJob) Run(context types.AsyncJobContext) {
-	job.wg.Add(1)
+func (job *DeployJob) Run(jobContext types.AsyncJobContext) {
+	job.runInner(jobContext)
 
-	go func() {
-		defer job.wg.Done()
+	ticker := time.NewTicker(job.runtimeConfig.PollSyncStatusInterval)
+	defer ticker.Stop()
 
-		job.runInner(context)
-
-		ticker := time.NewTicker(job.runtimeConfig.PollSyncStatusInterval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				job.runInner(context)
-			case <-job.stopCh:
-				return
-			}
+	for {
+		select {
+		case <-ticker.C:
+			job.runInner(jobContext)
+		case <-jobContext.GetGoContext().Done():
+			return
 		}
-	}()
+	}
+
 }
 func (job *DeployJob) runInner(context types.AsyncJobContext) {
 	syncManager := context.GetSyncManager()
@@ -113,7 +105,7 @@ func (job *DeployJob) Fail(context types.AsyncJobContext, msg string) {
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Deployment failure: " + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.UndeploymenConditionType, v1.LocalConditionType)
+	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.UndeploymenConditionType, v1.LocalConditionType)
 	if err != nil {
 		job.status = v1.DeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -132,7 +124,7 @@ func (job *DeployJob) Success(context types.AsyncJobContext, healthStatus *healt
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Deployment state changed to '" + string(job.status) + "'. " + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.UndeploymenConditionType, v1.LocalConditionType)
+	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.UndeploymenConditionType, v1.LocalConditionType)
 	if err != nil {
 		job.status = v1.DeploymentStatusFailure
 		job.msg = "Cannot Update Application Condition. " + err.Error()
@@ -155,10 +147,4 @@ func (job *DeployJob) GetStatus() v1.ConditionStatus {
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
 	}
-}
-
-func (job *DeployJob) Stop() {
-	job.stopped.Store(true)
-	job.stopCh <- struct{}{}
-	job.wg.Wait()
 }

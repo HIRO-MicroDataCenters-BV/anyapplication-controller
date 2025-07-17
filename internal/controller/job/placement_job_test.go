@@ -88,12 +88,12 @@ var _ = Describe("PlacementJob", func() {
 	})
 
 	It("should run and apply done status", func() {
-		context := NewAsyncJobContext(helmClient, kubeClient, context.TODO(), nil)
+		jobContext := NewAsyncJobContext(helmClient, kubeClient, context.TODO(), nil)
 
-		placementJob.Run(context)
+		placementJob.Run(jobContext)
 
 		result := &v1.AnyApplication{}
-		_ = kubeClient.Get(context.GetGoContext(), client.ObjectKeyFromObject(application), result)
+		_ = kubeClient.Get(jobContext.GetGoContext(), client.ObjectKeyFromObject(application), result)
 
 		Expect(result.Status.Zones).To(Equal(
 			[]v1.ZoneStatus{
