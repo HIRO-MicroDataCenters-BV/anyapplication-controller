@@ -28,31 +28,89 @@ import (
 // AnyApplicationSpec defines the desired state of AnyApplication.
 type AnyApplicationSpec struct {
 	// Foo is an example field of AnyApplication. Edit anyapplication_types.go to remove/update
-	Application       ApplicationMatcherSpec `json:"application" validate:"required"`
-	Zones             int                    `json:"zones"`
-	PlacementStrategy PlacementStrategySpec  `json:"placement-strategy,omitempty"`
-	RecoverStrategy   RecoverStrategySpec    `json:"recover-strategy,omitempty"`
+	Source            ApplicationSourceSpec `json:"source" validate:"required"`
+	Zones             int                   `json:"zones"`
+	SyncPolicy        SyncPolicySpec        `json:"syncPolicy,omitempty"`
+	PlacementStrategy PlacementStrategySpec `json:"placementStrategy,omitempty"`
+	RecoverStrategy   RecoverStrategySpec   `json:"recoverStrategy,omitempty"`
 }
 
-type ApplicationMatcherSpec struct {
-	ResourceSelector *map[string]string `json:"resourceSelector,omitempty"`
-	HelmSelector     *HelmSelectorSpec  `json:"helm,omitempty"`
+type ApplicationSourceSpec struct {
+	HelmSelector *ApplicationSourceHelm `json:"helm,omitempty"`
 }
 
-type HelmSelectorSpec struct {
-	Repository string `json:"repository"`
-	Chart      string `json:"chart"`
-	Version    string `json:"version"`
-	Namespace  string `json:"namespace"`
-	Values     string `json:"values,omitempty"`
+type ApplicationSourceHelm struct {
+	Repository  string `json:"repository"`
+	ReleaseName string `json:"releaseName,omitempty"`
+	Chart       string `json:"chart"`
+	Version     string `json:"version"`
+	Namespace   string `json:"namespace"`
+	Values      string `json:"values,omitempty"`
+	// Parameters is a list of Helm parameters which are passed to the helm template command upon manifest generation
+	Parameters []HelmParameter `json:"parameters,omitempty"`
+	// SkipCrds skips custom resource definition installation step (Helm's --skip-crds)
+	SkipCrds bool `json:"skipCrds,omitempty"`
 }
+
+type HelmParameter struct {
+	// Name is the name of the Helm parameter
+	Name string `json:"name,omitempty"`
+
+	// Value is the value for the Helm parameter
+	Value string `json:"value,omitempty"`
+
+	// ForceString determines whether to tell Helm to interpret booleans and numbers as strings
+	ForceString bool `json:"forceString,omitempty"`
+}
+
+type SyncPolicySpec struct {
+	// Automated will keep an application synced to the target revision
+	Automated *SyncPolicyAutomated `json:"automated,omitempty"`
+
+	// Options allow you to specify whole app sync-options
+	SyncOptions *[]string `json:"syncOptions,omitempty"`
+
+	// Retry controls failed sync retry behavior
+	Retry *RetryStrategy `json:"retry,omitempty"`
+}
+
+type RetryStrategy struct {
+	// Limit is the maximum number of attempts for retrying a failed sync. If set to 0, no retries will be performed.
+	Limit int64 `json:"limit,omitempty"`
+
+	// Backoff controls how to backoff on subsequent retries of failed syncs
+	Backoff *Backoff `json:"backoff,omitempty"`
+}
+
+type Backoff struct {
+	// Duration is the amount to back off. Default unit is seconds, but could also be a duration (e.g. "2m", "1h")
+	Duration string `json:"duration,omitempty"`
+
+	// Factor is a factor to multiply the base duration after each failed retry
+	Factor *int64 `json:"factor,omitempty"`
+
+	// MaxDuration is the maximum amount of time allowed for the backoff strategy
+	MaxDuration *string `json:"maxDuration,omitempty"`
+}
+
+type SyncPolicyAutomated struct {
+	// Prune specifies whether to delete resources from the cluster that are not found in the sources anymore as part of automated sync (default: false)
+	Prune bool `json:"prune,omitempty"`
+
+	// SelfHeal specifes whether to revert resources back to their desired state upon modification in the cluster (default: false)
+	SelfHeal bool `json:"selfHeal,omitempty"`
+
+	// AllowEmpty allows apps have zero live resources (default: false)
+	AllowEmpty bool `json:"allowEmpty,omitempty"`
+}
+
 type PlacementStrategySpec struct {
 	Strategy PlacementStrategy `json:"strategy"`
 }
 
 type RecoverStrategySpec struct {
 	Tolerance  int `json:"tolerance,omitempty"`
-	MaxRetries int `json:"max-retries,omitempty"`
+	MaxRetries int `json:"maxRetries,omitempty"`
 }
 
 // AnyApplicationStatus defines the observed state of AnyApplication.
@@ -71,7 +129,7 @@ type ZoneStatus struct {
 
 type Placement struct {
 	Zone         string   `json:"zone"`
-	NodeAffinity []string `json:"node-affinity,omitempty"`
+	NodeAffinity []string `json:"nodeAffinity,omitempty"`
 }
 
 type ConditionStatus struct {
