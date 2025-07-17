@@ -26,8 +26,8 @@ var _ = Describe("DeployJob", func() {
 				Namespace: "default",
 			},
 			Spec: v1.AnyApplicationSpec{
-				Application: v1.ApplicationMatcherSpec{
-					HelmSelector: &v1.HelmSelectorSpec{
+				Source: v1.ApplicationSourceSpec{
+					HelmSelector: &v1.ApplicationSourceHelm{
 						Repository: "https://helm.nginx.com/stable",
 						Chart:      "nginx-ingress",
 						Version:    "2.0.1",
@@ -84,7 +84,7 @@ var _ = Describe("DeployJob", func() {
 	})
 
 	It("should sync report failure", func() {
-		application.Spec.Application.HelmSelector = &v1.HelmSelectorSpec{
+		application.Spec.Source.HelmSelector = &v1.ApplicationSourceHelm{
 			Repository: "test-repo",
 			Chart:      "test-chart",
 			Version:    "1.0.0",

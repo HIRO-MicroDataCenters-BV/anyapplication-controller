@@ -69,8 +69,8 @@ var _ = Describe("SyncManager", func() {
 				Namespace: "default",
 			},
 			Spec: v1.AnyApplicationSpec{
-				Application: v1.ApplicationMatcherSpec{
-					HelmSelector: &v1.HelmSelectorSpec{
+				Source: v1.ApplicationSourceSpec{
+					HelmSelector: &v1.ApplicationSourceHelm{
 						Repository: "https://helm.nginx.com/stable",
 						Chart:      "nginx-ingress",
 						Version:    "2.0.1",

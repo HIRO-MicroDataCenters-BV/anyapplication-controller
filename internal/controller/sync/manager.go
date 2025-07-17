@@ -95,7 +95,7 @@ func (m *syncManager) getOrRenderApp(application *v1.AnyApplication) (*cachedApp
 
 func (m *syncManager) render(application *v1.AnyApplication) (*cachedApp, error) {
 	releaseName := application.Name
-	helmSelector := application.Spec.Application.HelmSelector
+	helmSelector := application.Spec.Source.HelmSelector
 	instanceId := m.GetInstanceId(application)
 
 	labels := map[string]string{
@@ -288,13 +288,13 @@ func (m *syncManager) deleteApp(ctx context.Context, application *v1.AnyApplicat
 }
 
 func (m *syncManager) getCacheKey(application *v1.AnyApplication) string {
-	version := application.Spec.Application.HelmSelector.Version
+	version := application.Spec.Source.HelmSelector.Version
 	return fmt.Sprintf("%s-%s-%s", application.Name, application.Namespace, version)
 }
 
 func (m *syncManager) GetInstanceId(application *v1.AnyApplication) string {
 	releaseName := application.Name
-	helmSelector := application.Spec.Application.HelmSelector
+	helmSelector := application.Spec.Source.HelmSelector
 	return fmt.Sprintf("%s-%s-%s", helmSelector.Chart, helmSelector.Version, releaseName)
 }
 

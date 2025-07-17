@@ -122,8 +122,8 @@ var _ = Describe("AnyApplication Controller", func() {
 						Namespace: "default",
 					},
 					Spec: dcpv1.AnyApplicationSpec{
-						Application: dcpv1.ApplicationMatcherSpec{
-							HelmSelector: &dcpv1.HelmSelectorSpec{
+						Source: dcpv1.ApplicationSourceSpec{
+							HelmSelector: &dcpv1.ApplicationSourceHelm{
 								Repository: "https://helm.nginx.com/stable",
 								Chart:      "nginx-ingress",
 								Version:    "2.0.1",

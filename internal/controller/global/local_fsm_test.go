@@ -43,8 +43,8 @@ var _ = Describe("Local Application FSM", func() {
 				ResourceVersion: "1",
 			},
 			Spec: v1.AnyApplicationSpec{
-				Application: v1.ApplicationMatcherSpec{
-					HelmSelector: &v1.HelmSelectorSpec{
+				Source: v1.ApplicationSourceSpec{
+					HelmSelector: &v1.ApplicationSourceHelm{
 						Repository: "test-repo",
 						Chart:      "test-chart",
 						Version:    "1.0.0",
