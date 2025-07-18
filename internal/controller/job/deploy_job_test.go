@@ -87,6 +87,7 @@ var _ = Describe("DeployJob", func() {
 				ZoneId:             "zone",
 				Status:             string(v1.DeploymentStatusDone),
 				LastTransitionTime: metav1.Time{},
+				Msg:                "Deployment state changed to 'Done'. ",
 			},
 		))
 
@@ -117,7 +118,7 @@ var _ = Describe("DeployJob", func() {
 				ZoneId:             "zone",
 				Status:             string(v1.DeploymentStatusFailure),
 				LastTransitionTime: metav1.Time{},
-				Msg:                "Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",
+				Msg:                "Deployment failure: Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",
 			},
 		))
 

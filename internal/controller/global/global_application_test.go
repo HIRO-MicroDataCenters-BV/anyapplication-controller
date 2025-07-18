@@ -448,6 +448,19 @@ var _ = Describe("GlobalApplication", func() {
 		})
 
 	})
+
+	It("switch to global failure if deployment job fails", func() {
+		// TODO
+	})
+
+	It("switch to global failure if undeployment job fails", func() {
+		// TODO
+	})
+
+	It("switch to deployment if operational job finds missing resources", func() {
+		// TODO
+	})
+
 })
 
 func makeApplication() *v1.AnyApplication {

@@ -1,6 +1,7 @@
 package job
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/health"
@@ -19,6 +20,7 @@ type DeployJob struct {
 	status        v1.DeploymentStatus
 	clock         clock.Clock
 	msg           string
+	reason        string
 	jobId         types.JobId
 	log           logr.Logger
 	events        *events.Events
@@ -62,7 +64,7 @@ func NewDeployJob(
 }
 
 func (job *DeployJob) Run(jobContext types.AsyncJobContext) {
-	if job.runInner(jobContext) {
+	if job.runSyncCycle(jobContext) {
 		return
 	}
 
@@ -72,7 +74,7 @@ func (job *DeployJob) Run(jobContext types.AsyncJobContext) {
 	for {
 		select {
 		case <-ticker.C:
-			completed := job.runInner(jobContext)
+			completed := job.runSyncCycle(jobContext)
 			if completed {
 				return
 			}
@@ -82,14 +84,14 @@ func (job *DeployJob) Run(jobContext types.AsyncJobContext) {
 	}
 
 }
-func (job *DeployJob) runInner(context types.AsyncJobContext) bool {
+func (job *DeployJob) runSyncCycle(context types.AsyncJobContext) bool {
 	syncManager := context.GetSyncManager()
 
 	syncResult, err := syncManager.Sync(context.GetGoContext(), job.application)
 	healthStatus := syncResult.Status
 
 	if err != nil {
-		job.Fail(context, err.Error())
+		job.Fail(context, err.Error(), "SyncError")
 		return true
 	}
 
@@ -98,46 +100,66 @@ func (job *DeployJob) runInner(context types.AsyncJobContext) bool {
 		return true
 	}
 
-	// TODO timeout
+	if job.startTime.Add(job.timeout).Before(job.clock.NowTime().Time) {
+		if job.attempt < job.retryAttempts {
+			job.attempt++
+			job.startTime = job.clock.NowTime().Time
+			job.log.Info("Retrying deployment", "attempt", job.attempt, "maxAttempts", job.retryAttempts)
+			job.AttemptFailure(
+				context,
+				fmt.Sprintf("Retrying deployment (attempt %v of %v)", job.attempt, job.retryAttempts),
+				"Timeout",
+			)
+		} else {
+			job.Fail(
+				context,
+				"Deployment timed out after "+job.timeout.String(),
+				"Timeout",
+			)
+			return true
+		}
+	}
+
 	return false
 }
 
-func (job *DeployJob) Fail(context types.AsyncJobContext, msg string) {
-	job.msg = msg
-	job.status = v1.DeploymentStatusFailure
+func (job *DeployJob) AttemptFailure(jobContext types.AsyncJobContext, msg string, reason string) {
+	job.status = v1.DeploymentStatusPull
+	job.msg = "Deployment failure: " + msg
+	job.reason = reason
 
-	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(),
-		job.log.WithName("StatusUpdater"),
-		context.GetKubeClient(),
-		job.application.GetNamespacedName(),
-		job.runtimeConfig.ZoneId,
-		job.events,
-	)
-	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Deployment failure: " + job.msg}
-	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.UndeploymenConditionType, v1.LocalConditionType)
-	if err != nil {
-		job.status = v1.DeploymentStatusFailure
-		job.msg = "Cannot Update Application Condition. " + err.Error()
-	}
+	job.updateStatus(jobContext)
 }
 
-func (job *DeployJob) Success(context types.AsyncJobContext, healthStatus *health.HealthStatus) {
-	job.status = v1.DeploymentStatusDone
+func (job *DeployJob) Fail(jobContext types.AsyncJobContext, msg string, reason string) {
+	job.status = v1.DeploymentStatusFailure
+	job.msg = "Deployment failure: " + msg
+	job.reason = reason
 
+	job.updateStatus(jobContext)
+}
+
+func (job *DeployJob) Success(jobContext types.AsyncJobContext, healthStatus *health.HealthStatus) {
+	job.status = v1.DeploymentStatusDone
+	job.msg = "Deployment state changed to '" + string(job.status) + "'. "
+	job.reason = ""
+
+	job.updateStatus(jobContext)
+}
+
+func (job *DeployJob) updateStatus(jobContext types.AsyncJobContext) {
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(),
+		jobContext.GetGoContext(),
 		job.log.WithName("StatusUpdater"),
-		context.GetKubeClient(),
+		jobContext.GetKubeClient(),
 		job.application.GetNamespacedName(),
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Deployment state changed to '" + string(job.status) + "'. " + job.msg}
+	event := events.Event{Reason: events.LocalStateChangeReason, Msg: job.msg}
 	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.UndeploymenConditionType, v1.LocalConditionType)
 	if err != nil {
-		job.status = v1.DeploymentStatusFailure
-		job.msg = "Cannot Update Application Condition. " + err.Error()
+		job.log.WithName("StatusUpdater").Error(err, "Failed to update status")
 	}
 }
 

@@ -29,6 +29,10 @@ func (c *FakeClock) NowTime() metav1.Time {
 	return metav1.NewTime(t)
 }
 
+func (c *FakeClock) Advance(duration time.Duration) {
+	c.nowMillis += duration.Milliseconds()
+}
+
 func (c *FakeClock) SetNow(nowMillis int64) {
 	c.nowMillis = nowMillis
 }
