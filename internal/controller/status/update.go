@@ -6,6 +6,7 @@ import (
 	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/controller/events"
+	ctrltypes "hiro.io/anyapplication/internal/controller/types"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -59,7 +60,7 @@ func (su *StatusUpdater) UpdateStatus(
 		}
 		// Update or insert condition
 		if updated {
-			if su.ctx.Err() == context.Canceled {
+			if ctrltypes.IsCancelled(su.ctx) {
 				return nil // stop retrying
 			}
 			updatedApplication.IncrementZoneVersion(su.zoneId)

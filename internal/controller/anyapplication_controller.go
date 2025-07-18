@@ -112,7 +112,10 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	result.JobsToAdd.ForEach(func(newJob types.AsyncJob) {
 		applicationId := newJob.GetJobID().ApplicationId
 		currentJobOpt := r.Jobs.GetCurrent(applicationId)
-		if currentJob, exists := currentJobOpt.Get(); exists {
+		currentJob, jobIsRunning := currentJobOpt.Get()
+		differentJobIsRunning := jobIsRunning && currentJob.GetJobID() != newJob.GetJobID()
+
+		if jobIsRunning && differentJobIsRunning {
 			r.Log.Info("Stopping job", "jobId", currentJob.GetJobID())
 			r.Jobs.Stop(applicationId)
 		}
@@ -147,8 +150,15 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	result.JobsToAdd.ForEach(func(newJob types.AsyncJob) {
-		r.Log.Info("Starting job", "jobId", newJob.GetJobID())
-		r.Jobs.Execute(newJob)
+		applicationId := newJob.GetJobID().ApplicationId
+		currentJobOpt := r.Jobs.GetCurrent(applicationId)
+		currentJob, jobIsRunning := currentJobOpt.Get()
+		theSameJobIsRunning := jobIsRunning && currentJob.GetJobID() == newJob.GetJobID()
+
+		if !theSameJobIsRunning {
+			r.Log.Info("Starting job", "jobId", newJob.GetJobID())
+			r.Jobs.Execute(newJob)
+		}
 	})
 
 	return ctrlResult, err

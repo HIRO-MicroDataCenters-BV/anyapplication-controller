@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/controller/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -59,6 +60,14 @@ var _ = Describe("DeployJob", func() {
 			LastTransitionTime: metav1.Time{},
 		},
 		))
+
+		Expect(deployJob.GetJobID()).To(Equal(types.JobId{
+			JobType: types.AsyncJobTypeDeploy,
+			ApplicationId: types.ApplicationId{
+				Name:      application.Name,
+				Namespace: application.Namespace,
+			},
+		}))
 	})
 
 	It("Deployment should run and apply done status", func() {

@@ -9,6 +9,7 @@ import (
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/events"
+	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -85,6 +86,15 @@ var _ = Describe("PlacementJob", func() {
 			LastTransitionTime: fakeClock.NowTime(),
 		},
 		))
+
+		Expect(placementJob.GetJobID()).To(Equal(types.JobId{
+			JobType: types.AsyncJobTypeLocalPlacement,
+			ApplicationId: types.ApplicationId{
+				Name:      application.Name,
+				Namespace: application.Namespace,
+			},
+		}))
+
 	})
 
 	It("should run and apply done status", func() {

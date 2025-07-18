@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/controller/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -61,16 +62,25 @@ var _ = Describe("UndeployJob", func() {
 			LastTransitionTime: metav1.Time{},
 		},
 		))
+
+		Expect(undeployJob.GetJobID()).To(Equal(types.JobId{
+			JobType: types.AsyncJobTypeUndeploy,
+			ApplicationId: types.ApplicationId{
+				Name:      application.Name,
+				Namespace: application.Namespace,
+			},
+		}))
+
 	})
 
 	It("should run and apply done status", func() {
 		jobContextDeploy, cancelDeploy := jobContext.WithCancel()
-		defer cancelDeploy()
 
 		deployJob := NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
 		go deployJob.Run(jobContextDeploy)
 
 		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
+		cancelDeploy()
 
 		jobContextUndeploy, cancelUndeploy := jobContext.WithCancel()
 		defer cancelUndeploy()
@@ -87,10 +97,10 @@ var _ = Describe("UndeployJob", func() {
 				Type:               v1.UndeploymenConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.UndeploymentStatusDone),
+				Msg:                "",
 				LastTransitionTime: metav1.Time{},
 			},
 		))
-		undeployJob.Stop()
 
 	})
 

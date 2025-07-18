@@ -1,8 +1,6 @@
 package job
 
 import (
-	"sync/atomic"
-
 	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
@@ -13,17 +11,15 @@ import (
 )
 
 type UndeployJob struct {
-	application        *v1.AnyApplication
-	runtimeConfig      *config.ApplicationRuntimeConfig
-	status             v1.UndeploymentStatus
-	clock              clock.Clock
-	msg                string
-	jobId              types.JobId
-	stopConfirmChannel chan struct{}
-	stopped            atomic.Bool
-	log                logr.Logger
-	version            string
-	events             *events.Events
+	application   *v1.AnyApplication
+	runtimeConfig *config.ApplicationRuntimeConfig
+	status        v1.UndeploymentStatus
+	clock         clock.Clock
+	msg           string
+	jobId         types.JobId
+	log           logr.Logger
+	version       string
+	events        *events.Events
 }
 
 func NewUndeployJob(
@@ -34,7 +30,7 @@ func NewUndeployJob(
 	events *events.Events,
 ) *UndeployJob {
 	jobId := types.JobId{
-		JobType: types.AsyncJobTypeLocalOperation,
+		JobType: types.AsyncJobTypeUndeploy,
 		ApplicationId: types.ApplicationId{
 			Name:      application.Name,
 			Namespace: application.Namespace,
@@ -43,25 +39,20 @@ func NewUndeployJob(
 	version := application.ResourceVersion
 	log = log.WithName("UndeployJob")
 	return &UndeployJob{
-		status:             v1.UndeploymentStatusUndeploy,
-		application:        application,
-		runtimeConfig:      runtimeConfig,
-		clock:              clock,
-		msg:                "",
-		jobId:              jobId,
-		stopConfirmChannel: make(chan struct{}),
-		stopped:            atomic.Bool{},
-		log:                log,
-		version:            version,
-		events:             events,
+		status:        v1.UndeploymentStatusUndeploy,
+		application:   application,
+		runtimeConfig: runtimeConfig,
+		clock:         clock,
+		msg:           "",
+		jobId:         jobId,
+		log:           log,
+		version:       version,
+		events:        events,
 	}
 }
 
 func (job *UndeployJob) Run(context types.AsyncJobContext) {
-	go func() {
-		defer close(job.stopConfirmChannel)
-		job.runInner(context)
-	}()
+	job.runInner(context)
 }
 
 func (job *UndeployJob) runInner(context types.AsyncJobContext) {
@@ -132,9 +123,4 @@ func (job *UndeployJob) GetStatus() v1.ConditionStatus {
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
 	}
-}
-
-func (job *UndeployJob) Stop() {
-	job.stopped.Store(true)
-	<-job.stopConfirmChannel
 }

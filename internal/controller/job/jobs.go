@@ -9,6 +9,8 @@ import (
 	"hiro.io/anyapplication/internal/controller/types"
 )
 
+type CleanupFunc func(jobID types.JobId)
+
 type jobs struct {
 	jobs       sync.Map
 	jobContext types.AsyncJobContext
@@ -31,7 +33,16 @@ func (j *jobs) StopAll() {
 func (j *jobs) Execute(job types.AsyncJob) {
 	jobId := job.GetJobID()
 	id := jobId.ApplicationId
-	worker := NewJobWorker(job)
+	worker := NewJobWorker(job, func(jobID types.JobId) {
+		worker, found := j.jobs.Load(jobID.ApplicationId)
+		if !found {
+			return
+		}
+		jobWorker, ok := worker.(*JobWorker)
+		if ok && jobWorker.getJob().GetJobID() == jobID {
+			j.jobs.Delete(jobID.ApplicationId)
+		}
+	})
 	j.jobs.Store(id, worker)
 	go worker.Run(j.jobContext)
 }
@@ -61,25 +72,25 @@ func (j *jobs) Stop(id types.ApplicationId) {
 }
 
 type JobWorker struct {
-	job                types.AsyncJob
-	stopped            atomic.Bool
-	stopConfirmChannel chan struct{}
-	cancelFunc         *context.CancelFunc
+	job         types.AsyncJob
+	stopped     atomic.Bool
+	cancelFunc  *context.CancelFunc
+	cleanupFunc CleanupFunc
 }
 
-func NewJobWorker(job types.AsyncJob) *JobWorker {
+func NewJobWorker(job types.AsyncJob, cleanupFunc CleanupFunc) *JobWorker {
 	return &JobWorker{
-		job:                job,
-		stopped:            atomic.Bool{},
-		stopConfirmChannel: make(chan struct{}),
+		job:         job,
+		cleanupFunc: cleanupFunc,
+		stopped:     atomic.Bool{},
 	}
 }
 
 func (w *JobWorker) Run(jobContext types.AsyncJobContext) {
-	jobContext, cancel := jobContext.WithCancel()
+	contextWithCancel, cancel := jobContext.WithCancel()
 	w.cancelFunc = &cancel
-	w.job.Run(jobContext)
-	close(w.stopConfirmChannel)
+	w.job.Run(contextWithCancel)
+	w.Stop()
 }
 
 func (w *JobWorker) getJob() types.AsyncJob {
@@ -91,6 +102,6 @@ func (w *JobWorker) Stop() {
 		if w.cancelFunc != nil {
 			(*w.cancelFunc)()
 		}
-		<-w.stopConfirmChannel
+		w.cleanupFunc(w.job.GetJobID())
 	}
 }

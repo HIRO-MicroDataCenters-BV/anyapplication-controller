@@ -36,7 +36,7 @@ func NewDeployJob(
 	events *events.Events,
 ) *DeployJob {
 	jobId := types.JobId{
-		JobType: types.AsyncJobTypeLocalOperation,
+		JobType: types.AsyncJobTypeDeploy,
 		ApplicationId: types.ApplicationId{
 			Name:      application.Name,
 			Namespace: application.Namespace,
@@ -62,7 +62,9 @@ func NewDeployJob(
 }
 
 func (job *DeployJob) Run(jobContext types.AsyncJobContext) {
-	job.runInner(jobContext)
+	if job.runInner(jobContext) {
+		return
+	}
 
 	ticker := time.NewTicker(job.runtimeConfig.PollSyncStatusInterval)
 	defer ticker.Stop()
@@ -70,14 +72,17 @@ func (job *DeployJob) Run(jobContext types.AsyncJobContext) {
 	for {
 		select {
 		case <-ticker.C:
-			job.runInner(jobContext)
+			completed := job.runInner(jobContext)
+			if completed {
+				return
+			}
 		case <-jobContext.GetGoContext().Done():
 			return
 		}
 	}
 
 }
-func (job *DeployJob) runInner(context types.AsyncJobContext) {
+func (job *DeployJob) runInner(context types.AsyncJobContext) bool {
 	syncManager := context.GetSyncManager()
 
 	syncResult, err := syncManager.Sync(context.GetGoContext(), job.application)
@@ -85,11 +90,16 @@ func (job *DeployJob) runInner(context types.AsyncJobContext) {
 
 	if err != nil {
 		job.Fail(context, err.Error())
+		return true
 	}
 
 	if syncResult.ApplicationResourcesDeployed {
 		job.Success(context, healthStatus)
+		return true
 	}
+
+	// TODO timeout
+	return false
 }
 
 func (job *DeployJob) Fail(context types.AsyncJobContext, msg string) {

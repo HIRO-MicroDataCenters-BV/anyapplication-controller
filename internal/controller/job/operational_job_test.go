@@ -5,6 +5,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/controller/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -61,18 +62,30 @@ var _ = Describe("LocalOperationJob", func() {
 			LastTransitionTime: metav1.Time{},
 		},
 		))
+
+		Expect(operationJob.GetJobID()).To(Equal(types.JobId{
+			JobType: types.AsyncJobTypeLocalOperation,
+			ApplicationId: types.ApplicationId{
+				Name:      application.Name,
+				Namespace: application.Namespace,
+			},
+		}))
+
 	})
 
 	It("should sync periodically and report status", func() {
 		deployJob := NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
-		jobContext, cancel := jobContext.WithCancel()
-		defer cancel()
+		deployJobContext, cancelDeploy := jobContext.WithCancel()
 
-		go deployJob.Run(jobContext)
+		go deployJob.Run(deployJobContext)
 
 		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
+		cancelDeploy()
 
-		operationJob.Run(jobContext)
+		operationJobContext, cancelOperation := jobContext.WithCancel()
+		defer cancelOperation()
+
+		go operationJob.Run(operationJobContext)
 
 		waitForJobStatus(operationJob, string(health.HealthStatusProgressing))
 
@@ -85,11 +98,9 @@ var _ = Describe("LocalOperationJob", func() {
 				ZoneId:             "zone",
 				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: metav1.Time{},
-				Msg:                "\n",
+				Msg:                "",
 			},
 		))
-
-		operationJob.Stop()
 
 	})
 

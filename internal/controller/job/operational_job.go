@@ -1,7 +1,6 @@
 package job
 
 import (
-	"sync/atomic"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/health"
@@ -15,18 +14,15 @@ import (
 )
 
 type LocalOperationJob struct {
-	application        *v1.AnyApplication
-	runtimeConfig      *config.ApplicationRuntimeConfig
-	clock              clock.Clock
-	status             health.HealthStatusCode
-	msg                string
-	stopCh             chan struct{}
-	stopConfirmChannel chan struct{}
-	jobId              types.JobId
-	stopped            atomic.Bool
-	log                logr.Logger
-	events             *events.Events
-	version            string
+	application   *v1.AnyApplication
+	runtimeConfig *config.ApplicationRuntimeConfig
+	clock         clock.Clock
+	status        health.HealthStatusCode
+	msg           string
+	jobId         types.JobId
+	log           logr.Logger
+	events        *events.Events
+	version       string
 }
 
 func NewLocalOperationJob(
@@ -47,38 +43,29 @@ func NewLocalOperationJob(
 	version := application.ResourceVersion
 
 	return &LocalOperationJob{
-		application:        application,
-		runtimeConfig:      runtimeConfig,
-		clock:              clock,
-		status:             health.HealthStatusProgressing,
-		stopCh:             make(chan struct{}),
-		stopConfirmChannel: make(chan struct{}),
-		jobId:              jobId,
-		stopped:            atomic.Bool{},
-		log:                log,
-		version:            version,
-		events:             events,
+		application:   application,
+		runtimeConfig: runtimeConfig,
+		clock:         clock,
+		status:        health.HealthStatusProgressing,
+		jobId:         jobId,
+		log:           log,
+		version:       version,
+		events:        events,
 	}
 }
 
 func (job *LocalOperationJob) Run(context types.AsyncJobContext) {
-	go func() {
-		defer close(job.stopConfirmChannel)
+	ticker := time.NewTicker(job.runtimeConfig.PollOperationalStatusInterval)
+	defer ticker.Stop()
 
-		job.runInner(context)
-
-		ticker := time.NewTicker(job.runtimeConfig.PollOperationalStatusInterval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				job.runInner(context)
-			case <-job.stopCh:
-				return
-			}
+	for {
+		select {
+		case <-ticker.C:
+			job.runInner(context)
+		case <-context.GetGoContext().Done():
+			return
 		}
-	}()
+	}
 }
 
 func (job *LocalOperationJob) runInner(context types.AsyncJobContext) {
@@ -105,12 +92,6 @@ func (job *LocalOperationJob) runInner(context types.AsyncJobContext) {
 			job.Success(context)
 		}
 	}
-}
-
-func (job *LocalOperationJob) Stop() {
-	job.stopped.Store(true)
-	job.stopCh <- struct{}{}
-	<-job.stopConfirmChannel
 }
 
 func (job *LocalOperationJob) Fail(context types.AsyncJobContext) {
