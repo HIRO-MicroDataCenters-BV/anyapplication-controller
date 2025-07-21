@@ -22,9 +22,9 @@ spec:
             enable: false
   zones: 1
   placementStrategy: 
-    strategy: Local
-    # strategy: Global
+    # strategy: Local
+    strategy: Global
   recoverStrategy:
-    tolerance: 0
+    tolerance: 1
     maxRetries: 3
 
