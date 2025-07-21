@@ -17,6 +17,7 @@ type OwnershipTransferJob struct {
 	jobId         types.JobId
 	log           logr.Logger
 	events        *events.Events
+	reason        string
 }
 
 func NewOwnershipTransferJob(
@@ -63,6 +64,8 @@ func (job *OwnershipTransferJob) GetStatus() v1.ConditionStatus {
 		ZoneId:             job.runtimeConfig.ZoneId,
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),
+		Msg:                "Ownership transfer in progress",
+		Reason:             job.reason,
 	}
 }
 

@@ -63,6 +63,8 @@ configuration:
     zone: zone
     operationalPollDuration: 5s
     syncPollDuration: 60s
+    defaultSyncTimeout: 180s
+    defaultUndeployTimeout: 180s
   api:
     bind_address: :9000
   logging:

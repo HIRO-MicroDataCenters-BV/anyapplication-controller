@@ -22,6 +22,7 @@ type LocalPlacementJob struct {
 	log           logr.Logger
 	version       string
 	events        *events.Events
+	reason        string
 }
 
 func NewLocalPlacementJob(
@@ -104,5 +105,6 @@ func (job *LocalPlacementJob) GetStatus() v1.ConditionStatus {
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
+		Reason:             job.reason,
 	}
 }

@@ -145,5 +145,6 @@ func (job *LocalOperationJob) GetStatus() v1.ConditionStatus {
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
+		Reason:             job.reason,
 	}
 }
