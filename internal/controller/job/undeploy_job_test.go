@@ -97,7 +97,7 @@ var _ = Describe("UndeployJob", func() {
 				Type:               v1.UndeploymenConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.UndeploymentStatusDone),
-				Msg:                "",
+				Msg:                "Undeploy state changed to 'Done'. ",
 				LastTransitionTime: metav1.Time{},
 			},
 		))

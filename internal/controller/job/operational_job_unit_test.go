@@ -1,11 +1,10 @@
 package job
 
 import (
-	"context"
-	"fmt"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
+	"github.com/argoproj/gitops-engine/pkg/health"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "hiro.io/anyapplication/api/v1"
@@ -19,18 +18,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/watch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 )
 
-var _ = Describe("UndeployJobUnitests", func() {
+var _ = Describe("LocalOperationJobUnitTests", func() {
 	var (
-		undeployJob    *UndeployJob
+		localJob       *LocalOperationJob
 		application    *v1.AnyApplication
 		scheme         *runtime.Scheme
 		gitOpsEngine   *fixture.FakeGitOpsEngine
@@ -38,14 +34,13 @@ var _ = Describe("UndeployJobUnitests", func() {
 		fakeClock      *clock.FakeClock
 		jobContext     types.AsyncJobContext
 		runtimeConfig  config.ApplicationRuntimeConfig
-		fakeHelmClient *helm.FakeHelmClient
 		updateFuncs    []cache.UpdateSettingsFunc
+		fakeHelmClient *helm.FakeHelmClient
 	)
 
 	BeforeEach(func() {
 		scheme = runtime.NewScheme()
 		_ = v1.AddToScheme(scheme)
-		_ = corev1.AddToScheme(scheme)
 
 		fakeClock = clock.NewFakeClock()
 		application = &v1.AnyApplication{
@@ -111,13 +106,8 @@ var _ = Describe("UndeployJobUnitests", func() {
 
 		kubeClient = fake.NewClientBuilder().
 			WithScheme(scheme).
-			WithRuntimeObjects(application, &pod).
+			WithRuntimeObjects(application).
 			WithStatusSubresource(&v1.AnyApplication{}).
-			WithInterceptorFuncs(interceptor.Funcs{
-				Delete: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
-					return fmt.Errorf("delete error")
-				},
-			}).
 			Build()
 
 		fakeHelmClient = helm.NewFakeHelmClient()
@@ -134,6 +124,7 @@ var _ = Describe("UndeployJobUnitests", func() {
 			PollSyncStatusInterval:        300 * time.Millisecond,
 			DefaultSyncTimeout:            300 * time.Millisecond,
 		}
+
 		updateFuncs = []cache.UpdateSettingsFunc{
 			cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
 				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()["dcp.hiro.io/managed-by"]}
@@ -142,94 +133,29 @@ var _ = Describe("UndeployJobUnitests", func() {
 			}),
 		}
 
-		clusterCache, _ := fixture.NewTestClusterCacheWithOptions(updateFuncs, &pod)
-		if err := clusterCache.EnsureSynced(); err != nil {
-			Fail("Failed to sync cluster cache: " + err.Error())
-		}
-
+		clusterCache, _ := fixture.NewTestClusterCacheWithOptions(updateFuncs)
 		syncManager := ctrl_sync.NewSyncManager(kubeClient, fakeHelmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
 		jobContext = NewAsyncJobContext(fakeHelmClient, kubeClient, ctx, syncManager)
 
-		undeployJob = NewUndeployJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
+		localJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
 	})
 
-	It("Deployment should retry and fail after several attempts", func() {
+	It("LocalOperationJob should exit with failure if resources are missing", func() {
+
 		jobContext, cancel := jobContext.WithCancel()
 		defer cancel()
 
-		go undeployJob.Run(jobContext)
+		go localJob.Run(jobContext)
 
 		fakeClock.Advance(1 * time.Second)
 
-		status := undeployJob.GetStatus()
-		Expect(status.Status).To(Equal(string(v1.UndeploymentStatusUndeploy)))
-		waitForJobMsg(undeployJob, "Undeploy failure: Undeployment timed out Retrying undeployment (attempt 2 of 3).")
+		waitForJobStatus(localJob, string(health.HealthStatusMissing))
 
-		fakeClock.Advance(1 * time.Second)
+		status := localJob.GetStatus()
+		Expect(status.Status).To(Equal(string(health.HealthStatusMissing)))
+		Expect(status.Msg).To(Equal("Operation Failure: Application resources are missing"))
 
-		status = undeployJob.GetStatus()
-		Expect(status.Status).To(Equal(string(v1.UndeploymentStatusUndeploy)))
-		waitForJobMsg(undeployJob, "Undeploy failure: Undeployment timed out Retrying undeployment (attempt 3 of 3).")
-
-		fakeClock.Advance(1 * time.Second)
-
-		waitForJobStatus(undeployJob, string(v1.UndeploymentStatusFailure))
-
-		Expect(undeployJob.GetStatus().Msg).To(Equal("Undeploy failure: Failure after 3 attempts."))
 	})
 
 })
-
-type FakeObjectTracker struct {
-}
-
-func NewObjectTracker() *FakeObjectTracker {
-	return &FakeObjectTracker{}
-}
-
-func (f *FakeObjectTracker) Add(obj runtime.Object) error {
-	return nil
-}
-
-// Get retrieves the object by its kind, namespace and name.
-func (f *FakeObjectTracker) Get(gvr schema.GroupVersionResource, ns, name string, opts ...metav1.GetOptions) (runtime.Object, error) {
-	return nil, nil
-}
-func (f *FakeObjectTracker) Create(gvr schema.GroupVersionResource, obj runtime.Object, ns string, opts ...metav1.CreateOptions) error {
-	return nil
-}
-
-// Update updates an existing object in the tracker in the specified namespace.
-func (f *FakeObjectTracker) Update(gvr schema.GroupVersionResource, obj runtime.Object, ns string, opts ...metav1.UpdateOptions) error {
-	return nil
-}
-
-// Patch patches an existing object in the tracker in the specified namespace.
-func (f *FakeObjectTracker) Patch(gvr schema.GroupVersionResource, obj runtime.Object, ns string, opts ...metav1.PatchOptions) error {
-	return nil
-}
-
-// Apply applies an object in the tracker in the specified namespace.
-func (f *FakeObjectTracker) Apply(gvr schema.GroupVersionResource, applyConfiguration runtime.Object, ns string, opts ...metav1.PatchOptions) error {
-	return nil
-}
-
-// List retrieves all objects of a given kind in the given
-// namespace. Only non-List kinds are accepted.
-func (f *FakeObjectTracker) List(gvr schema.GroupVersionResource, gvk schema.GroupVersionKind, ns string, opts ...metav1.ListOptions) (runtime.Object, error) {
-	return nil, nil
-}
-
-// Delete deletes an existing object from the tracker. If object
-// didn't exist in the tracker prior to deletion, Delete returns
-// no error.
-func (f *FakeObjectTracker) Delete(gvr schema.GroupVersionResource, ns, name string, opts ...metav1.DeleteOptions) error {
-	return fmt.Errorf("delete error")
-}
-
-// Watch watches objects from the tracker. Watch returns a channel
-// which will push added / modified / deleted object.
-func (f *FakeObjectTracker) Watch(gvr schema.GroupVersionResource, ns string, opts ...metav1.ListOptions) (watch.Interface, error) {
-	return nil, fmt.Errorf("not implemented")
-}

@@ -294,7 +294,6 @@ func (m *syncManager) deleteApp(ctx context.Context, app *cachedApp) (*types.Del
 			m.log.V(1).Info("Deleted", "Resource", fullName)
 		}
 	}
-	fmt.Printf("managedResourcesByKey %d, deleted %d, delete failures %d\n", len(managedResourcesByKey), syncResult.Deleted, syncResult.DeleteFailed)
 	syncResult.ApplicationResourcesPresent = len(managedResourcesByKey) > 0
 	return syncResult, nil
 

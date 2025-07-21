@@ -18,6 +18,7 @@ type LocalOperationJob struct {
 	runtimeConfig *config.ApplicationRuntimeConfig
 	clock         clock.Clock
 	status        health.HealthStatusCode
+	reason        string
 	msg           string
 	jobId         types.JobId
 	log           logr.Logger
@@ -61,70 +62,71 @@ func (job *LocalOperationJob) Run(context types.AsyncJobContext) {
 	for {
 		select {
 		case <-ticker.C:
-			job.runInner(context)
+			isCompleted := job.runInner(context)
+			if isCompleted {
+				return
+			}
 		case <-context.GetGoContext().Done():
 			return
 		}
 	}
 }
 
-func (job *LocalOperationJob) runInner(context types.AsyncJobContext) {
+func (job *LocalOperationJob) runInner(context types.AsyncJobContext) bool {
 	syncManager := context.GetSyncManager()
 
 	healthStatus := syncManager.GetAggregatedStatus(job.application)
+
 	job.status = healthStatus.Status
 	job.msg = healthStatus.Message
 
 	switch healthStatus.Status {
 	case health.HealthStatusHealthy, health.HealthStatusProgressing:
-		job.Success(context)
+		job.Success(context, healthStatus.Status)
+		return false
 	case health.HealthStatusDegraded, health.HealthStatusUnknown:
-		job.Fail(context)
+		job.Fail(context, healthStatus.Status, "", "HealthCheckFailed")
+		return true
+
 	case health.HealthStatusMissing:
-		syncResult, err := syncManager.Sync(context.GetGoContext(), job.application)
-		if err != nil {
-			job.status = health.HealthStatusDegraded
-			job.msg = "Cannot sync application: " + err.Error()
-			job.Fail(context)
-		} else {
-			job.status = syncResult.Status.Status
-			job.msg = syncResult.Status.Message
-			job.Success(context)
-		}
+		job.Fail(context, health.HealthStatusMissing, "Application resources are missing", "ResourcesMissing")
+		return true
+	default:
+		return false
 	}
 }
 
-func (job *LocalOperationJob) Fail(context types.AsyncJobContext) {
+func (job *LocalOperationJob) Fail(context types.AsyncJobContext, status health.HealthStatusCode, msg string, reason string) {
+
+	job.msg = "Operation Failure: " + msg
+	job.reason = reason
+	job.status = status
+
+	job.updateStatus(context)
+}
+
+func (job *LocalOperationJob) Success(context types.AsyncJobContext, status health.HealthStatusCode) {
+
+	job.msg = "Operation state changed to '" + string(status) + "'. "
+	job.reason = ""
+	job.status = status
+
+	job.updateStatus(context)
+}
+
+func (job *LocalOperationJob) updateStatus(jobContext types.AsyncJobContext) {
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(),
+		jobContext.GetGoContext(),
 		job.log.WithName("StatusUpdater"),
-		context.GetKubeClient(),
+		jobContext.GetKubeClient(),
 		job.application.GetNamespacedName(),
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Operation Failure: " + job.msg}
+	event := events.Event{Reason: events.LocalStateChangeReason, Msg: job.msg}
 	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.DeploymenConditionType, v1.UndeploymenConditionType)
 	if err != nil {
-		job.status = health.HealthStatusDegraded
-		job.msg = "Cannot Update Application Condition. " + err.Error()
-	}
-}
-
-func (job *LocalOperationJob) Success(context types.AsyncJobContext) {
-	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(),
-		job.log.WithName("StatusUpdater"),
-		context.GetKubeClient(),
-		job.application.GetNamespacedName(),
-		job.runtimeConfig.ZoneId,
-		job.events,
-	)
-	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Operation state change to " + string(job.status) + job.msg}
-	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.DeploymenConditionType, v1.UndeploymenConditionType)
-	if err != nil {
-		job.status = health.HealthStatusDegraded
-		job.msg = "Cannot Update Application Condition. " + err.Error()
+		job.log.WithName("StatusUpdater").Error(err, "Failed to update status")
 	}
 }
 
