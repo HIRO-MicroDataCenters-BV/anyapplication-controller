@@ -31,6 +31,15 @@ func (a AsyncJobContextImpl) GetGoContext() context.Context {
 	return a.ctx
 }
 
+func (a AsyncJobContextImpl) WithCancel() (types.AsyncJobContext, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(a.ctx)
+	return AsyncJobContextImpl{a.helmClient, a.kubeClient, ctx, a.syncManager}, cancel
+}
+
+func (a AsyncJobContextImpl) IsCancelled() bool {
+	return types.IsCancelled(a.ctx)
+}
+
 func (a AsyncJobContextImpl) GetSyncManager() types.SyncManager {
 	return a.syncManager
 }

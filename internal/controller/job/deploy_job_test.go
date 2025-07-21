@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "hiro.io/anyapplication/api/v1"
+	"hiro.io/anyapplication/internal/controller/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -53,18 +54,28 @@ var _ = Describe("DeployJob", func() {
 		status := deployJob.GetStatus()
 		status.LastTransitionTime = metav1.Time{}
 		Expect(status).To(Equal(v1.ConditionStatus{
-			Type:               v1.DeploymenConditionType,
+			Type:               v1.DeploymentConditionType,
 			ZoneId:             "zone",
 			Status:             string(v1.DeploymentStatusPull),
 			LastTransitionTime: metav1.Time{},
 		},
 		))
+
+		Expect(deployJob.GetJobID()).To(Equal(types.JobId{
+			JobType: types.AsyncJobTypeDeploy,
+			ApplicationId: types.ApplicationId{
+				Name:      application.Name,
+				Namespace: application.Namespace,
+			},
+		}))
 	})
 
 	It("Deployment should run and apply done status", func() {
 		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+		jobContext, cancel := jobContext.WithCancel()
+		defer cancel()
 
-		deployJob.Run(jobContext)
+		go deployJob.Run(jobContext)
 		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
 
 		status := deployJob.GetStatus()
@@ -72,14 +83,13 @@ var _ = Describe("DeployJob", func() {
 
 		Expect(status).To(Equal(
 			v1.ConditionStatus{
-				Type:               v1.DeploymenConditionType,
+				Type:               v1.DeploymentConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.DeploymentStatusDone),
 				LastTransitionTime: metav1.Time{},
+				Msg:                "Deployment state changed to 'Done'. ",
 			},
 		))
-
-		deployJob.Stop()
 
 	})
 
@@ -90,9 +100,12 @@ var _ = Describe("DeployJob", func() {
 			Version:    "1.0.0",
 		}
 		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+		jobContext, cancel := jobContext.WithCancel()
+		defer cancel()
+
 		deployJob = NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
 
-		deployJob.Run(jobContext)
+		go deployJob.Run(jobContext)
 
 		waitForJobStatus(deployJob, string(v1.DeploymentStatusFailure))
 
@@ -101,15 +114,14 @@ var _ = Describe("DeployJob", func() {
 
 		Expect(status).To(Equal(
 			v1.ConditionStatus{
-				Type:               v1.DeploymenConditionType,
+				Type:               v1.DeploymentConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.DeploymentStatusFailure),
 				LastTransitionTime: metav1.Time{},
-				Msg:                "Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",
+				Msg:                "Deployment failure: Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",
+				Reason:             "SyncError",
 			},
 		))
-
-		deployJob.Stop()
 
 	})
 

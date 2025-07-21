@@ -13,10 +13,10 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 )
 
-func NewTestClusterCacheWithOptions(opts []cache.UpdateSettingsFunc, objs ...runtime.Object) cache.ClusterCache {
-	client := k8sfake.NewSimpleDynamicClient(scheme.Scheme, objs...)
-	reactor := client.ReactionChain[0]
-	client.PrependReactor("list", "*", func(action testcore.Action) (handled bool, ret runtime.Object, err error) {
+func NewTestClusterCacheWithOptions(opts []cache.UpdateSettingsFunc, objs ...runtime.Object) (cache.ClusterCache, *k8sfake.FakeDynamicClient) {
+	k8sClient := k8sfake.NewSimpleDynamicClient(scheme.Scheme, objs...)
+	reactor := k8sClient.ReactionChain[0]
+	k8sClient.PrependReactor("list", "*", func(action testcore.Action) (handled bool, ret runtime.Object, err error) {
 		handled, ret, err = reactor.React(action)
 		if err != nil || !handled {
 			return
@@ -53,12 +53,12 @@ func NewTestClusterCacheWithOptions(opts []cache.UpdateSettingsFunc, objs ...run
 	}}
 
 	opts = append([]cache.UpdateSettingsFunc{
-		cache.SetKubectl(&kubetest.MockKubectlCmd{APIResources: apiResources, DynamicClient: client}),
+		cache.SetKubectl(&kubetest.MockKubectlCmd{APIResources: apiResources, DynamicClient: k8sClient}),
 	}, opts...)
 
 	cache := cache.NewClusterCache(
 		&rest.Config{Host: "https://test"},
 		opts...,
 	)
-	return cache
+	return cache, k8sClient
 }

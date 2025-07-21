@@ -72,22 +72,32 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 
 	conditionsToRemove := make([]*v1.ConditionStatus, 0)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.LocalConditionType, g.config.ZoneId)
-	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymenConditionType, g.config.ZoneId)
+	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymentConditionType, g.config.ZoneId)
 
-	if !g.applicationPresent && !g.applicationDeployed {
+	if !g.applicationDeployed {
 		if !g.isRunning(types.AsyncJobTypeDeploy) {
-			deployJob := g.jobFactory.CreateDeployJob(g.application)
-			deployJobOpt := mo.Some(deployJob)
-			deployCondition := deployJob.GetStatus()
-			deployConditionOpt := mo.EmptyableToOption(&deployCondition)
+			deploymentCondition, found := status.FindCondition(v1.DeploymentConditionType)
+			attemptsExhausted := false
+			if found {
+				attemptsExhausted = deploymentCondition.Status == string(v1.DeploymentStatusFailure) &&
+					deploymentCondition.RetryAttempt >= g.recoverStrategy.MaxRetries
+			}
 
-			return types.NextStateResult{
-				ConditionsToAdd:    deployConditionOpt,
-				ConditionsToRemove: conditionsToRemove,
-				Jobs:               types.NextJobs{JobsToAdd: deployJobOpt},
+			if !attemptsExhausted {
+
+				deployJob := g.jobFactory.CreateDeployJob(g.application)
+				deployJobOpt := mo.Some(deployJob)
+				deployCondition := deployJob.GetStatus()
+				deployConditionOpt := mo.EmptyableToOption(&deployCondition)
+
+				return types.NextStateResult{
+					ConditionsToAdd:    deployConditionOpt,
+					ConditionsToRemove: conditionsToRemove,
+					Jobs:               types.NextJobs{JobsToAdd: deployJobOpt},
+				}
 			}
 		}
-	} else if g.applicationPresent {
+	} else if g.applicationDeployed {
 		return g.handleOperation()
 	}
 
@@ -101,11 +111,19 @@ func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 
 	conditionsToRemove := make([]*v1.ConditionStatus, 0)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.LocalConditionType, g.config.ZoneId)
-	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.DeploymenConditionType, g.config.ZoneId)
+	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.DeploymentConditionType, g.config.ZoneId)
+
+	undeploymentCondition, found := status.FindCondition(v1.UndeploymentConditionType)
+	attemptsExhausted := false
+
+	if found {
+		attemptsExhausted = undeploymentCondition.Status == string(v1.UndeploymentStatusFailure) &&
+			undeploymentCondition.RetryAttempt >= g.recoverStrategy.MaxRetries
+	}
 
 	if !g.isRunning(types.AsyncJobTypeUndeploy) {
 
-		if g.applicationPresent {
+		if g.applicationPresent && !attemptsExhausted {
 			undeployJob := g.jobFactory.CreateUndeployJob(g.application)
 			undeployJobOpt := mo.Some(undeployJob)
 			undeployCondition := undeployJob.GetStatus()
@@ -117,24 +135,10 @@ func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 				Jobs:               types.NextJobs{JobsToAdd: undeployJobOpt},
 			}
 		}
-	} else {
-		undeploymentCondition, found := status.FindCondition(v1.UndeploymenConditionType)
-		if found && undeploymentCondition.Status == string(v1.UndeploymentStatusFailure) {
-			if undeploymentCondition.RetryAttempt < g.recoverStrategy.MaxRetries {
-				undeployJob := g.jobFactory.CreateUndeployJob(g.application)
-				undeployJobOpt := mo.Some(undeployJob)
-				undeployCondition := undeployJob.GetStatus()
-				undeployConditionOpt := mo.EmptyableToOption(&undeployCondition)
+	}
 
-				return types.NextStateResult{
-					ConditionsToAdd:    undeployConditionOpt,
-					ConditionsToRemove: conditionsToRemove,
-					Jobs:               types.NextJobs{JobsToAdd: undeployJobOpt},
-				}
-			}
-		} else if found && undeploymentCondition.Status == string(v1.UndeploymentStatusDone) {
-			conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymenConditionType, g.config.ZoneId)
-		}
+	if found && undeploymentCondition.Status == string(v1.UndeploymentStatusDone) {
+		conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymentConditionType, g.config.ZoneId)
 	}
 
 	return types.NextStateResult{
@@ -146,7 +150,7 @@ func (g *LocalFSM) handleOperation() types.NextStateResult {
 	status := g.application.Status.GetOrCreateStatusFor(g.config.ZoneId)
 
 	conditionsToRemove := make([]*v1.ConditionStatus, 0)
-	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymenConditionType, g.config.ZoneId)
+	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymentConditionType, g.config.ZoneId)
 
 	if g.applicationDeployed && !g.isRunning(types.AsyncJobTypeLocalOperation) {
 		operationJob := g.jobFactory.CreateOperationJob(g.application)
@@ -162,7 +166,7 @@ func (g *LocalFSM) handleOperation() types.NextStateResult {
 
 	// By default remove deployment conditions
 	if g.isRunning(types.AsyncJobTypeLocalOperation) || len(conditionsToRemove) > 0 {
-		conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.DeploymenConditionType, g.config.ZoneId)
+		conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.DeploymentConditionType, g.config.ZoneId)
 	}
 
 	return types.NextStateResult{

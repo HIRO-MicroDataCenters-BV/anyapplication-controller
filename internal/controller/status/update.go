@@ -2,11 +2,11 @@ package status
 
 import (
 	"context"
-	"sync/atomic"
 
 	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/controller/events"
+	ctrltypes "hiro.io/anyapplication/internal/controller/types"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -41,7 +41,6 @@ func NewStatusUpdater(
 }
 
 func (su *StatusUpdater) UpdateStatus(
-	stopRetrying *atomic.Bool,
 	statusUpdate func(status *v1.AnyApplicationStatus, zoneId string) (bool, events.Event),
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -61,7 +60,7 @@ func (su *StatusUpdater) UpdateStatus(
 		}
 		// Update or insert condition
 		if updated {
-			if stopRetrying != nil && stopRetrying.Load() {
+			if ctrltypes.IsCancelled(su.ctx) {
 				return nil // stop retrying
 			}
 			updatedApplication.IncrementZoneVersion(su.zoneId)
@@ -79,12 +78,11 @@ func (su *StatusUpdater) UpdateStatus(
 }
 
 func (su *StatusUpdater) UpdateCondition(
-	stopRetrying *atomic.Bool,
 	event events.Event,
 	conditionToUpdate v1.ConditionStatus,
 	conditionsToRemove ...v1.ApplicationConditionType,
 ) error {
-	return su.UpdateStatus(stopRetrying, func(status *v1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
+	return su.UpdateStatus(func(status *v1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
 		updated := status.AddOrUpdate(&conditionToUpdate, zoneId)
 		for _, condType := range conditionsToRemove {
 			removed := status.Remove(condType, zoneId)

@@ -8,6 +8,7 @@ import (
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type LocalApplication struct {
@@ -75,9 +76,35 @@ func (l *LocalApplication) GetCondition() v1.ConditionStatus {
 func FakeLocalApplication(
 	config *config.ApplicationRuntimeConfig,
 	clock clock.Clock,
+	isDeployed bool,
 ) LocalApplication {
+
+	appBundle := &ApplicationBundle{}
+	if !isDeployed {
+
+		bundle, err := LoadApplicationBundle(
+			[]*unstructured.Unstructured{},
+			[]*unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "ConfigMap",
+						"metadata": map[string]interface{}{
+							"namespace": config.ZoneId,
+							"name":      "fake-configmap",
+						},
+					},
+				},
+			},
+			logf.Log,
+		)
+		if err != nil {
+			panic("Failed to create fake LocalApplication: " + err.Error())
+		}
+		appBundle = &bundle
+	}
 	return LocalApplication{
-		bundle:   &ApplicationBundle{},
+		bundle:   appBundle,
 		status:   health.HealthStatusProgressing,
 		messages: []string{},
 		config:   config,

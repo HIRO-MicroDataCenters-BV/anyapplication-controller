@@ -2,7 +2,6 @@ package job
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	v1 "hiro.io/anyapplication/api/v1"
@@ -93,7 +92,7 @@ var _ = Describe("Jobs", func() {
 			Build()
 		helmClient = helm.NewFakeHelmClient()
 
-		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		clusterCache, _ := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
 		syncManager := ctrl_sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
 		context := NewAsyncJobContext(helmClient, kubeClient, ctx, syncManager)
@@ -133,8 +132,6 @@ type testJob struct {
 	id       types.JobId
 	clock    clock.Clock
 	interval time.Duration
-	stopCh   chan struct{}
-	wg       sync.WaitGroup
 	status   health.HealthStatusCode
 }
 
@@ -145,7 +142,6 @@ func newTestJob(applicationId types.ApplicationId, jobType types.AsyncJobType, c
 			JobType:       jobType,
 			ApplicationId: applicationId,
 		},
-		stopCh:   make(chan struct{}),
 		status:   health.HealthStatusProgressing,
 		interval: interval,
 	}
@@ -165,32 +161,21 @@ func (j *testJob) GetStatus() v1.ConditionStatus {
 		LastTransitionTime: j.clock.NowTime(),
 	}
 }
-func (j *testJob) Run(context types.AsyncJobContext) {
-	j.wg.Add(1)
+func (j *testJob) Run(jobContext types.AsyncJobContext) {
 
-	go func() {
-		defer j.wg.Done()
+	ticker := time.NewTicker(j.interval)
+	defer ticker.Stop()
 
-		ticker := time.NewTicker(j.interval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				j.runInner()
-			case <-j.stopCh:
-				return
-			}
+	for {
+		select {
+		case <-ticker.C:
+			j.runInner()
+		case <-jobContext.GetGoContext().Done():
+			return
 		}
-	}()
-
+	}
 }
 
 func (j *testJob) runInner() {
 	j.status = health.HealthStatusProgressing
-}
-
-func (job *testJob) Stop() {
-	close(job.stopCh)
-	job.wg.Wait()
 }

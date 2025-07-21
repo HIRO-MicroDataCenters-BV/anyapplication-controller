@@ -19,9 +19,10 @@ type SyncResult struct {
 }
 
 type DeleteResult struct {
-	Total        int
-	Deleted      int
-	DeleteFailed int
+	Total                       int
+	Deleted                     int
+	DeleteFailed                int
+	ApplicationResourcesPresent bool
 }
 
 func NewSyncResult() *SyncResult {

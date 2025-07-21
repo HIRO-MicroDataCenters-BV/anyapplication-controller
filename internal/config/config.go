@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"go.uber.org/zap/zapcore"
@@ -14,6 +15,8 @@ type ApplicationRuntimeConfig struct {
 	ZoneId                        string        `yaml:"zone"`
 	PollOperationalStatusInterval time.Duration `yaml:"operationalPollDuration"`
 	PollSyncStatusInterval        time.Duration `yaml:"syncPollDuration"`
+	DefaultSyncTimeout            time.Duration `yaml:"defaultSyncTimeout"`
+	DefaultUndeployTimeout        time.Duration `yaml:"defaultUndeployTimeout"`
 }
 
 // Define a struct to match the YAML structure
@@ -89,4 +92,31 @@ func ParseLevel(lvl string) zapcore.Level {
 		level = zapcore.InfoLevel
 	}
 	return level
+}
+
+func GetSyncTimeout(syncOptions *[]string, defaultTimeout time.Duration) time.Duration {
+	if syncOptions == nil {
+		return defaultTimeout
+	}
+	syncOptionsMap := parseKeyValuePairs(*syncOptions)
+	if timeoutStr, ok := syncOptionsMap["syncTimeout"]; ok {
+		if timeout, err := time.ParseDuration(timeoutStr); err == nil {
+			return timeout
+		}
+	}
+
+	return defaultTimeout
+}
+
+func parseKeyValuePairs(pairs []string) map[string]string {
+	result := make(map[string]string)
+	for _, pair := range pairs {
+		parts := strings.SplitN(pair, "=", 2)
+		if len(parts) == 2 {
+			result[parts[0]] = parts[1]
+		} else {
+			result[pair] = ""
+		}
+	}
+	return result
 }

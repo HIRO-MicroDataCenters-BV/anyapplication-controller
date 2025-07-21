@@ -1,8 +1,8 @@
 package job
 
 import (
-	"sync"
-	"sync/atomic"
+	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
@@ -19,12 +19,14 @@ type UndeployJob struct {
 	status        v1.UndeploymentStatus
 	clock         clock.Clock
 	msg           string
+	reason        string
 	jobId         types.JobId
-	wg            sync.WaitGroup
-	stopped       atomic.Bool
 	log           logr.Logger
 	version       string
 	events        *events.Events
+	startTime     time.Time
+	retryAttempts int
+	attempt       int
 }
 
 func NewUndeployJob(
@@ -35,7 +37,7 @@ func NewUndeployJob(
 	events *events.Events,
 ) *UndeployJob {
 	jobId := types.JobId{
-		JobType: types.AsyncJobTypeLocalOperation,
+		JobType: types.AsyncJobTypeUndeploy,
 		ApplicationId: types.ApplicationId{
 			Name:      application.Name,
 			Namespace: application.Namespace,
@@ -50,71 +52,116 @@ func NewUndeployJob(
 		clock:         clock,
 		msg:           "",
 		jobId:         jobId,
-		stopped:       atomic.Bool{},
 		log:           log,
 		version:       version,
 		events:        events,
+		retryAttempts: 3,
+		attempt:       1,
+		startTime:     clock.NowTime().Time,
 	}
 }
 
-func (job *UndeployJob) Run(context types.AsyncJobContext) {
-	job.wg.Add(1)
+func (job *UndeployJob) Run(jobContext types.AsyncJobContext) {
+	isCompleted := job.runInner(jobContext)
+	if isCompleted {
+		return
+	}
 
-	go func() {
-		defer job.wg.Done()
-		job.runInner(context)
-	}()
+	ticker := time.NewTicker(job.runtimeConfig.PollSyncStatusInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			isCompleted := job.runInner(jobContext)
+			if isCompleted {
+				return
+			}
+		case <-jobContext.GetGoContext().Done():
+			return
+		}
+	}
 }
 
-func (job *UndeployJob) runInner(context types.AsyncJobContext) {
-	ctx := context.GetGoContext()
+func (job *UndeployJob) runInner(jobContext types.AsyncJobContext) bool {
 
-	syncManager := context.GetSyncManager()
-	_, err := syncManager.Delete(ctx, job.application)
+	syncManager := jobContext.GetSyncManager()
+	result, err := syncManager.Delete(jobContext.GetGoContext(), job.application)
 
 	if err != nil {
-		job.Fail(context, err.Error())
+		return job.maybeRetry(jobContext, "SyncError", fmt.Sprintf("Undeployment failed: %s", err.Error()))
 	} else {
-		job.Success(context)
+		if !result.ApplicationResourcesPresent {
+			job.Success(jobContext)
+			return true
+		}
+		if job.startTime.Add(job.runtimeConfig.DefaultUndeployTimeout).Before(job.clock.NowTime().Time) {
+			return job.maybeRetry(jobContext, "Timeout", "Undeployment timed out")
+		}
+	}
+	return false
+}
+
+func (job *UndeployJob) maybeRetry(jobContext types.AsyncJobContext, reason string, failureMsg string) bool {
+	if job.attempt < job.retryAttempts {
+		job.attempt++
+		job.startTime = job.clock.NowTime().Time
+		job.AttemptFailure(
+			jobContext,
+			fmt.Sprintf("%s Retrying undeployment (attempt %v of %v).", failureMsg, job.attempt, job.retryAttempts),
+			reason,
+		)
+		return false
+	} else {
+		job.Fail(
+			jobContext,
+			fmt.Sprintf("Failure after %v attempts.", job.retryAttempts),
+			reason,
+		)
+		return true
 	}
 }
 
-func (job *UndeployJob) Fail(context types.AsyncJobContext, msg string) {
-	job.msg = msg
+func (job *UndeployJob) AttemptFailure(jobContext types.AsyncJobContext, msg string, reason string) {
+
+	job.status = v1.UndeploymentStatusUndeploy
+	job.msg = "Undeploy failure: " + msg
+	job.reason = reason
+
+	job.updateStatus(jobContext)
+}
+
+func (job *UndeployJob) Fail(jobContext types.AsyncJobContext, msg string, reason string) {
+
+	job.msg = "Undeploy failure: " + msg
 	job.status = v1.UndeploymentStatusFailure
-	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(),
-		job.log.WithName("StatusUpdater"),
-		context.GetKubeClient(),
-		job.application.GetNamespacedName(),
-		job.runtimeConfig.ZoneId,
-		job.events,
-	)
-	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Undeploy failure: " + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.LocalConditionType, v1.DeploymenConditionType)
-	if err != nil {
-		job.status = v1.UndeploymentStatusFailure
-		job.msg = "Cannot Update Application Condition. " + err.Error()
-	}
+	job.reason = reason
+
+	job.updateStatus(jobContext)
 }
 
 func (job *UndeployJob) Success(context types.AsyncJobContext) {
-	job.status = v1.UndeploymentStatusDone
 
+	job.status = v1.UndeploymentStatusDone
+	job.msg = "Undeploy state changed to '" + string(job.status) + "'. "
+	job.reason = ""
+
+	job.updateStatus(context)
+}
+
+func (job *UndeployJob) updateStatus(jobContext types.AsyncJobContext) {
 	statusUpdater := status.NewStatusUpdater(
-		context.GetGoContext(),
+		jobContext.GetGoContext(),
 		job.log.WithName("StatusUpdater"),
-		context.GetKubeClient(),
+		jobContext.GetKubeClient(),
 		job.application.GetNamespacedName(),
 		job.runtimeConfig.ZoneId,
 		job.events,
 	)
-	event := events.Event{Reason: events.LocalStateChangeReason, Msg: "Undeploy state changed to '" + string(job.status) + "'" + job.msg}
-	err := statusUpdater.UpdateCondition(&job.stopped, event, job.GetStatus(), v1.LocalConditionType, v1.DeploymenConditionType)
-
+	event := events.Event{Reason: events.LocalStateChangeReason, Msg: job.msg}
+	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.LocalConditionType, v1.DeploymentConditionType)
 	if err != nil {
-		job.status = v1.UndeploymentStatusFailure
-		job.msg = "Cannot Update Application Condition. " + err.Error()
+		job.log.WithName("StatusUpdater").Error(err, "Failed to update status")
 	}
 }
 
@@ -128,15 +175,11 @@ func (job *UndeployJob) GetType() types.AsyncJobType {
 
 func (job *UndeployJob) GetStatus() v1.ConditionStatus {
 	return v1.ConditionStatus{
-		Type:               v1.UndeploymenConditionType,
+		Type:               v1.UndeploymentConditionType,
 		ZoneId:             job.runtimeConfig.ZoneId,
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
+		Reason:             job.reason,
 	}
-}
-
-func (job *UndeployJob) Stop() {
-	job.stopped.Store(true)
-	job.wg.Wait()
 }

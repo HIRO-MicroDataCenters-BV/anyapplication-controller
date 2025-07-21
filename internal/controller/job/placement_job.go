@@ -2,7 +2,6 @@ package job
 
 import (
 	"fmt"
-	"sync/atomic"
 
 	"github.com/go-logr/logr"
 	v1 "hiro.io/anyapplication/api/v1"
@@ -20,10 +19,10 @@ type LocalPlacementJob struct {
 	status        v1.PlacementStatus
 	msg           string
 	jobId         types.JobId
-	stopped       atomic.Bool
 	log           logr.Logger
 	version       string
 	events        *events.Events
+	reason        string
 }
 
 func NewLocalPlacementJob(
@@ -34,7 +33,7 @@ func NewLocalPlacementJob(
 	events *events.Events,
 ) *LocalPlacementJob {
 	jobId := types.JobId{
-		JobType: types.AsyncJobTypeLocalOperation,
+		JobType: types.AsyncJobTypeLocalPlacement,
 		ApplicationId: types.ApplicationId{
 			Name:      application.Name,
 			Namespace: application.Namespace,
@@ -48,7 +47,6 @@ func NewLocalPlacementJob(
 		clock:         clock,
 		status:        v1.PlacementStatusInProgress,
 		jobId:         jobId,
-		stopped:       atomic.Bool{},
 		log:           log,
 		version:       version,
 		events:        events,
@@ -75,7 +73,6 @@ func (job *LocalPlacementJob) Run(context types.AsyncJobContext) {
 		Msg:    job.msg + " Placement set to zone '" + job.runtimeConfig.ZoneId + "'",
 	}
 	err := statusUpdater.UpdateStatus(
-		&job.stopped,
 		func(applicationStatus *v1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
 			applicationStatus.Placements = []v1.Placement{
 				{
@@ -108,9 +105,6 @@ func (job *LocalPlacementJob) GetStatus() v1.ConditionStatus {
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),
 		Msg:                job.msg,
+		Reason:             job.reason,
 	}
-}
-
-func (job *LocalPlacementJob) Stop() {
-	job.stopped.Store(true)
 }

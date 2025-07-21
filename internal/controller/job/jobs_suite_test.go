@@ -171,9 +171,21 @@ func getFirstFoundEnvTestBinaryDir() string {
 func waitForJobStatus(job types.AsyncJob, status string) {
 	for i := 0; i < 100; i++ {
 		time.Sleep(300 * time.Millisecond)
+		fmt.Printf("Waiting for job %s to reach status %s, current status: %s, condition: %v\n", job.GetJobID(), status, job.GetStatus().Status, job.GetStatus())
 		if job.GetStatus().Status == status {
 			return
 		}
 	}
 	Fail(fmt.Sprintf("Expected status %s, but got %s, object %v\n", status, job.GetStatus().Status, job.GetStatus()))
+}
+
+func waitForJobMsg(job types.AsyncJob, msg string) {
+	for i := 0; i < 100; i++ {
+		time.Sleep(300 * time.Millisecond)
+		fmt.Printf("Waiting for job %s to reach message %s, current message: %s, condition: %v\n", job.GetJobID(), msg, job.GetStatus().Msg, job.GetStatus())
+		if job.GetStatus().Msg == msg {
+			return
+		}
+	}
+	Fail(fmt.Sprintf("Expected message %s, but got %s, object %v\n", msg, job.GetStatus().Msg, job.GetStatus()))
 }

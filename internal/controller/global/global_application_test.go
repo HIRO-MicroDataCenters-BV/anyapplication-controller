@@ -20,8 +20,9 @@ var _ = Describe("GlobalApplication", func() {
 	fakeClock := clock.NewFakeClock()
 
 	Context("on application resource change", func() {
+		currentZone := "zone"
 		runtimeConfig := &config.ApplicationRuntimeConfig{
-			ZoneId: "zone",
+			ZoneId: currentZone,
 		}
 		events := events.NewFakeEvents()
 		jobFactory := job.NewAsyncJobFactory(runtimeConfig, fakeClock, logf.Log, &events)
@@ -43,15 +44,15 @@ var _ = Describe("GlobalApplication", func() {
 				v1.AnyApplicationStatus{
 					State:      v1.PlacementGlobalState,
 					Placements: nil,
-					Owner:      "zone",
+					Owner:      currentZone,
 					Zones: []v1.ZoneStatus{
 						{
-							ZoneId:      "zone",
+							ZoneId:      currentZone,
 							ZoneVersion: 0,
 							Conditions: []v1.ConditionStatus{
 								{
 									Type:               v1.PlacementConditionType,
-									ZoneId:             "zone",
+									ZoneId:             currentZone,
 									Status:             string(v1.PlacementStatusInProgress),
 									LastTransitionTime: fakeClock.NowTime(),
 								},
@@ -64,7 +65,7 @@ var _ = Describe("GlobalApplication", func() {
 			jobToAdd := jobs.JobsToAdd.OrEmpty()
 			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
 				Type:               v1.PlacementConditionType,
-				ZoneId:             "zone",
+				ZoneId:             currentZone,
 				Status:             string(v1.PlacementStatusInProgress),
 				LastTransitionTime: fakeClock.NowTime(),
 			}))
@@ -91,15 +92,15 @@ var _ = Describe("GlobalApplication", func() {
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
 					State: v1.PlacementGlobalState,
-					Owner: "zone",
+					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
-							ZoneId:      "zone",
+							ZoneId:      currentZone,
 							ZoneVersion: 0,
 							Conditions: []v1.ConditionStatus{
 								{
 									Type:               v1.PlacementConditionType,
-									ZoneId:             "zone",
+									ZoneId:             currentZone,
 									Status:             string(v1.PlacementStatusInProgress),
 									LastTransitionTime: fakeClock.NowTime(),
 								},
@@ -112,7 +113,7 @@ var _ = Describe("GlobalApplication", func() {
 			jobToAdd := jobs.JobsToAdd.OrEmpty()
 			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
 				Type:               v1.PlacementConditionType,
-				ZoneId:             "zone",
+				ZoneId:             currentZone,
 				Status:             string(v1.PlacementStatusInProgress),
 				LastTransitionTime: fakeClock.NowTime(),
 			}))
@@ -124,15 +125,15 @@ var _ = Describe("GlobalApplication", func() {
 			applicationResource := makeApplication()
 			existingCondition := v1.ConditionStatus{
 				Type:               v1.PlacementConditionType,
-				ZoneId:             "zone",
+				ZoneId:             currentZone,
 				Status:             string(v1.PlacementStatusDone),
 				LastTransitionTime: fakeClock.NowTime(),
 			}
 			applicationResource.Status.State = v1.PlacementGlobalState
-			applicationResource.Status.Placements = []v1.Placement{{Zone: "zone"}}
+			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
-					ZoneId:      "zone",
+					ZoneId:      currentZone,
 					ZoneVersion: 1,
 					Conditions:  []v1.ConditionStatus{existingCondition},
 				},
@@ -154,23 +155,23 @@ var _ = Describe("GlobalApplication", func() {
 				v1.AnyApplicationStatus{
 					State: v1.RelocationGlobalState,
 					Placements: []v1.Placement{
-						{Zone: "zone"},
+						{Zone: currentZone},
 					},
-					Owner: "zone",
+					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
-							ZoneId:      "zone",
+							ZoneId:      currentZone,
 							ZoneVersion: 1,
 							Conditions: []v1.ConditionStatus{
 								{
 									Type:               v1.PlacementConditionType,
-									ZoneId:             "zone",
+									ZoneId:             currentZone,
 									Status:             string(v1.PlacementStatusDone),
 									LastTransitionTime: fakeClock.NowTime(),
 								},
 								{
-									Type:               v1.DeploymenConditionType,
-									ZoneId:             "zone",
+									Type:               v1.DeploymentConditionType,
+									ZoneId:             currentZone,
 									Status:             string(v1.DeploymentStatusPull),
 									LastTransitionTime: fakeClock.NowTime(),
 								},
@@ -182,8 +183,8 @@ var _ = Describe("GlobalApplication", func() {
 
 			jobToAdd := jobs.JobsToAdd.OrEmpty()
 			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
-				Type:               v1.DeploymenConditionType,
-				ZoneId:             "zone",
+				Type:               v1.DeploymentConditionType,
+				ZoneId:             currentZone,
 				Status:             string(v1.DeploymentStatusPull),
 				LastTransitionTime: fakeClock.NowTime(),
 			}))
@@ -193,21 +194,21 @@ var _ = Describe("GlobalApplication", func() {
 		It("switch to operational once deployment is completed ", func() {
 			applicationResource := makeApplication()
 			applicationResource.Status.State = v1.RelocationGlobalState
-			applicationResource.Status.Placements = []v1.Placement{{Zone: "zone"}}
+			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
-					ZoneId:      "zone",
+					ZoneId:      currentZone,
 					ZoneVersion: 1,
 					Conditions: []v1.ConditionStatus{
 						{
 							Type:               v1.PlacementConditionType,
-							ZoneId:             "zone",
+							ZoneId:             currentZone,
 							Status:             string(v1.PlacementStatusDone),
 							LastTransitionTime: fakeClock.NowTime(),
 						},
 						{
-							Type:               v1.DeploymenConditionType,
-							ZoneId:             "zone",
+							Type:               v1.DeploymentConditionType,
+							ZoneId:             currentZone,
 							Status:             string(v1.DeploymentStatusDone),
 							LastTransitionTime: fakeClock.NowTime(),
 						},
@@ -216,13 +217,13 @@ var _ = Describe("GlobalApplication", func() {
 			}
 
 			existingJobCondition := types.FromCondition(v1.ConditionStatus{
-				Type:               v1.DeploymenConditionType,
-				ZoneId:             "zone",
+				Type:               v1.DeploymentConditionType,
+				ZoneId:             currentZone,
 				Status:             string(v1.DeploymentStatusDone),
 				LastTransitionTime: fakeClock.NowTime(),
 			}, types.AsyncJobTypeDeploy)
 
-			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock))
+			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock, true))
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -237,29 +238,29 @@ var _ = Describe("GlobalApplication", func() {
 				v1.AnyApplicationStatus{
 					State: v1.OperationalGlobalState,
 					Placements: []v1.Placement{
-						{Zone: "zone"},
+						{Zone: currentZone},
 					},
-					Owner: "zone",
+					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
-							ZoneId:      "zone",
+							ZoneId:      currentZone,
 							ZoneVersion: 1,
 							Conditions: []v1.ConditionStatus{
 								{
 									Type:               v1.PlacementConditionType,
-									ZoneId:             "zone",
+									ZoneId:             currentZone,
 									Status:             string(v1.PlacementStatusDone),
 									LastTransitionTime: fakeClock.NowTime(),
 								},
 								{
-									Type:               v1.DeploymenConditionType,
-									ZoneId:             "zone",
+									Type:               v1.DeploymentConditionType,
+									ZoneId:             currentZone,
 									Status:             string(v1.DeploymentStatusDone),
 									LastTransitionTime: fakeClock.NowTime(),
 								},
 								{
 									Type:               v1.LocalConditionType,
-									ZoneId:             "zone",
+									ZoneId:             currentZone,
 									Status:             string(health.HealthStatusProgressing),
 									LastTransitionTime: fakeClock.NowTime(),
 								},
@@ -272,7 +273,7 @@ var _ = Describe("GlobalApplication", func() {
 			jobToAdd := jobs.JobsToAdd.OrEmpty()
 			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
-				ZoneId:             "zone",
+				ZoneId:             currentZone,
 				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: fakeClock.NowTime(),
 			}))
@@ -282,7 +283,7 @@ var _ = Describe("GlobalApplication", func() {
 		It("should relocate if placements has changed", func() {
 			applicationResource := makeApplication()
 			applicationResource.Status.State = v1.OperationalGlobalState
-			applicationResource.Status.Placements = []v1.Placement{{Zone: "zone"}}
+			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
 
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
@@ -316,9 +317,9 @@ var _ = Describe("GlobalApplication", func() {
 				v1.AnyApplicationStatus{
 					State: v1.RelocationGlobalState,
 					Placements: []v1.Placement{
-						{Zone: "zone"},
+						{Zone: currentZone},
 					},
-					Owner: "zone",
+					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      "otherzone",
@@ -333,12 +334,12 @@ var _ = Describe("GlobalApplication", func() {
 							},
 						},
 						{
-							ZoneId:      "zone",
+							ZoneId:      currentZone,
 							ZoneVersion: 0,
 							Conditions: []v1.ConditionStatus{
 								{
-									Type:               v1.DeploymenConditionType,
-									ZoneId:             "zone",
+									Type:               v1.DeploymentConditionType,
+									ZoneId:             currentZone,
 									Status:             string(v1.DeploymentStatusPull),
 									LastTransitionTime: fakeClock.NowTime(),
 								},
@@ -350,8 +351,8 @@ var _ = Describe("GlobalApplication", func() {
 
 			jobToAdd := jobs.JobsToAdd.OrEmpty()
 			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
-				Type:               v1.DeploymenConditionType,
-				ZoneId:             "zone",
+				Type:               v1.DeploymentConditionType,
+				ZoneId:             currentZone,
 				Status:             string(v1.DeploymentStatusPull),
 				LastTransitionTime: fakeClock.NowTime(),
 			}))
@@ -362,7 +363,7 @@ var _ = Describe("GlobalApplication", func() {
 			applicationResource := makeApplication()
 			localJobCondition := v1.ConditionStatus{
 				Type:               v1.LocalConditionType,
-				ZoneId:             "zone",
+				ZoneId:             currentZone,
 				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: fakeClock.NowTime(),
 			}
@@ -370,7 +371,7 @@ var _ = Describe("GlobalApplication", func() {
 			applicationResource.Status.Placements = []v1.Placement{{Zone: "otherzone"}}
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
-					ZoneId:      "zone",
+					ZoneId:      currentZone,
 					ZoneVersion: 1,
 					Conditions:  []v1.ConditionStatus{localJobCondition},
 				},
@@ -390,7 +391,7 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.FromCondition(localJobCondition, types.AsyncJobTypeLocalOperation)
 
-			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock))
+			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock, true))
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -407,15 +408,15 @@ var _ = Describe("GlobalApplication", func() {
 					Placements: []v1.Placement{
 						{Zone: "otherzone"},
 					},
-					Owner: "zone",
+					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
-							ZoneId:      "zone",
+							ZoneId:      currentZone,
 							ZoneVersion: 1,
 							Conditions: []v1.ConditionStatus{
 								{
-									Type:               v1.UndeploymenConditionType,
-									ZoneId:             "zone",
+									Type:               v1.UndeploymentConditionType,
+									ZoneId:             currentZone,
 									Status:             string(v1.UndeploymentStatusUndeploy),
 									LastTransitionTime: fakeClock.NowTime(),
 								},
@@ -439,15 +440,423 @@ var _ = Describe("GlobalApplication", func() {
 
 			jobToAdd := jobs.JobsToAdd.OrEmpty()
 			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
-				Type:               v1.UndeploymenConditionType,
-				ZoneId:             "zone",
+				Type:               v1.UndeploymentConditionType,
+				ZoneId:             currentZone,
 				Status:             string(v1.UndeploymentStatusUndeploy),
 				LastTransitionTime: fakeClock.NowTime(),
 			}))
 			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 		})
 
+		It("switch to global failure if deployment job fails", func() {
+			applicationResource := makeApplication()
+			applicationResource.Status.State = v1.OperationalGlobalState
+			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+
+			applicationResource.Status.Zones = []v1.ZoneStatus{
+				{
+					ZoneId:      currentZone,
+					ZoneVersion: 1,
+					Conditions: []v1.ConditionStatus{
+						{
+							Type:               v1.DeploymentConditionType,
+							ZoneId:             currentZone,
+							Status:             string(v1.DeploymentStatusFailure),
+							LastTransitionTime: fakeClock.NowTime(),
+							RetryAttempt:       1,
+						},
+					},
+				},
+			}
+
+			existingJobCondition := types.EmptyJobConditions()
+
+			localApplication := mo.None[local.LocalApplication]()
+			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+
+			Expect(globalApplication.IsDeployed()).To(BeFalse())
+			Expect(globalApplication.IsPresent()).To(BeFalse())
+
+			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
+
+			status := statusResult.Status.OrEmpty()
+			jobs := statusResult.Jobs
+
+			Expect(status).To(Equal(
+				v1.AnyApplicationStatus{
+					State: v1.FailureGlobalState,
+					Placements: []v1.Placement{
+						{Zone: currentZone},
+					},
+					Owner: currentZone,
+					Zones: []v1.ZoneStatus{
+						{
+							ZoneId:      currentZone,
+							ZoneVersion: 1,
+							Conditions: []v1.ConditionStatus{
+								{
+									Type:               v1.DeploymentConditionType,
+									ZoneId:             currentZone,
+									Status:             string(v1.DeploymentStatusFailure),
+									LastTransitionTime: fakeClock.NowTime(),
+									RetryAttempt:       1,
+								},
+							},
+						},
+					},
+				},
+			))
+
+			Expect(jobs.JobsToAdd).To(Equal(mo.None[types.AsyncJob]()))
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
+		})
+
+		It("switch to operational state if undeployment job fails and application is deployed", func() {
+			applicationResource := makeApplication()
+			applicationResource.Status.State = v1.OperationalGlobalState
+			applicationResource.Status.Owner = currentZone
+			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+
+			applicationResource.Status.Zones = []v1.ZoneStatus{
+				{
+					ZoneId:      currentZone,
+					ZoneVersion: 1,
+					Conditions: []v1.ConditionStatus{
+						{
+							Type:               v1.UndeploymentConditionType,
+							ZoneId:             currentZone,
+							Status:             string(v1.UndeploymentStatusFailure),
+							LastTransitionTime: fakeClock.NowTime(),
+							RetryAttempt:       1,
+						},
+					},
+				},
+			}
+
+			existingJobCondition := types.EmptyJobConditions()
+
+			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock, true))
+			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+
+			Expect(globalApplication.IsDeployed()).To(BeTrue())
+			Expect(globalApplication.IsPresent()).To(BeTrue())
+
+			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
+
+			status := statusResult.Status.OrEmpty()
+			jobs := statusResult.Jobs
+
+			Expect(status).To(Equal(
+				v1.AnyApplicationStatus{
+					State: v1.OperationalGlobalState,
+					Placements: []v1.Placement{
+						{Zone: currentZone},
+					},
+					Owner: currentZone,
+					Zones: []v1.ZoneStatus{
+						{
+							ZoneId:      currentZone,
+							ZoneVersion: 1,
+							Conditions: []v1.ConditionStatus{
+								{
+									Type:               v1.LocalConditionType,
+									ZoneId:             currentZone,
+									Status:             string(health.HealthStatusProgressing),
+									LastTransitionTime: fakeClock.NowTime(),
+								},
+							},
+						},
+					},
+				},
+			))
+
+			jobToAdd := jobs.JobsToAdd.OrEmpty()
+			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
+				Type:               v1.LocalConditionType,
+				ZoneId:             currentZone,
+				Status:             string(health.HealthStatusProgressing),
+				LastTransitionTime: fakeClock.NowTime(),
+			}))
+
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
+
+		})
+
+		It("switch to operational state if undeployment job fails and application is not deployed", func() {
+			applicationResource := makeApplication()
+			applicationResource.Status.State = v1.OperationalGlobalState
+			applicationResource.Status.Owner = currentZone
+			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+
+			applicationResource.Status.Zones = []v1.ZoneStatus{
+				{
+					ZoneId:      currentZone,
+					ZoneVersion: 1,
+					Conditions: []v1.ConditionStatus{
+						{
+							Type:               v1.UndeploymentConditionType,
+							ZoneId:             currentZone,
+							Status:             string(v1.UndeploymentStatusFailure),
+							LastTransitionTime: fakeClock.NowTime(),
+							RetryAttempt:       1,
+						},
+					},
+				},
+			}
+
+			existingJobCondition := types.EmptyJobConditions()
+
+			fakeLocalApp := local.FakeLocalApplication(runtimeConfig, fakeClock, false)
+
+			localApplication := mo.Some(fakeLocalApp)
+			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+
+			Expect(globalApplication.IsDeployed()).To(BeFalse())
+			Expect(globalApplication.IsPresent()).To(BeTrue())
+
+			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
+
+			status := statusResult.Status.OrEmpty()
+			jobs := statusResult.Jobs
+
+			Expect(status).To(Equal(
+				v1.AnyApplicationStatus{
+					State: v1.RelocationGlobalState,
+					Placements: []v1.Placement{
+						{Zone: currentZone},
+					},
+					Owner: currentZone,
+					Zones: []v1.ZoneStatus{
+						{
+							ZoneId:      currentZone,
+							ZoneVersion: 1,
+							Conditions: []v1.ConditionStatus{
+								{
+									Type:               v1.DeploymentConditionType,
+									ZoneId:             currentZone,
+									Status:             string(v1.DeploymentStatusPull),
+									LastTransitionTime: fakeClock.NowTime(),
+								},
+							},
+						},
+					},
+				},
+			))
+
+			jobToAdd := jobs.JobsToAdd.OrEmpty()
+			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
+				Type:               v1.DeploymentConditionType,
+				ZoneId:             currentZone,
+				Status:             string(v1.DeploymentStatusPull),
+				LastTransitionTime: fakeClock.NowTime(),
+			}))
+
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
+
+		})
+
+		It("switch to failure state if undeployment job fails and there are no placements", func() {
+			applicationResource := makeApplication()
+			applicationResource.Status.State = v1.OperationalGlobalState
+			applicationResource.Status.Owner = currentZone
+			applicationResource.Status.Placements = []v1.Placement{}
+
+			applicationResource.Status.Zones = []v1.ZoneStatus{
+				{
+					ZoneId:      currentZone,
+					ZoneVersion: 1,
+					Conditions: []v1.ConditionStatus{
+						{
+							Type:               v1.UndeploymentConditionType,
+							ZoneId:             currentZone,
+							Status:             string(v1.UndeploymentStatusFailure),
+							LastTransitionTime: fakeClock.NowTime(),
+							RetryAttempt:       1,
+						},
+					},
+				},
+			}
+
+			existingJobCondition := types.EmptyJobConditions()
+
+			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock, true))
+			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+
+			Expect(globalApplication.IsDeployed()).To(BeTrue())
+			Expect(globalApplication.IsPresent()).To(BeTrue())
+
+			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
+
+			status := statusResult.Status.OrEmpty()
+			jobs := statusResult.Jobs
+
+			Expect(status).To(Equal(
+				v1.AnyApplicationStatus{
+					State:      v1.FailureGlobalState,
+					Placements: []v1.Placement{},
+					Owner:      currentZone,
+					Zones: []v1.ZoneStatus{
+						{
+							ZoneId:      currentZone,
+							ZoneVersion: 1,
+							Conditions: []v1.ConditionStatus{
+								{
+									Type:               v1.UndeploymentConditionType,
+									ZoneId:             currentZone,
+									Status:             string(v1.UndeploymentStatusFailure),
+									LastTransitionTime: fakeClock.NowTime(),
+									RetryAttempt:       1,
+								},
+							},
+						},
+					},
+				},
+			))
+
+			Expect(jobs.JobsToAdd).To(Equal(mo.None[types.AsyncJob]()))
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
+
+		})
+
+		It("undeployment in different zone fails", func() {
+
+			applicationResource := makeApplication()
+			applicationResource.Status.State = v1.OperationalGlobalState
+			applicationResource.Status.Owner = currentZone
+			applicationResource.Status.Placements = []v1.Placement{
+				{Zone: "otherzone"},
+			}
+
+			applicationResource.Status.Zones = []v1.ZoneStatus{
+				{
+					ZoneId:      "otherzone",
+					ZoneVersion: 1,
+					Conditions: []v1.ConditionStatus{
+						{
+							Type:               v1.UndeploymentConditionType,
+							ZoneId:             "otherzone",
+							Status:             string(v1.UndeploymentStatusFailure),
+							LastTransitionTime: fakeClock.NowTime(),
+							RetryAttempt:       1,
+						},
+					},
+				},
+			}
+
+			existingJobCondition := types.EmptyJobConditions()
+
+			localApplication := mo.None[local.LocalApplication]()
+			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+
+			Expect(globalApplication.IsDeployed()).To(BeFalse())
+			Expect(globalApplication.IsPresent()).To(BeFalse())
+
+			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
+
+			status := statusResult.Status.OrEmpty()
+			jobs := statusResult.Jobs
+
+			Expect(status).To(Equal(
+				v1.AnyApplicationStatus{
+					State: v1.FailureGlobalState,
+					Placements: []v1.Placement{
+						{Zone: "otherzone"},
+					},
+					Owner: currentZone,
+					Zones: []v1.ZoneStatus{
+						{
+							ZoneId:      "otherzone",
+							ZoneVersion: 1,
+							Conditions: []v1.ConditionStatus{
+								{
+									Type:               v1.UndeploymentConditionType,
+									ZoneId:             "otherzone",
+									Status:             string(v1.UndeploymentStatusFailure),
+									LastTransitionTime: fakeClock.NowTime(),
+									RetryAttempt:       1,
+								},
+							},
+						},
+					},
+				},
+			))
+
+			Expect(jobs.JobsToAdd).To(Equal(mo.None[types.AsyncJob]()))
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
+
+		})
+
+		It("switch to deployment if operational job finds missing resources", func() {
+			applicationResource := makeApplication()
+			applicationResource.Status.State = v1.OperationalGlobalState
+			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+
+			applicationResource.Status.Zones = []v1.ZoneStatus{
+				{
+					ZoneId:      currentZone,
+					ZoneVersion: 1,
+					Conditions: []v1.ConditionStatus{
+						{
+							Type:               v1.LocalConditionType,
+							ZoneId:             currentZone,
+							Status:             string(health.HealthStatusMissing),
+							LastTransitionTime: fakeClock.NowTime(),
+						},
+					},
+				},
+			}
+
+			existingJobCondition := types.EmptyJobConditions()
+
+			localApplication := mo.None[local.LocalApplication]()
+			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+
+			Expect(globalApplication.IsDeployed()).To(BeFalse())
+			Expect(globalApplication.IsPresent()).To(BeFalse())
+
+			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
+
+			status := statusResult.Status.OrEmpty()
+			jobs := statusResult.Jobs
+
+			Expect(status).To(Equal(
+				v1.AnyApplicationStatus{
+					State: v1.RelocationGlobalState,
+					Placements: []v1.Placement{
+						{Zone: currentZone},
+					},
+					Owner: currentZone,
+					Zones: []v1.ZoneStatus{
+						{
+							ZoneId:      currentZone,
+							ZoneVersion: 1,
+							Conditions: []v1.ConditionStatus{
+								{
+									Type:               v1.DeploymentConditionType,
+									ZoneId:             currentZone,
+									Status:             string(v1.DeploymentStatusPull),
+									LastTransitionTime: fakeClock.NowTime(),
+								},
+							},
+						},
+					},
+				},
+			))
+
+			jobToAdd := jobs.JobsToAdd.OrEmpty()
+			Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
+				Type:               v1.DeploymentConditionType,
+				ZoneId:             currentZone,
+				Status:             string(v1.DeploymentStatusPull),
+				LastTransitionTime: fakeClock.NowTime(),
+			}))
+
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
+
+		})
+
 	})
+
 })
 
 func makeApplication() *v1.AnyApplication {
