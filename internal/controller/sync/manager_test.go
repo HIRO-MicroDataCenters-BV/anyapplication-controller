@@ -20,6 +20,7 @@ import (
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -51,6 +52,7 @@ var _ = Describe("SyncManager", func() {
 		clusterCache  cache.ClusterCache
 		runtimeConfig config.ApplicationRuntimeConfig
 		gitOpsEngine  *fixture.FakeGitOpsEngine
+		updateFuncs   []cache.UpdateSettingsFunc
 	)
 
 	BeforeEach(func() {
@@ -74,7 +76,7 @@ var _ = Describe("SyncManager", func() {
 						Repository: "https://helm.nginx.com/stable",
 						Chart:      "nginx-ingress",
 						Version:    "2.0.1",
-						Namespace:  "nginx",
+						Namespace:  "default",
 					},
 				},
 				Zones: 1,
@@ -137,9 +139,42 @@ var _ = Describe("SyncManager", func() {
 			WithScheme(scheme).
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
-		clusterCache, _ = fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+
+		updateFuncs = []cache.UpdateSettingsFunc{
+			cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
+				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()["dcp.hiro.io/managed-by"]}
+				cacheManifest = true
+				return
+			}),
+		}
+
+		clusterCache, _ = fixture.NewTestClusterCacheWithOptions(updateFuncs)
+		if err := clusterCache.EnsureSynced(); err != nil {
+			Fail("Failed to sync cluster cache: " + err.Error())
+		}
+
 		gitOpsEngine = fixture.NewFakeGitopsEngine()
 		syncManager = NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+	})
+
+	It("should return unique instance id for helm chart version and release", func() {
+		instanceId := syncManager.GetInstanceId(application)
+
+		Expect(instanceId).To(Equal("nginx-ingress-2.0.1-test-app"))
+	})
+
+	It("should return aggregated status for application", func() {
+		status := syncManager.GetAggregatedStatus(application)
+
+		Expect(status.Status).To(Equal(health.HealthStatusMissing))
+		Expect(status.Message).To(Equal(". "))
+	})
+
+	It("should load application from cluster cache", func() {
+		application, _ := syncManager.LoadApplication(application)
+
+		Expect(application.IsDeployed()).To(Equal(false))
+		Expect(application.IsPresent()).To(Equal(false))
 	})
 
 	It("should sync helm release", func() {
@@ -170,6 +205,7 @@ var _ = Describe("SyncManager", func() {
 		syncResult, err := syncManager.Sync(context.Background(), application)
 
 		fmt.Printf("syncResult %v \n", syncResult)
+
 		Expect(err).NotTo(HaveOccurred())
 		Expect(syncResult.Total).To(Equal(2))
 		Expect(syncResult.OperationPhaseStats).To(Equal(map[common.OperationPhase]int{
@@ -182,7 +218,7 @@ var _ = Describe("SyncManager", func() {
 			"Synced": 2,
 		}))
 
-		Expect(syncResult.Status.Status).To(Equal(health.HealthStatusUnknown))
+		Expect(syncResult.Status.Status).To(Equal(health.HealthStatusMissing))
 	})
 
 	It("should delete helm release or fail", func() {
@@ -193,8 +229,8 @@ var _ = Describe("SyncManager", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(syncResult.Total).To(Equal(23))
-		Expect(syncResult.Deleted).To(Equal(0))
-		Expect(syncResult.DeleteFailed).To(Equal(23))
+		Expect(syncResult.Deleted).To(Equal(23))
+		Expect(syncResult.DeleteFailed).To(Equal(0))
 	})
 
 })
