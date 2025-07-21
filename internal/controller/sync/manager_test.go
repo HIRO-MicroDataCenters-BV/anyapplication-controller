@@ -173,8 +173,8 @@ var _ = Describe("SyncManager", func() {
 	It("should load application from cluster cache", func() {
 		application, _ := syncManager.LoadApplication(application)
 
-		Expect(application.IsDeployed()).To(Equal(false))
-		Expect(application.IsPresent()).To(Equal(false))
+		Expect(application.IsDeployed()).To(BeFalse())
+		Expect(application.IsPresent()).To(BeFalse())
 	})
 
 	It("should sync helm release", func() {

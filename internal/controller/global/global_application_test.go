@@ -447,18 +447,77 @@ var _ = Describe("GlobalApplication", func() {
 			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 		})
 
-	})
+		It("switch to global failure if deployment job fails", func() {
+			applicationResource := makeApplication()
+			applicationResource.Status.State = v1.OperationalGlobalState
+			applicationResource.Status.Placements = []v1.Placement{{Zone: "zone"}}
 
-	It("switch to global failure if deployment job fails", func() {
-		// TODO
-	})
+			applicationResource.Status.Zones = []v1.ZoneStatus{
+				{
+					ZoneId:      "zone",
+					ZoneVersion: 1,
+					Conditions: []v1.ConditionStatus{
+						{
+							Type:               v1.DeploymenConditionType,
+							ZoneId:             "zone",
+							Status:             string(v1.DeploymentStatusFailure),
+							LastTransitionTime: fakeClock.NowTime(),
+							RetryAttempt:       1,
+						},
+					},
+				},
+			}
 
-	It("switch to global failure if undeployment job fails", func() {
-		// TODO
-	})
+			existingJobCondition := types.EmptyJobConditions()
 
-	It("switch to deployment if operational job finds missing resources", func() {
-		// TODO
+			localApplication := mo.None[local.LocalApplication]()
+			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+
+			Expect(globalApplication.IsDeployed()).To(BeFalse())
+			Expect(globalApplication.IsPresent()).To(BeFalse())
+
+			statusResult := globalApplication.DeriveNewStatus(existingJobCondition, jobFactory)
+
+			status := statusResult.Status.OrEmpty()
+			jobs := statusResult.Jobs
+
+			Expect(status).To(Equal(
+				v1.AnyApplicationStatus{
+					State: v1.FailureGlobalState,
+					Placements: []v1.Placement{
+						{Zone: "zone"},
+					},
+					Owner: "zone",
+					Zones: []v1.ZoneStatus{
+						{
+							ZoneId:      "zone",
+							ZoneVersion: 1,
+							Conditions: []v1.ConditionStatus{
+								{
+									Type:               v1.DeploymenConditionType,
+									ZoneId:             "zone",
+									Status:             string(v1.DeploymentStatusFailure),
+									LastTransitionTime: fakeClock.NowTime(),
+									RetryAttempt:       1,
+								},
+							},
+						},
+					},
+				},
+			))
+
+			Expect(jobs.JobsToAdd).To(Equal(mo.None[types.AsyncJob]()))
+			Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
+		})
+
+		It("switch to global failure if undeployment job fails", func() {
+			// TODO
+		})
+
+		It("switch to deployment if operational job finds missing resources", func() {
+			// TODO
+		})
+
 	})
 
 })

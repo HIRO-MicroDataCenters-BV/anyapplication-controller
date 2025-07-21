@@ -119,6 +119,7 @@ var _ = Describe("DeployJob", func() {
 				Status:             string(v1.DeploymentStatusFailure),
 				LastTransitionTime: metav1.Time{},
 				Msg:                "Deployment failure: Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",
+				Reason:             "SyncError",
 			},
 		))
 
