@@ -92,7 +92,7 @@ var _ = Describe("Jobs", func() {
 			Build()
 		helmClient = helm.NewFakeHelmClient()
 
-		clusterCache := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		clusterCache, _ := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
 		syncManager := ctrl_sync.NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
 		context := NewAsyncJobContext(helmClient, kubeClient, ctx, syncManager)

@@ -16,6 +16,7 @@ type ApplicationRuntimeConfig struct {
 	PollOperationalStatusInterval time.Duration `yaml:"operationalPollDuration"`
 	PollSyncStatusInterval        time.Duration `yaml:"syncPollDuration"`
 	DefaultSyncTimeout            time.Duration `yaml:"defaultSyncTimeout"`
+	DefaultUndeployTimeout        time.Duration `yaml:"defaultUndeployTimeout"`
 }
 
 // Define a struct to match the YAML structure

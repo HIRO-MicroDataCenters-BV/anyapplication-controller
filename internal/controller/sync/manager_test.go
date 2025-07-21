@@ -137,7 +137,7 @@ var _ = Describe("SyncManager", func() {
 			WithScheme(scheme).
 			WithStatusSubresource(&v1.AnyApplication{}).
 			Build()
-		clusterCache = fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
+		clusterCache, _ = fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
 		gitOpsEngine = fixture.NewFakeGitopsEngine()
 		syncManager = NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 	})

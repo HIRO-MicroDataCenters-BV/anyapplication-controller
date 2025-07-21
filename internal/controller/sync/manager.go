@@ -193,37 +193,37 @@ func (m *syncManager) getAggregatedStatus(app *cachedApp) *health.HealthStatus {
 	code := health.HealthStatusHealthy
 	msg := ""
 
+	managedResources := m.findAvailableApplicationResources(app.application)
+	managedResourcesByKey := make(map[kube.ResourceKey]*unstructured.Unstructured)
+	for _, res := range managedResources {
+		key := kube.GetResourceKey(res)
+		managedResourcesByKey[key] = res
+	}
+
 	for _, obj := range app.resources {
 		fullName := getFullName(obj)
 		resourceKey := kube.GetResourceKey(obj)
 
-		// Get live object from cache
-		live, err := m.clusterCache.GetManagedLiveObjs([]*unstructured.Unstructured{obj}, func(r *cache.Resource) bool {
-			if r.Resource == nil {
-				return false
+		liveObj := managedResourcesByKey[resourceKey]
+		status := health.HealthStatusHealthy
+		message := ""
+		if liveObj != nil {
+			h, err := health.GetResourceHealth(liveObj, nil)
+			if err != nil {
+				m.log.Error(err, "GetResourceHealth failed", "Resource", fullName)
+				continue
 			}
-			return r.Resource.GetLabels()["dcp.hiro.io/instance-id"] == app.instanceId
-		})
-		if err != nil {
-			m.log.Error(err, "GetManagedLiveObjs failed", "Resource", fullName)
-		}
-
-		liveObj := live[resourceKey]
-		if liveObj == nil {
-			continue
-		}
-
-		h, err := health.GetResourceHealth(liveObj, nil)
-		if err != nil {
-			m.log.Error(err, "GetResourceHealth failed", "Resource", fullName)
-			continue
-		}
-		if h != nil {
-			statusCounts += 1
-			if health.IsWorse(code, h.Status) {
-				code = h.Status
-				msg = msg + "\n" + h.Message
+			if h != nil {
+				status = h.Status
+				message = h.Message
 			}
+		} else {
+			status = health.HealthStatusMissing
+		}
+		statusCounts += 1
+		if health.IsWorse(code, status) {
+			code = status
+			msg = msg + ". " + message
 		}
 	}
 	if statusCounts == 0 {
@@ -243,46 +243,59 @@ func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication
 		return nil, err
 	}
 
-	return m.deleteApp(ctx, application, app)
+	return m.deleteApp(ctx, app)
 }
 
-func (m *syncManager) deleteApp(ctx context.Context, application *v1.AnyApplication, app *cachedApp) (*types.DeleteResult, error) {
+func (m *syncManager) deleteApp(ctx context.Context, app *cachedApp) (*types.DeleteResult, error) {
 	syncResult := &types.DeleteResult{}
 
 	syncResult.Total += len(app.resources)
 
+	managedResources := m.findAvailableApplicationResources(app.application)
+	managedResourcesByKey := make(map[kube.ResourceKey]*unstructured.Unstructured)
+	for _, res := range managedResources {
+		key := kube.GetResourceKey(res)
+		managedResourcesByKey[key] = res
+	}
+	// Deleting known managed resources
 	for _, obj := range app.resources {
 		fullName := getFullName(obj)
+		resourceKey := kube.GetResourceKey(obj)
 		m.log.V(1).Info("Deleting resource", "Resource", fullName)
+		live := managedResourcesByKey[resourceKey]
 
-		live, err := m.clusterCache.GetManagedLiveObjs([]*unstructured.Unstructured{obj}, func(r *cache.Resource) bool { return true })
-		if err == nil && live != nil {
+		if live == nil {
+			syncResult.Deleted += 1
+		} else {
 			err := m.kubeClient.Delete(ctx, obj)
-
 			if err != nil {
 				syncResult.DeleteFailed += 1
 			} else {
+				delete(managedResourcesByKey, resourceKey)
 				syncResult.Deleted += 1
 				m.log.V(1).Info("Deleted", "Resource", fullName)
 			}
 		}
 	}
 
-	remainingResources := m.findAvailableApplicationResources(application)
-	syncResult.Total += len(remainingResources)
-
-	for _, obj := range remainingResources {
+	// Deleting remaining managed resources
+	for _, obj := range managedResourcesByKey {
 		fullName := getFullName(obj)
+		resourceKey := kube.GetResourceKey(obj)
 		m.log.V(1).Info("Deleting", "Resource", fullName)
 
 		err := m.kubeClient.Delete(ctx, obj)
+
 		if err != nil {
 			syncResult.DeleteFailed += 1
 		} else {
+			delete(managedResourcesByKey, resourceKey)
 			syncResult.Deleted += 1
 			m.log.V(1).Info("Deleted", "Resource", fullName)
 		}
 	}
+	fmt.Printf("managedResourcesByKey %d, deleted %d, delete failures %d\n", len(managedResourcesByKey), syncResult.Deleted, syncResult.DeleteFailed)
+	syncResult.ApplicationResourcesPresent = len(managedResourcesByKey) > 0
 	return syncResult, nil
 
 }
@@ -325,6 +338,7 @@ func (m *syncManager) loadLocalApplication(application *v1.AnyApplication) (mo.O
 
 func (m *syncManager) findAvailableApplicationResources(application *v1.AnyApplication) []*unstructured.Unstructured {
 	instanceId := m.GetInstanceId(application)
+
 	cachedResources := m.clusterCache.FindResources("", func(r *cache.Resource) bool {
 		if r.Resource == nil {
 			return false

@@ -92,7 +92,7 @@ var _ = Describe("K8sReportService", func() {
 				return
 			}),
 		}
-		clusterCache := fixture.NewTestClusterCacheWithOptions(updateFuncs, &pod)
+		clusterCache, _ := fixture.NewTestClusterCacheWithOptions(updateFuncs, &pod)
 		if err := clusterCache.EnsureSynced(); err != nil {
 			Fail("Failed to sync cluster cache: " + err.Error())
 		}
@@ -155,7 +155,7 @@ var _ = Describe("K8sReportService", func() {
 		daemonSet.Status.NumberReady = 1
 
 		// Add resources to cluster cache
-		clusterCache := fixture.NewTestClusterCacheWithOptions(updateFuncs, deployment, replicaSet, statefulSet, daemonSet)
+		clusterCache, _ := fixture.NewTestClusterCacheWithOptions(updateFuncs, deployment, replicaSet, statefulSet, daemonSet)
 		if err := clusterCache.EnsureSynced(); err != nil {
 			Fail("Failed to sync cluster cache: " + err.Error())
 		}
