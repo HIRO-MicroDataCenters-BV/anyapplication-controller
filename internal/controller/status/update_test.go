@@ -222,7 +222,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 			Status: string(v1.PlacementStatusInProgress),
 		}
 		cond3 := v1.ConditionStatus{
-			Type:   v1.DeploymenConditionType,
+			Type:   v1.DeploymentConditionType,
 			ZoneId: "zone",
 			Status: string(v1.PlacementStatusInProgress),
 		}
@@ -231,7 +231,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 
 		statusUpdater := NewStatusUpdater(ctx, log, fakeClient, client.ObjectKeyFromObject(application), "zone", &fakeEvents)
 		event := events.Event{}
-		err := statusUpdater.UpdateCondition(event, cond1, v1.LocalConditionType, v1.DeploymenConditionType)
+		err := statusUpdater.UpdateCondition(event, cond1, v1.LocalConditionType, v1.DeploymentConditionType)
 		Expect(err).ToNot(HaveOccurred())
 
 		updatedApp := &v1.AnyApplication{}
@@ -244,7 +244,7 @@ var _ = Describe("AddOrUpdateStatusCondition", func() {
 		Expect(zoneStatus.Conditions).To(ContainElement(cond1))
 		for _, c := range zoneStatus.Conditions {
 			Expect(c.Type).NotTo(Equal(v1.LocalConditionType))
-			Expect(c.Type).NotTo(Equal(v1.DeploymenConditionType))
+			Expect(c.Type).NotTo(Equal(v1.DeploymentConditionType))
 		}
 	})
 

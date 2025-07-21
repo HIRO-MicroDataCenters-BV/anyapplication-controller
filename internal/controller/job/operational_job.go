@@ -124,7 +124,7 @@ func (job *LocalOperationJob) updateStatus(jobContext types.AsyncJobContext) {
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: job.msg}
-	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.DeploymenConditionType, v1.UndeploymenConditionType)
+	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.DeploymentConditionType, v1.UndeploymentConditionType)
 	if err != nil {
 		job.log.WithName("StatusUpdater").Error(err, "Failed to update status")
 	}

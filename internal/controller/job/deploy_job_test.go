@@ -54,7 +54,7 @@ var _ = Describe("DeployJob", func() {
 		status := deployJob.GetStatus()
 		status.LastTransitionTime = metav1.Time{}
 		Expect(status).To(Equal(v1.ConditionStatus{
-			Type:               v1.DeploymenConditionType,
+			Type:               v1.DeploymentConditionType,
 			ZoneId:             "zone",
 			Status:             string(v1.DeploymentStatusPull),
 			LastTransitionTime: metav1.Time{},
@@ -83,7 +83,7 @@ var _ = Describe("DeployJob", func() {
 
 		Expect(status).To(Equal(
 			v1.ConditionStatus{
-				Type:               v1.DeploymenConditionType,
+				Type:               v1.DeploymentConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.DeploymentStatusDone),
 				LastTransitionTime: metav1.Time{},
@@ -114,7 +114,7 @@ var _ = Describe("DeployJob", func() {
 
 		Expect(status).To(Equal(
 			v1.ConditionStatus{
-				Type:               v1.DeploymenConditionType,
+				Type:               v1.DeploymentConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.DeploymentStatusFailure),
 				LastTransitionTime: metav1.Time{},

@@ -11,8 +11,8 @@ const (
 	LocalConditionType             ApplicationConditionType = "Local"
 	PlacementConditionType         ApplicationConditionType = "Placement"
 	OwnershipTransferConditionType ApplicationConditionType = "OwnershipTransfer"
-	DeploymenConditionType         ApplicationConditionType = "Deployment"
-	UndeploymenConditionType       ApplicationConditionType = "Undeployment"
+	DeploymentConditionType        ApplicationConditionType = "Deployment"
+	UndeploymentConditionType      ApplicationConditionType = "Undeployment"
 )
 
 func (s *ApplicationConditionType) UnmarshalJSON(data []byte) error {
@@ -25,8 +25,8 @@ func (s *ApplicationConditionType) UnmarshalJSON(data []byte) error {
 	case string(LocalConditionType),
 		string(PlacementConditionType),
 		string(OwnershipTransferConditionType),
-		string(DeploymenConditionType),
-		string(UndeploymenConditionType):
+		string(DeploymentConditionType),
+		string(UndeploymentConditionType):
 		*s = ApplicationConditionType(str)
 		return nil
 	default:

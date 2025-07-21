@@ -97,7 +97,7 @@ var _ = Describe("Local Application FSM", func() {
 						ZoneVersion: 0,
 						Conditions: []v1.ConditionStatus{
 							{
-								Type:               v1.DeploymenConditionType,
+								Type:               v1.DeploymentConditionType,
 								ZoneId:             "zone",
 								Status:             string(v1.DeploymentStatusPull),
 								LastTransitionTime: fakeClock.NowTime(),
@@ -110,7 +110,7 @@ var _ = Describe("Local Application FSM", func() {
 
 		jobToAdd := jobs.JobsToAdd.OrEmpty()
 		Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
-			Type:               v1.DeploymenConditionType,
+			Type:               v1.DeploymentConditionType,
 			ZoneId:             "zone",
 			Status:             string(v1.DeploymentStatusPull),
 			LastTransitionTime: fakeClock.NowTime(),
@@ -121,7 +121,7 @@ var _ = Describe("Local Application FSM", func() {
 
 	It("should avoid double start deployment job if one is already running", func() {
 		deploymentCondition := v1.ConditionStatus{
-			Type:               v1.DeploymenConditionType,
+			Type:               v1.DeploymentConditionType,
 			ZoneId:             "zone",
 			Status:             string(v1.DeploymentStatusPull),
 			LastTransitionTime: fakeClock.NowTime(),
@@ -155,7 +155,7 @@ var _ = Describe("Local Application FSM", func() {
 						ZoneVersion: 1,
 						Conditions: []v1.ConditionStatus{
 							{
-								Type:               v1.DeploymenConditionType,
+								Type:               v1.DeploymentConditionType,
 								ZoneId:             "zone",
 								Status:             string(v1.DeploymentStatusPull),
 								LastTransitionTime: fakeClock.NowTime(),
@@ -179,7 +179,7 @@ var _ = Describe("Local Application FSM", func() {
 				ZoneVersion: 1,
 				Conditions: []v1.ConditionStatus{
 					{
-						Type:               v1.DeploymenConditionType,
+						Type:               v1.DeploymentConditionType,
 						ZoneId:             "zone",
 						Status:             string(v1.DeploymentStatusDone),
 						LastTransitionTime: fakeClock.NowTime(),
@@ -188,7 +188,7 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock, true))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -209,7 +209,7 @@ var _ = Describe("Local Application FSM", func() {
 						ZoneVersion: 1,
 						Conditions: []v1.ConditionStatus{
 							{
-								Type:               v1.DeploymenConditionType,
+								Type:               v1.DeploymentConditionType,
 								ZoneId:             "zone",
 								Status:             string(v1.DeploymentStatusDone),
 								LastTransitionTime: fakeClock.NowTime(),
@@ -253,7 +253,7 @@ var _ = Describe("Local Application FSM", func() {
 				ZoneVersion: 1,
 				Conditions: []v1.ConditionStatus{
 					{
-						Type:               v1.DeploymenConditionType,
+						Type:               v1.DeploymentConditionType,
 						ZoneId:             "zone",
 						Status:             string(v1.DeploymentStatusDone),
 						LastTransitionTime: fakeClock.NowTime(),
@@ -263,7 +263,7 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock, true))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -317,7 +317,7 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock, true))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -338,7 +338,7 @@ var _ = Describe("Local Application FSM", func() {
 						ZoneVersion: 1,
 						Conditions: []v1.ConditionStatus{
 							{
-								Type:               v1.UndeploymenConditionType,
+								Type:               v1.UndeploymentConditionType,
 								ZoneId:             "zone",
 								Status:             string(v1.UndeploymentStatusUndeploy),
 								LastTransitionTime: fakeClock.NowTime(),
@@ -351,7 +351,7 @@ var _ = Describe("Local Application FSM", func() {
 
 		jobToAdd := jobs.JobsToAdd.OrEmpty()
 		Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
-			Type:               v1.UndeploymenConditionType,
+			Type:               v1.UndeploymentConditionType,
 			ZoneId:             "zone",
 			Status:             string(v1.UndeploymentStatusUndeploy),
 			LastTransitionTime: fakeClock.NowTime(),
@@ -363,7 +363,7 @@ var _ = Describe("Local Application FSM", func() {
 
 	It("should avoid double starting undeploy job if the undeploy job is already in progress", func() {
 		undeployCondition := v1.ConditionStatus{
-			Type:               v1.UndeploymenConditionType,
+			Type:               v1.UndeploymentConditionType,
 			ZoneId:             "zone",
 			Status:             string(v1.UndeploymentStatusUndeploy),
 			LastTransitionTime: fakeClock.NowTime(),
@@ -387,7 +387,7 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock))
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock, true))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -408,7 +408,7 @@ var _ = Describe("Local Application FSM", func() {
 						ZoneVersion: 1,
 						Conditions: []v1.ConditionStatus{
 							{
-								Type:               v1.UndeploymenConditionType,
+								Type:               v1.UndeploymentConditionType,
 								ZoneId:             "zone",
 								Status:             string(v1.UndeploymentStatusUndeploy),
 								LastTransitionTime: fakeClock.NowTime(),

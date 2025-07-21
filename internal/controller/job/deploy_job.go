@@ -157,7 +157,7 @@ func (job *DeployJob) updateStatus(jobContext types.AsyncJobContext) {
 		job.events,
 	)
 	event := events.Event{Reason: events.LocalStateChangeReason, Msg: job.msg}
-	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.UndeploymenConditionType, v1.LocalConditionType)
+	err := statusUpdater.UpdateCondition(event, job.GetStatus(), v1.UndeploymentConditionType, v1.LocalConditionType)
 	if err != nil {
 		job.log.WithName("StatusUpdater").Error(err, "Failed to update status")
 	}
@@ -173,7 +173,7 @@ func (job *DeployJob) GetType() types.AsyncJobType {
 
 func (job *DeployJob) GetStatus() v1.ConditionStatus {
 	return v1.ConditionStatus{
-		Type:               v1.DeploymenConditionType,
+		Type:               v1.DeploymentConditionType,
 		ZoneId:             job.runtimeConfig.ZoneId,
 		Status:             string(job.status),
 		LastTransitionTime: job.clock.NowTime(),

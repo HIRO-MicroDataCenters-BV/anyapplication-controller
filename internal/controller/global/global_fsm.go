@@ -103,7 +103,7 @@ func getGlobalState(status *v1.AnyApplicationStatus) v1.GlobalState {
 		} else {
 			conditionOpt := getHighestZoneCondition(zoneStatus, placement.Zone)
 			condition, present := conditionOpt.Get()
-			if present && (condition.Type == v1.DeploymenConditionType || condition.Type == v1.UndeploymenConditionType) {
+			if present && (condition.Type == v1.DeploymentConditionType || condition.Type == v1.UndeploymentConditionType) {
 				state = v1.RelocationGlobalState
 			} else if !present {
 				state = v1.RelocationGlobalState
@@ -116,8 +116,8 @@ func getGlobalState(status *v1.AnyApplicationStatus) v1.GlobalState {
 func getHighestZoneCondition(zoneStatus *v1.ZoneStatus, zoneId string) mo.Option[*v1.ConditionStatus] {
 	conditionTypes := []v1.ApplicationConditionType{
 		v1.LocalConditionType,
-		v1.DeploymenConditionType,
-		v1.UndeploymenConditionType,
+		v1.DeploymentConditionType,
+		v1.UndeploymentConditionType,
 	}
 	for _, conditionType := range conditionTypes {
 		condition, found := getCondition(zoneStatus.Conditions, conditionType, zoneId)
@@ -171,11 +171,11 @@ func isFailureCondition(application *v1.AnyApplication) bool {
 				if condition.Status == string(health.HealthStatusDegraded) || condition.Status == string(health.HealthStatusMissing) {
 					zoneFailedConditions = true
 				}
-			case v1.DeploymenConditionType:
+			case v1.DeploymentConditionType:
 				if condition.Status == string(v1.DeploymentStatusFailure) {
 					zoneFailedConditions = true
 				}
-			case v1.UndeploymenConditionType:
+			case v1.UndeploymentConditionType:
 				if condition.Status == string(v1.UndeploymentStatusFailure) {
 					zoneFailedConditions = true
 				}

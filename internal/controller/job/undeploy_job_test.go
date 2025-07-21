@@ -56,7 +56,7 @@ var _ = Describe("UndeployJob", func() {
 		status.LastTransitionTime = metav1.Time{}
 
 		Expect(status).To(Equal(v1.ConditionStatus{
-			Type:               v1.UndeploymenConditionType,
+			Type:               v1.UndeploymentConditionType,
 			ZoneId:             "zone",
 			Status:             string(v1.UndeploymentStatusUndeploy),
 			LastTransitionTime: metav1.Time{},
@@ -94,7 +94,7 @@ var _ = Describe("UndeployJob", func() {
 
 		Expect(status).To(Equal(
 			v1.ConditionStatus{
-				Type:               v1.UndeploymenConditionType,
+				Type:               v1.UndeploymentConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.UndeploymentStatusDone),
 				Msg:                "Undeploy state changed to 'Done'. ",
