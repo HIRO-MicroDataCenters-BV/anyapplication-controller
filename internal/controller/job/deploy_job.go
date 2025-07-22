@@ -85,9 +85,9 @@ func (job *DeployJob) Run(jobContext types.AsyncJobContext) {
 
 }
 func (job *DeployJob) runSyncCycle(context types.AsyncJobContext) bool {
-	syncManager := context.GetSyncManager()
+	applications := context.GetApplications()
 
-	syncResult, err := syncManager.Sync(context.GetGoContext(), job.application)
+	syncResult, err := applications.Sync(context.GetGoContext(), job.application)
 	healthStatus := syncResult.Status
 
 	if err != nil {

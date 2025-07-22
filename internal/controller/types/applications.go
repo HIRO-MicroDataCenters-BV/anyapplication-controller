@@ -43,7 +43,7 @@ func (s *SyncResult) AddResult(r *common.ResourceSyncResult) {
 	s.ResultCodeStats[r.Status] += 1
 }
 
-type SyncManager interface {
+type Applications interface {
 	GetAggregatedStatus(application *v1.AnyApplication) *health.HealthStatus
 	Sync(ctx context.Context, application *v1.AnyApplication) (*SyncResult, error)
 	Delete(ctx context.Context, application *v1.AnyApplication) (*DeleteResult, error)

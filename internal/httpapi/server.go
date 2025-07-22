@@ -21,7 +21,7 @@ type Server struct {
 	mux                *http.ServeMux
 	options            ApplicationApiOptions
 	applicationReports types.ApplicationReports
-	syncManager        ctrltypes.SyncManager
+	applications       ctrltypes.Applications
 	kubeClient         client.Client
 }
 
@@ -29,14 +29,14 @@ type Server struct {
 func NewHttpServer(
 	options ApplicationApiOptions,
 	applicationReports types.ApplicationReports,
-	syncManager *ctrltypes.SyncManager,
+	applications *ctrltypes.Applications,
 	kubeClient client.Client,
 ) *Server {
 	s := &Server{
 		mux:                http.NewServeMux(),
 		options:            options,
 		applicationReports: applicationReports,
-		syncManager:        *syncManager,
+		applications:       *applications,
 		kubeClient:         kubeClient,
 	}
 	s.routes()
@@ -63,7 +63,7 @@ func (s *Server) handleGetApplicationErrorContext(w http.ResponseWriter, r *http
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	instanceId := s.syncManager.GetInstanceId(application)
+	instanceId := s.applications.GetInstanceId(application)
 
 	report, err := s.applicationReports.Fetch(r.Context(), instanceId, namespace)
 	if err != nil {

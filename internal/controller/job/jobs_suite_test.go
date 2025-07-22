@@ -42,7 +42,7 @@ var (
 	runtimeConfig config.ApplicationRuntimeConfig
 	jobContext    types.AsyncJobContext
 	fakeEvents    events.Events
-	syncManager   types.SyncManager
+	applications  types.Applications
 	stopFunc      engine.StopFunc
 )
 
@@ -136,9 +136,9 @@ var _ = BeforeEach(func() {
 		panic("error " + err.Error())
 	}
 
-	syncManager = sync.NewSyncManager(k8sClient, helmClient, clusterCache, theClock, &runtimeConfig, gitOpsEngine, logf.Log)
+	applications = sync.NewApplications(k8sClient, helmClient, clusterCache, theClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
-	jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+	jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, applications)
 })
 
 var _ = AfterEach(func() {

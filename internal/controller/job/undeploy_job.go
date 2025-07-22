@@ -85,8 +85,8 @@ func (job *UndeployJob) Run(jobContext types.AsyncJobContext) {
 
 func (job *UndeployJob) runInner(jobContext types.AsyncJobContext) bool {
 
-	syncManager := jobContext.GetSyncManager()
-	result, err := syncManager.Delete(jobContext.GetGoContext(), job.application)
+	applications := jobContext.GetApplications()
+	result, err := applications.Delete(jobContext.GetGoContext(), job.application)
 
 	if err != nil {
 		return job.maybeRetry(jobContext, "SyncError", fmt.Sprintf("Undeployment failed: %s", err.Error()))

@@ -73,9 +73,9 @@ func (job *LocalOperationJob) Run(context types.AsyncJobContext) {
 }
 
 func (job *LocalOperationJob) runInner(context types.AsyncJobContext) bool {
-	syncManager := context.GetSyncManager()
+	applications := context.GetApplications()
 
-	healthStatus := syncManager.GetAggregatedStatus(job.application)
+	healthStatus := applications.GetAggregatedStatus(job.application)
 
 	job.status = healthStatus.Status
 	job.msg = healthStatus.Message

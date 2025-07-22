@@ -50,7 +50,7 @@ var _ = Describe("AnyApplication Controller", func() {
 	var (
 		runtimeConfig config.ApplicationRuntimeConfig
 		jobs          ctrltypes.AsyncJobs
-		syncManager   ctrltypes.SyncManager
+		syncManager   ctrltypes.Applications
 		reconciler    recon.Reconciler
 		stopFunc      engine.StopFunc
 		fakeEvents    events.Events
@@ -107,7 +107,7 @@ var _ = Describe("AnyApplication Controller", func() {
 				panic("error " + err.Error())
 			}
 
-			syncManager = sync.NewSyncManager(k8sClient, helmClient, clusterCache, clock, &runtimeConfig, gitOpsEngine, logf.Log)
+			syncManager = sync.NewApplications(k8sClient, helmClient, clusterCache, clock, &runtimeConfig, gitOpsEngine, logf.Log)
 			jobContext := job.NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
 			jobs = job.NewJobs(jobContext)
 			jobFactory := job.NewAsyncJobFactory(&runtimeConfig, clock, logf.Log, &fakeEvents)
@@ -159,15 +159,15 @@ var _ = Describe("AnyApplication Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &AnyApplicationReconciler{
-				Client:      k8sClient,
-				Scheme:      k8sClient.Scheme(),
-				Config:      &runtimeConfig,
-				SyncManager: syncManager,
-				Jobs:        jobs,
-				Reconciler:  reconciler,
-				Log:         logf.Log.WithName("controllers").WithName("AnyApplication"),
-				Recorder:    record.NewFakeRecorder(100),
-				Events:      &fakeEvents,
+				Client:       k8sClient,
+				Scheme:       k8sClient.Scheme(),
+				Config:       &runtimeConfig,
+				Applications: syncManager,
+				Jobs:         jobs,
+				Reconciler:   reconciler,
+				Log:          logf.Log.WithName("controllers").WithName("AnyApplication"),
+				Recorder:     record.NewFakeRecorder(100),
+				Events:       &fakeEvents,
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{

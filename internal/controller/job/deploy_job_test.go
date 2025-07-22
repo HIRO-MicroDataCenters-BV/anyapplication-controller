@@ -71,7 +71,7 @@ var _ = Describe("DeployJob", func() {
 	})
 
 	It("Deployment should run and apply done status", func() {
-		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, applications)
 		jobContext, cancel := jobContext.WithCancel()
 		defer cancel()
 
@@ -99,7 +99,7 @@ var _ = Describe("DeployJob", func() {
 			Chart:      "test-chart",
 			Version:    "1.0.0",
 		}
-		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, applications)
 		jobContext, cancel := jobContext.WithCancel()
 		defer cancel()
 

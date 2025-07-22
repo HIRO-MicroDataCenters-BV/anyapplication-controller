@@ -9,13 +9,13 @@ import (
 )
 
 type AsyncJobContextImpl struct {
-	helmClient  helm.HelmClient
-	kubeClient  client.Client
-	ctx         context.Context
-	syncManager types.SyncManager
+	helmClient   helm.HelmClient
+	kubeClient   client.Client
+	ctx          context.Context
+	applications types.Applications
 }
 
-func NewAsyncJobContext(helmClient helm.HelmClient, kubeClient client.Client, ctx context.Context, syncManager types.SyncManager) types.AsyncJobContext {
+func NewAsyncJobContext(helmClient helm.HelmClient, kubeClient client.Client, ctx context.Context, syncManager types.Applications) types.AsyncJobContext {
 	return AsyncJobContextImpl{helmClient, kubeClient, ctx, syncManager}
 }
 
@@ -33,13 +33,13 @@ func (a AsyncJobContextImpl) GetGoContext() context.Context {
 
 func (a AsyncJobContextImpl) WithCancel() (types.AsyncJobContext, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(a.ctx)
-	return AsyncJobContextImpl{a.helmClient, a.kubeClient, ctx, a.syncManager}, cancel
+	return AsyncJobContextImpl{a.helmClient, a.kubeClient, ctx, a.applications}, cancel
 }
 
 func (a AsyncJobContextImpl) IsCancelled() bool {
 	return types.IsCancelled(a.ctx)
 }
 
-func (a AsyncJobContextImpl) GetSyncManager() types.SyncManager {
-	return a.syncManager
+func (a AsyncJobContextImpl) GetApplications() types.Applications {
+	return a.applications
 }
