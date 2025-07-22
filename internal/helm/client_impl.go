@@ -75,6 +75,10 @@ func (h *HelmClientImpl) AddOrUpdateChartRepo(repoURL string) (string, error) {
 	return repoName, nil
 }
 
+func (h *HelmClientImpl) SyncRepositories() {
+	h.client.UpdateChartRepos()
+}
+
 func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 
 	repoName, err := h.AddOrUpdateChartRepo(args.RepoUrl)

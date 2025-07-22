@@ -13,7 +13,7 @@ type ChartId struct {
 
 type ChartKey struct {
 	ChartId ChartId
-	Version ChartVersion
+	Version SpecificVersion
 }
 
 type ApplicationInstance struct {
@@ -43,30 +43,42 @@ type ChartVersion interface {
 	ToString() string
 }
 
-type specificVersion struct {
+type SpecificVersion struct {
 	version semver.Version
+}
+
+func NewSpecificVersion(version string) (*SpecificVersion, error) {
+	v, err := semver.NewVersion(version)
+	if err == nil {
+		return &SpecificVersion{version: *v}, nil
+	}
+	return nil, errors.Wrapf(err, "invalid specific version: %s", version)
+}
+
+func (v *SpecificVersion) ToString() string {
+	return v.version.String()
+}
+
+func (v *SpecificVersion) IsNewerThan(other *SpecificVersion) bool {
+	return v.version.GreaterThan(&other.version)
+}
+
+type VersionRange struct {
+	constraint semver.Constraints
+}
+
+func (v *VersionRange) ToString() string {
+	return v.constraint.String()
 }
 
 func NewChartVersion(version string) (ChartVersion, error) {
 	v, err := semver.NewVersion(version)
 	if err == nil {
-		return &specificVersion{version: *v}, nil
+		return &SpecificVersion{version: *v}, nil
 	}
 	c, err := semver.NewConstraint(version)
 	if err != nil {
 		return nil, errors.Wrapf(err, "invalid chart version: %s", version)
 	}
-	return &versionRange{constraint: *c}, nil
-}
-
-func (v *specificVersion) ToString() string {
-	return v.version.String()
-}
-
-type versionRange struct {
-	constraint semver.Constraints
-}
-
-func (v *versionRange) ToString() string {
-	return v.constraint.String()
+	return &VersionRange{constraint: *c}, nil
 }

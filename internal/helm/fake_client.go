@@ -19,3 +19,7 @@ func (c FakeHelmClient) Template(args *TemplateArgs) (string, error) {
 func (c *FakeHelmClient) AddOrUpdateChartRepo(repoURL string) (string, error) {
 	return repoURL, nil
 }
+
+func (c *FakeHelmClient) SyncRepositories() {
+
+}
