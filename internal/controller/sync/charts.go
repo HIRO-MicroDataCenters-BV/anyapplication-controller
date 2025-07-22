@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/utils/kube"
@@ -16,6 +17,7 @@ type ChartsOptions struct {
 
 type charts struct {
 	ctx        context.Context
+	charts     sync.Map
 	helmClient helm.HelmClient
 	options    *ChartsOptions
 }
@@ -27,19 +29,38 @@ func NewCharts(
 ) types.Charts {
 	return &charts{
 		ctx:        ctx,
+		charts:     sync.Map{},
 		helmClient: helmClient,
 		options:    options,
 	}
 }
 
-func (c *charts) AddChart(chartKey *types.ChartKey) error {
-	// Logic to add a chart
-	return nil
+func (c *charts) AddChart(chartName string, repoUrl string, version types.ChartVersion) (*types.ChartKey, error) {
+	chartId := types.ChartId{RepoUrl: repoUrl, ChartName: chartName}
+	chartKey := &types.ChartKey{ChartId: chartId, Version: version}
+	versions, err := c.GetOrCreateVersions(&chartKey.ChartId)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get or create chart versions")
+	}
+
+	if !versions.Exists(chartKey.Version) {
+
+	}
+	return nil, nil
 }
 
-func (c *charts) GetChart(chartKey *types.ChartKey) (*types.Chart, error) {
-	// Logic to get a chart
-	return nil, nil
+func (c *charts) GetOrCreateVersions(chartId *types.ChartId) (*ChartVersions, error) {
+	versions, exists := c.charts.Load(chartId)
+	if !exists {
+		repoName, err := c.helmClient.AddOrUpdateChartRepo(chartId.RepoUrl)
+		if err != nil {
+			return nil, err
+		}
+		versions = &ChartVersions{repoName: repoName, charts: sync.Map{}}
+		c.charts.Store(chartId, versions)
+	}
+
+	return versions.(*ChartVersions), nil
 }
 
 func (c *charts) RunSynchronization() {
@@ -60,8 +81,17 @@ func (c *charts) RunSynchronization() {
 }
 
 func (c *charts) runSyncCycle() bool {
-
+	c.charts.Range(func(key, value any) bool {
+		chartId := key.(*types.ChartId)
+		versions := value.(*ChartVersions)
+		c.probeNewVersion(chartId, versions)
+		return true
+	})
 	return false
+}
+
+func (c *charts) probeNewVersion(chartId *types.ChartId, versions *ChartVersions) {
+	// TODO
 }
 
 func (c *charts) Render(chartKey *types.ChartKey, instance *types.ApplicationInstance) (*types.RenderedChart, error) {
@@ -73,10 +103,10 @@ func (c *charts) Render(chartKey *types.ChartKey, instance *types.ApplicationIns
 
 	template, err := c.helmClient.Template(&helm.TemplateArgs{
 		ReleaseName: instance.ReleaseName,
-		RepoUrl:     chartKey.RepoUrl,
-		ChartName:   chartKey.ChartName,
+		RepoUrl:     chartKey.ChartId.RepoUrl,
+		ChartName:   chartKey.ChartId.ChartName,
 		Namespace:   instance.Namespace,
-		Version:     chartKey.Version,
+		Version:     chartKey.Version.ToString(),
 		ValuesYaml:  instance.ValuesYaml,
 		Labels:      labels,
 	})
@@ -92,4 +122,32 @@ func (c *charts) Render(chartKey *types.ChartKey, instance *types.ApplicationIns
 		Instance:  *instance,
 		Resources: resources,
 	}, nil
+}
+
+type ChartVersions struct {
+	charts   sync.Map
+	repoName string
+}
+
+func (cv *ChartVersions) AddVersion(version types.ChartVersion) {
+	cv.charts.Store(version.ToString(), version)
+}
+
+func (cv *ChartVersions) HasNewerVersion(version types.ChartVersion) (*types.ChartVersion, bool) {
+	var hasNewerVersion = false
+	var newerChartVersion types.ChartVersion
+	cv.charts.Range(func(key, value any) bool {
+		hasNewerVersion = true
+		newerChartVersion = value.(types.ChartVersion)
+		return true
+	})
+	if hasNewerVersion {
+		return &newerChartVersion, true
+	}
+	return nil, false
+}
+
+func (cv *ChartVersions) Exists(version types.ChartVersion) bool {
+	_, found := cv.charts.Load(version.ToString())
+	return found
 }

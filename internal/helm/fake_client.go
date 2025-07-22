@@ -15,3 +15,7 @@ func (c *FakeHelmClient) MockTemplate(template string) {
 func (c FakeHelmClient) Template(args *TemplateArgs) (string, error) {
 	return c.template, nil
 }
+
+func (c *FakeHelmClient) AddOrUpdateChartRepo(repoURL string) (string, error) {
+	return repoURL, nil
+}

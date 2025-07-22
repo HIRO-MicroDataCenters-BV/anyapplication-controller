@@ -19,7 +19,13 @@ func (f *FakeCharts) Render(chartKey *types.ChartKey, instance *types.Applicatio
 		Instance: *instance,
 	}, nil
 }
-func (f *FakeCharts) AddChart(chartKey *types.ChartKey) error {
-	// Simulate adding a chart by returning nil
-	return nil
+func (f *FakeCharts) AddChart(chartName string, repoUrl string, version types.ChartVersion) (*types.ChartKey, error) {
+	// Simulate adding a chart by returning a fake ChartKey
+	return &types.ChartKey{
+		ChartId: types.ChartId{
+			RepoUrl:   repoUrl,
+			ChartName: chartName,
+		},
+		Version: version,
+	}, nil
 }
