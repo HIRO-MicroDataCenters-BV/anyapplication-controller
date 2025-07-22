@@ -36,6 +36,7 @@ type cachedApp struct {
 
 type applications struct {
 	helmClient   helm.HelmClient
+	charts       types.Charts
 	kubeClient   client.Client
 	clusterCache cache.ClusterCache
 	appCache     sync.Map
@@ -48,6 +49,7 @@ type applications struct {
 func NewApplications(
 	kubeClient client.Client,
 	helmClient helm.HelmClient,
+	charts types.Charts,
 	clusterCache cache.ClusterCache,
 	clock clock.Clock,
 	config *config.ApplicationRuntimeConfig,
@@ -57,6 +59,7 @@ func NewApplications(
 	log := logger.WithName("SyncManager")
 	return &applications{
 		kubeClient:   kubeClient,
+		charts:       charts,
 		helmClient:   helmClient,
 		clusterCache: clusterCache,
 		appCache:     sync.Map{},

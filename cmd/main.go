@@ -248,7 +248,6 @@ func main() {
 			Major:   "1",
 			Minor:   "23",
 		},
-		UpgradeCRDs: true,
 	})
 	failIfError(err, setupLog, "unable to create helm client")
 
@@ -275,9 +274,15 @@ func main() {
 	stopFunc, err := gitOpsEngine.Run()
 	failIfError(err, setupLog, "unable to start gitops engine")
 
+	charts := sync.NewCharts(context.Background(), helmClient, &sync.ChartsOptions{
+		SyncPeriod: controllerConfig.Runtime.ChartVersionPollInterval,
+	})
+	go charts.RunSynchronization()
+
 	applications := sync.NewApplications(
 		kubeClient,
 		helmClient,
+		charts,
 		clusterCache,
 		clock,
 		&applicationConfig,

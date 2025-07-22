@@ -111,7 +111,6 @@ var _ = BeforeEach(func() {
 			Major:   "1",
 			Minor:   "23",
 		},
-		UpgradeCRDs: true,
 	})
 	if err != nil {
 		panic("error " + err.Error())
@@ -135,8 +134,8 @@ var _ = BeforeEach(func() {
 	if err != nil {
 		panic("error " + err.Error())
 	}
-
-	applications = sync.NewApplications(k8sClient, helmClient, clusterCache, theClock, &runtimeConfig, gitOpsEngine, logf.Log)
+	fakeCharts := sync.NewFakeCharts()
+	applications = sync.NewApplications(k8sClient, helmClient, fakeCharts, clusterCache, theClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
 	jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, applications)
 })

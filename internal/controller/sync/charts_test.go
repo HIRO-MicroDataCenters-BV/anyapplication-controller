@@ -114,7 +114,10 @@ var _ = Describe("Charts", func() {
 
 	// })
 
-	It("should return unique instance id for helm chart version and release", func() {
+	It("Sync chart", func() {
+	})
+
+	It("Sync new version of chart", func() {
 	})
 
 })

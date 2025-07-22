@@ -134,7 +134,8 @@ var _ = Describe("LocalOperationJobUnitTests", func() {
 		}
 
 		clusterCache, _ := fixture.NewTestClusterCacheWithOptions(updateFuncs)
-		applications := ctrl_sync.NewApplications(kubeClient, fakeHelmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+		fakeCharts := ctrl_sync.NewFakeCharts()
+		applications := ctrl_sync.NewApplications(kubeClient, fakeHelmClient, fakeCharts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
 		jobContext = NewAsyncJobContext(fakeHelmClient, kubeClient, ctx, applications)
 

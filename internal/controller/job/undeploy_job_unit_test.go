@@ -147,7 +147,9 @@ var _ = Describe("UndeployJobUnitests", func() {
 			Fail("Failed to sync cluster cache: " + err.Error())
 		}
 
-		applications := ctrl_sync.NewApplications(kubeClient, fakeHelmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+		fakeCharts := ctrl_sync.NewFakeCharts()
+
+		applications := ctrl_sync.NewApplications(kubeClient, fakeHelmClient, fakeCharts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
 		jobContext = NewAsyncJobContext(fakeHelmClient, kubeClient, ctx, applications)
 

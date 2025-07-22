@@ -39,6 +39,7 @@ var _ = Describe("SyncManager", func() {
 		runtimeConfig config.ApplicationRuntimeConfig
 		gitOpsEngine  *fixture.FakeGitOpsEngine
 		updateFuncs   []cache.UpdateSettingsFunc
+		fakeCharts    types.Charts
 	)
 
 	BeforeEach(func() {
@@ -113,7 +114,8 @@ var _ = Describe("SyncManager", func() {
 		}
 
 		gitOpsEngine = fixture.NewFakeGitopsEngine()
-		applications = NewApplications(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+		fakeCharts = NewFakeCharts()
+		applications = NewApplications(kubeClient, helmClient, fakeCharts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 	})
 
 	It("should return unique instance id for helm chart version and release", func() {

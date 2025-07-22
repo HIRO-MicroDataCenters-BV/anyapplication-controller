@@ -118,7 +118,7 @@ var _ = Describe("DeployJob", func() {
 				ZoneId:             "zone",
 				Status:             string(v1.DeploymentStatusFailure),
 				LastTransitionTime: metav1.Time{},
-				Msg:                "Deployment failure: Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",
+				Msg:                "Deployment failure: Fail to render application: Helm template failure: Failed to add or update chart repo: could not find protocol handler for: ",
 				Reason:             "SyncError",
 			},
 		))

@@ -53,6 +53,7 @@ var _ = Describe("AnyApplication Controller", func() {
 		syncManager   ctrltypes.Applications
 		reconciler    recon.Reconciler
 		stopFunc      engine.StopFunc
+		fakeCharts    ctrltypes.Charts
 		fakeEvents    events.Events
 	)
 
@@ -81,7 +82,6 @@ var _ = Describe("AnyApplication Controller", func() {
 				Debug:       false,
 				Linting:     true,
 				KubeVersion: &chartutil.DefaultCapabilities.KubeVersion,
-				UpgradeCRDs: true,
 			})
 			if err != nil {
 				panic("error " + err.Error())
@@ -107,7 +107,9 @@ var _ = Describe("AnyApplication Controller", func() {
 				panic("error " + err.Error())
 			}
 
-			syncManager = sync.NewApplications(k8sClient, helmClient, clusterCache, clock, &runtimeConfig, gitOpsEngine, logf.Log)
+			fakeCharts = sync.NewFakeCharts()
+
+			syncManager = sync.NewApplications(k8sClient, helmClient, fakeCharts, clusterCache, clock, &runtimeConfig, gitOpsEngine, logf.Log)
 			jobContext := job.NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
 			jobs = job.NewJobs(jobContext)
 			jobFactory := job.NewAsyncJobFactory(&runtimeConfig, clock, logf.Log, &fakeEvents)

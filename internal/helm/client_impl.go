@@ -22,7 +22,6 @@ type HelmClientOptions struct {
 	Debug       bool
 	Linting     bool
 	KubeVersion *chartutil.KubeVersion
-	UpgradeCRDs bool
 }
 
 type HelmClientImpl struct {
@@ -53,11 +52,11 @@ type TemplateArgs struct {
 	ValuesOptions values.Options
 	ValuesYaml    string
 	Labels        map[string]string
+	UpgradeCRDs   bool
 }
 
-func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
-
-	repoName, err := DeriveUniqueHelmRepoName(args.RepoUrl)
+func (h *HelmClientImpl) AddOrUpdateChartRepo(repoURL string) (string, error) {
+	repoName, err := DeriveUniqueHelmRepoName(repoURL)
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to derive unique helm repo name")
 	}
@@ -65,13 +64,23 @@ func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 	// Define a private chart repository
 	chartRepo := repo.Entry{
 		Name:               repoName,
-		URL:                args.RepoUrl,
+		URL:                repoURL,
 		PassCredentialsAll: false,
 	}
 
 	// Add a chart-repository to the client.
 	if err := h.client.AddOrUpdateChartRepo(chartRepo); err != nil {
-		return "", errors.Wrap(err, "Failed to AddOrUpdateChartRepo")
+		return "", errors.Wrap(err, "Failed to add or update chart repo")
+	}
+	return repoName, nil
+}
+
+func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
+
+	repoName, err := h.AddOrUpdateChartRepo(args.RepoUrl)
+
+	if err != nil {
+		return "", err
 	}
 
 	chartSpec := helmclient.ChartSpec{
@@ -79,7 +88,7 @@ func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 		ChartName:   repoName + "/" + args.ChartName,
 		Version:     args.Version,
 		Namespace:   args.Namespace,
-		UpgradeCRDs: h.options.UpgradeCRDs,
+		UpgradeCRDs: args.UpgradeCRDs,
 		Wait:        true,
 		Timeout:     32 * time.Second,
 		Labels:      args.Labels,

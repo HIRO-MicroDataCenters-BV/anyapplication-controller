@@ -4,13 +4,14 @@ import (
 	"context"
 	"time"
 
-	v1 "hiro.io/anyapplication/api/v1"
+	"github.com/argoproj/gitops-engine/pkg/utils/kube"
+	"github.com/cockroachdb/errors"
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 )
 
 type ChartsOptions struct {
-	syncPeriod time.Duration
+	SyncPeriod time.Duration
 }
 
 type charts struct {
@@ -19,7 +20,7 @@ type charts struct {
 	options    *ChartsOptions
 }
 
-func (c *charts) NewCharts(
+func NewCharts(
 	ctx context.Context,
 	helmClient helm.HelmClient,
 	options *ChartsOptions,
@@ -31,18 +32,18 @@ func (c *charts) NewCharts(
 	}
 }
 
-func (c *charts) AddChart(chart *any) error {
+func (c *charts) AddChart(chartKey *types.ChartKey) error {
 	// Logic to add a chart
 	return nil
 }
 
-func (c *charts) GetChart(application *v1.AnyApplication) (*types.Chart, error) {
+func (c *charts) GetChart(chartKey *types.ChartKey) (*types.Chart, error) {
 	// Logic to get a chart
 	return nil, nil
 }
 
 func (c *charts) RunSynchronization() {
-	ticker := time.NewTicker(c.options.syncPeriod)
+	ticker := time.NewTicker(c.options.SyncPeriod)
 	defer ticker.Stop()
 
 	for {
@@ -61,4 +62,34 @@ func (c *charts) RunSynchronization() {
 func (c *charts) runSyncCycle() bool {
 
 	return false
+}
+
+func (c *charts) Render(chartKey *types.ChartKey, instance *types.ApplicationInstance) (*types.RenderedChart, error) {
+
+	labels := map[string]string{
+		"dcp.hiro.io/managed-by":  "dcp",
+		"dcp.hiro.io/instance-id": instance.InstanceId,
+	}
+
+	template, err := c.helmClient.Template(&helm.TemplateArgs{
+		ReleaseName: instance.ReleaseName,
+		RepoUrl:     chartKey.RepoUrl,
+		ChartName:   chartKey.ChartName,
+		Namespace:   instance.Namespace,
+		Version:     chartKey.Version,
+		ValuesYaml:  instance.ValuesYaml,
+		Labels:      labels,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "Helm template failure")
+	}
+	resources, err := kube.SplitYAML([]byte(template))
+	if err != nil {
+		return nil, errors.Wrap(err, "Fail to split YAML")
+	}
+	return &types.RenderedChart{
+		Key:       *chartKey,
+		Instance:  *instance,
+		Resources: resources,
+	}, nil
 }
