@@ -75,6 +75,7 @@ var _ = Describe("AnyApplication Controller", func() {
 			runtimeConfig = config.ApplicationRuntimeConfig{
 				ZoneId:                        "zone",
 				PollOperationalStatusInterval: time.Duration(60000),
+				ChartVersionPollInterval:      time.Duration(60000),
 			}
 
 			helmClient, err := helm.NewHelmClient(&helm.HelmClientOptions{
