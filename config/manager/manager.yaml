@@ -17,7 +17,20 @@ data:
       - url: localhost:8080
     runtime:
       zone: zone
-      localPollDuration: 10s
+      operationalPollDuration: 5s
+      syncPollDuration: 10s
+      chartVersionPollDuration: 60s
+      defaultSyncTimeout: 180s
+      defaultUndeployTimeout: 180s
+    logging:
+      default_level: info
+      components:
+        SyncManager: none
+        GitOpsEngine: none
+        ClusterCache: none
+        Controller: none
+        Jobs: info
+
 ---
 apiVersion: apps/v1
 kind: Deployment
