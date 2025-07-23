@@ -86,8 +86,8 @@ func (h *HelmClientImpl) addOrUpdateChartRepo(repoURL string) (*repo.Entry, erro
 	return &chartRepo, nil
 }
 
-func (h *HelmClientImpl) SyncRepositories() {
-	h.client.UpdateChartRepos()
+func (h *HelmClientImpl) SyncRepositories() error {
+	return h.client.UpdateChartRepos()
 }
 
 func (h *HelmClientImpl) FetchVersions(repoURL string, chartName string) ([]*semver.Version, error) {

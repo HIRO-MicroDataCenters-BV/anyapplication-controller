@@ -6,7 +6,7 @@ import (
 
 type HelmClient interface {
 	AddOrUpdateChartRepo(repoURL string) (string, error)
-	SyncRepositories()
+	SyncRepositories() error
 	FetchVersions(repoURL string, chartName string) ([]*semver.Version, error)
 	Template(args *TemplateArgs) (string, error)
 }

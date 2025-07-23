@@ -2,12 +2,14 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	semver "github.com/Masterminds/semver/v3"
 	"github.com/argoproj/gitops-engine/pkg/utils/kube"
 	"github.com/cockroachdb/errors"
+	"github.com/go-logr/logr"
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 )
@@ -21,17 +23,20 @@ type charts struct {
 	charts     sync.Map
 	helmClient helm.HelmClient
 	options    *ChartsOptions
+	logger     logr.Logger
 }
 
 func NewCharts(
 	ctx context.Context,
 	helmClient helm.HelmClient,
 	options *ChartsOptions,
+	logger logr.Logger,
 ) types.Charts {
 	return &charts{
 		ctx:        ctx,
 		charts:     sync.Map{},
 		helmClient: helmClient,
+		logger:     logger,
 		options:    options,
 	}
 }
@@ -89,30 +94,30 @@ func (c *charts) RunSynchronization() {
 	for {
 		select {
 		case <-ticker.C:
-			isCompleted := c.runSyncCycle()
-			if isCompleted {
-				return
-			}
+			c.runSyncCycle()
 		case <-c.ctx.Done():
 			return
 		}
 	}
 }
 
-func (c *charts) runSyncCycle() bool {
-	c.helmClient.SyncRepositories()
+func (c *charts) runSyncCycle() {
+	if err := c.helmClient.SyncRepositories(); err != nil {
+		c.logger.Error(err, "Failed to sync Helm repositories")
+
+	}
 	c.charts.Range(func(key, value any) bool {
 		chartId := key.(*types.ChartId)
 		versions := value.(*ChartVersions)
 		c.updateAvailableVersions(chartId, versions)
 		return true
 	})
-	return false
 }
 
 func (c *charts) updateAvailableVersions(chartId *types.ChartId, versions *ChartVersions) {
 	semanticVersions, err := c.helmClient.FetchVersions(chartId.RepoUrl, chartId.ChartName)
 	if err != nil {
+		c.logger.Error(err, "Failed to fetch versions for chart", "chartId", chartId)
 		return
 	}
 	versions.UpdateVersions(semanticVersions)
@@ -154,7 +159,7 @@ type ChartVersions struct {
 }
 
 func (cv *ChartVersions) AddVersion(version *types.SpecificVersion) {
-	cv.charts.Store(version, version)
+	cv.charts.Store(version.ToString(), version)
 }
 
 func (cv *ChartVersions) GetNewerVersion(version *types.SpecificVersion) (*types.SpecificVersion, bool) {
@@ -163,7 +168,7 @@ func (cv *ChartVersions) GetNewerVersion(version *types.SpecificVersion) (*types
 
 	cv.charts.Range(func(key, value any) bool {
 		hasNewerVersion = true
-		chartVersionIter := key.(*types.SpecificVersion)
+		chartVersionIter := value.(*types.SpecificVersion)
 		if chartVersionIter.IsNewerThan(version) {
 			hasNewerVersion = true
 			newerChartVersion = chartVersionIter
@@ -180,14 +185,15 @@ func (cv *ChartVersions) UpdateVersions(semanticVersions []*semver.Version) {
 	for _, version := range semanticVersions {
 		specificVersion, err := types.NewFromSemantic(version)
 		if err != nil {
+			fmt.Printf("Failed to parse semantic version %s, %s", version.String(), err.Error())
 			continue
 		}
 		cv.AddVersion(specificVersion)
 	}
 }
 
-func (cv *ChartVersions) Exists(version types.ChartVersion) bool {
-	_, found := cv.charts.Load(version)
+func (cv *ChartVersions) Exists(version *types.SpecificVersion) bool {
+	_, found := cv.charts.Load(version.ToString())
 	return found
 }
 
@@ -208,7 +214,7 @@ func (cv *ChartVersions) getLatestFor(versionRange *types.VersionRange) (*types.
 	var latestChartVersion *types.SpecificVersion
 
 	cv.charts.Range(func(key, value any) bool {
-		chartVersionIter := key.(*types.SpecificVersion)
+		chartVersionIter := value.(*types.SpecificVersion)
 		if !versionRange.Contains(chartVersionIter) {
 			return true
 		}

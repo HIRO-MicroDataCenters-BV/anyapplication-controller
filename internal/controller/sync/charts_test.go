@@ -11,6 +11,7 @@ import (
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	"k8s.io/client-go/rest"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("Charts", func() {
@@ -35,11 +36,11 @@ var _ = Describe("Charts", func() {
 
 		charts = NewCharts(context.TODO(), helmClient, &ChartsOptions{
 			SyncPeriod: 100 * time.Millisecond,
-		})
+		}, logf.Log)
 
 	})
 
-	It("should sync chart", func() {
+	It("should sync chart for a specific version", func() {
 		version, err := types.NewChartVersion("2.0.1")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -51,40 +52,39 @@ var _ = Describe("Charts", func() {
 		Expect(latest.Version.ToString()).To(Equal("2.0.1"))
 	})
 
-	It("should render chart", func() {
-		version, _ := types.NewChartVersion("2.0.1")
+	It("should sync new version of chart for a version constraint", func() {
 
-		latest, _ := charts.AddAndGetLatest("nginx-ingress", "https://helm.nginx.com/stable", version)
-		instance := &types.ApplicationInstance{
-			Name:        "test-instance",
-			Namespace:   "default",
-			ReleaseName: "test-release",
-			ValuesYaml:  "",
-		}
-		rendered, err := charts.Render(latest, instance)
+		version, err := types.NewChartVersion("^2.x")
 		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("should sync new version of chart", func() {
-		version, err := types.NewChartVersion("2.0.0")
-		Expect(err).NotTo(HaveOccurred())
-
-		versionRange, err2 := types.NewChartVersion("^2.x")
-		Expect(err2).NotTo(HaveOccurred())
 
 		latest, err := charts.AddAndGetLatest("nginx-ingress", "https://helm.nginx.com/stable", version)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(latest).NotTo(BeNil())
 		Expect(latest.ChartId.RepoUrl).To(Equal("https://helm.nginx.com/stable"))
 		Expect(latest.ChartId.ChartName).To(Equal("nginx-ingress"))
-		Expect(latest.Version.ToString()).To(Equal("2.0.0"))
+		Expect(latest.Version.ToString()).To(Equal("2.2.1"))
+	})
 
-		newLatest, err := charts.AddAndGetLatest("nginx-ingress", "https://helm.nginx.com/stable", versionRange)
+	It("should render chart", func() {
+		version, _ := types.NewChartVersion("2.0.1")
+
+		latest, err := charts.AddAndGetLatest("nginx-ingress", "https://helm.nginx.com/stable", version)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(newLatest).NotTo(BeNil())
-		Expect(newLatest.ChartId.RepoUrl).To(Equal("https://helm.nginx.com/stable"))
-		Expect(newLatest.ChartId.ChartName).To(Equal("nginx-ingress"))
-		Expect(newLatest.Version.ToString()).To(Equal("2.0.1"))
+
+		instance := &types.ApplicationInstance{
+			Name:        "test-instance",
+			Namespace:   "default",
+			ReleaseName: "test-release",
+			InstanceId:  "test-instance-id",
+			ValuesYaml:  "",
+		}
+		rendered, err := charts.Render(latest, instance)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rendered).NotTo(BeNil())
+
+		Expect(rendered.Instance).To(Equal(*instance))
+		Expect(rendered.Key).To(Equal(*latest))
+		Expect(rendered.Resources).To(HaveLen(23))
 	})
 
 })

@@ -276,7 +276,8 @@ func main() {
 
 	charts := sync.NewCharts(context.Background(), helmClient, &sync.ChartsOptions{
 		SyncPeriod: controllerConfig.Runtime.ChartVersionPollInterval,
-	})
+	}, loggers["SyncManager"])
+
 	go charts.RunSynchronization()
 
 	applications := sync.NewApplications(
