@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	semver "github.com/Masterminds/semver/v3"
 	"github.com/argoproj/gitops-engine/pkg/utils/kube"
 	"github.com/cockroachdb/errors"
 	"hiro.io/anyapplication/internal/controller/types"
@@ -46,10 +47,9 @@ func (c *charts) AddAndGetLatest(chartName string, repoUrl string, chartVersion 
 		return nil, errors.Wrap(err, "Failed to get or create chart versions")
 	}
 	if chartVersions.isEmpty() {
-		c.updateIndexAndFetchLatest(&chartId, chartVersions)
+		c.updateAvailableVersions(&chartId, chartVersions)
 	}
 	if isSpecificVersion {
-		c.fetchSpecific(&chartId, chartVersions, specificVersion)
 		if chartVersions.Exists(specificVersion) {
 			return &types.ChartKey{
 				ChartId: chartId,
@@ -104,25 +104,18 @@ func (c *charts) runSyncCycle() bool {
 	c.charts.Range(func(key, value any) bool {
 		chartId := key.(*types.ChartId)
 		versions := value.(*ChartVersions)
-		c.updateIndexAndFetchLatest(chartId, versions)
+		c.updateAvailableVersions(chartId, versions)
 		return true
 	})
 	return false
 }
 
-func (c *charts) updateIndexAndFetchLatest(chartId *types.ChartId, versions *ChartVersions) {
-	// specificVersion, isSpecific := chartVersion.(*types.SpecificVersion)
-
-	// TODO
-}
-
-func (c *charts) fetchSpecific(chartId *types.ChartId, versions *ChartVersions, specificVersion *types.SpecificVersion) {
-
-	if versions.Exists(specificVersion) {
+func (c *charts) updateAvailableVersions(chartId *types.ChartId, versions *ChartVersions) {
+	semanticVersions, err := c.helmClient.FetchVersions(chartId.RepoUrl, chartId.ChartName)
+	if err != nil {
 		return
 	}
-	// fetch from helm repo
-	// TODO
+	versions.UpdateVersions(semanticVersions)
 }
 
 func (c *charts) Render(chartKey *types.ChartKey, instance *types.ApplicationInstance) (*types.RenderedChart, error) {
@@ -181,6 +174,16 @@ func (cv *ChartVersions) GetNewerVersion(version *types.SpecificVersion) (*types
 		return newerChartVersion, true
 	}
 	return nil, false
+}
+
+func (cv *ChartVersions) UpdateVersions(semanticVersions []*semver.Version) {
+	for _, version := range semanticVersions {
+		specificVersion, err := types.NewFromSemantic(version)
+		if err != nil {
+			continue
+		}
+		cv.AddVersion(specificVersion)
+	}
 }
 
 func (cv *ChartVersions) Exists(version types.ChartVersion) bool {

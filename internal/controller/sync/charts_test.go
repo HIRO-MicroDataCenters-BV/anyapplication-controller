@@ -39,14 +39,9 @@ var _ = Describe("Charts", func() {
 
 	})
 
-	It("Sync chart", func() {
+	It("should sync chart", func() {
 		version, err := types.NewChartVersion("2.0.1")
 		Expect(err).NotTo(HaveOccurred())
-
-		version2, err2 := types.NewChartVersion("^2.x")
-		Expect(err2).NotTo(HaveOccurred())
-
-		fmt.Printf("Version: %s, Version2: %s\n", version.ToString(), version2.ToString())
 
 		latest, err := charts.AddAndGetLatest("nginx-ingress", "https://helm.nginx.com/stable", version)
 		Expect(err).NotTo(HaveOccurred())
@@ -56,7 +51,21 @@ var _ = Describe("Charts", func() {
 		Expect(latest.Version.ToString()).To(Equal("2.0.1"))
 	})
 
-	It("Sync new version of chart", func() {
+	It("should render chart", func() {
+		version, _ := types.NewChartVersion("2.0.1")
+
+		latest, _ := charts.AddAndGetLatest("nginx-ingress", "https://helm.nginx.com/stable", version)
+		instance := &types.ApplicationInstance{
+			Name:        "test-instance",
+			Namespace:   "default",
+			ReleaseName: "test-release",
+			ValuesYaml:  "",
+		}
+		rendered, err := charts.Render(latest, instance)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should sync new version of chart", func() {
 		version, err := types.NewChartVersion("2.0.0")
 		Expect(err).NotTo(HaveOccurred())
 
