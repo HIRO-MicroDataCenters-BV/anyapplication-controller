@@ -71,7 +71,7 @@ var _ = Describe("DeployJob", func() {
 	})
 
 	It("Deployment should run and apply done status", func() {
-		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, applications)
 		jobContext, cancel := jobContext.WithCancel()
 		defer cancel()
 
@@ -99,7 +99,7 @@ var _ = Describe("DeployJob", func() {
 			Chart:      "test-chart",
 			Version:    "1.0.0",
 		}
-		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, applications)
 		jobContext, cancel := jobContext.WithCancel()
 		defer cancel()
 
@@ -118,7 +118,7 @@ var _ = Describe("DeployJob", func() {
 				ZoneId:             "zone",
 				Status:             string(v1.DeploymentStatusFailure),
 				LastTransitionTime: metav1.Time{},
-				Msg:                "Deployment failure: Fail to render application: Helm template failure: Failed to AddOrUpdateChartRepo: could not find protocol handler for: ",
+				Msg:                "Deployment failure: Fail to render application: Helm template failure: Failed to add or update chart repo: could not find protocol handler for: ",
 				Reason:             "SyncError",
 			},
 		))

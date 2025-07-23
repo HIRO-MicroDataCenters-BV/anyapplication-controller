@@ -34,8 +34,9 @@ type cachedApp struct {
 	namespace   string
 }
 
-type syncManager struct {
+type applications struct {
 	helmClient   helm.HelmClient
+	charts       types.Charts
 	kubeClient   client.Client
 	clusterCache cache.ClusterCache
 	appCache     sync.Map
@@ -45,18 +46,20 @@ type syncManager struct {
 	log          logr.Logger
 }
 
-func NewSyncManager(
+func NewApplications(
 	kubeClient client.Client,
 	helmClient helm.HelmClient,
+	charts types.Charts,
 	clusterCache cache.ClusterCache,
 	clock clock.Clock,
 	config *config.ApplicationRuntimeConfig,
 	gitOpsEngine engine.GitOpsEngine,
 	logger logr.Logger,
-) types.SyncManager {
+) types.Applications {
 	log := logger.WithName("SyncManager")
-	return &syncManager{
+	return &applications{
 		kubeClient:   kubeClient,
+		charts:       charts,
 		helmClient:   helmClient,
 		clusterCache: clusterCache,
 		appCache:     sync.Map{},
@@ -67,7 +70,7 @@ func NewSyncManager(
 	}
 }
 
-func (m *syncManager) Sync(ctx context.Context, application *v1.AnyApplication) (*types.SyncResult, error) {
+func (m *applications) Sync(ctx context.Context, application *v1.AnyApplication) (*types.SyncResult, error) {
 	app, err := m.getOrRenderApp(application)
 	if err != nil {
 		return types.NewSyncResult(), err
@@ -75,7 +78,7 @@ func (m *syncManager) Sync(ctx context.Context, application *v1.AnyApplication) 
 	return m.sync(ctx, app)
 }
 
-func (m *syncManager) getOrRenderApp(application *v1.AnyApplication) (*cachedApp, error) {
+func (m *applications) getOrRenderApp(application *v1.AnyApplication) (*cachedApp, error) {
 	appKey := m.getCacheKey(application)
 	existing, found := m.appCache.Load(appKey)
 	if !found {
@@ -93,7 +96,7 @@ func (m *syncManager) getOrRenderApp(application *v1.AnyApplication) (*cachedApp
 	return cached, nil
 }
 
-func (m *syncManager) render(application *v1.AnyApplication) (*cachedApp, error) {
+func (m *applications) render(application *v1.AnyApplication) (*cachedApp, error) {
 	releaseName := application.Name
 	helmSelector := application.Spec.Source.HelmSelector
 	instanceId := m.GetInstanceId(application)
@@ -129,7 +132,7 @@ func (m *syncManager) render(application *v1.AnyApplication) (*cachedApp, error)
 	return &app, nil
 }
 
-func (m *syncManager) sync(ctx context.Context, app *cachedApp) (*types.SyncResult, error) {
+func (m *applications) sync(ctx context.Context, app *cachedApp) (*types.SyncResult, error) {
 
 	syncResult := types.NewSyncResult()
 	prune := true
@@ -164,7 +167,7 @@ func (m *syncManager) sync(ctx context.Context, app *cachedApp) (*types.SyncResu
 	return syncResult, nil
 }
 
-func (m *syncManager) addAndLogResults(resourceSyncResults []common.ResourceSyncResult, syncResult *types.SyncResult) {
+func (m *applications) addAndLogResults(resourceSyncResults []common.ResourceSyncResult, syncResult *types.SyncResult) {
 	for _, resourceSyncResult := range resourceSyncResults {
 		syncResult.AddResult(&resourceSyncResult)
 
@@ -180,7 +183,7 @@ func (m *syncManager) addAndLogResults(resourceSyncResults []common.ResourceSync
 	}
 }
 
-func (m *syncManager) GetAggregatedStatus(application *v1.AnyApplication) *health.HealthStatus {
+func (m *applications) GetAggregatedStatus(application *v1.AnyApplication) *health.HealthStatus {
 	app, err := m.getOrRenderApp(application)
 	if err != nil {
 		m.log.Error(err, "Failed to get or render application")
@@ -188,7 +191,7 @@ func (m *syncManager) GetAggregatedStatus(application *v1.AnyApplication) *healt
 	return m.getAggregatedStatus(app)
 }
 
-func (m *syncManager) getAggregatedStatus(app *cachedApp) *health.HealthStatus {
+func (m *applications) getAggregatedStatus(app *cachedApp) *health.HealthStatus {
 	statusCounts := 0
 	code := health.HealthStatusHealthy
 	msg := ""
@@ -237,7 +240,7 @@ func (m *syncManager) getAggregatedStatus(app *cachedApp) *health.HealthStatus {
 	return &status
 }
 
-func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication) (*types.DeleteResult, error) {
+func (m *applications) Delete(ctx context.Context, application *v1.AnyApplication) (*types.DeleteResult, error) {
 	app, err := m.getOrRenderApp(application)
 	if err != nil {
 		return nil, err
@@ -246,7 +249,7 @@ func (m *syncManager) Delete(ctx context.Context, application *v1.AnyApplication
 	return m.deleteApp(ctx, app)
 }
 
-func (m *syncManager) deleteApp(ctx context.Context, app *cachedApp) (*types.DeleteResult, error) {
+func (m *applications) deleteApp(ctx context.Context, app *cachedApp) (*types.DeleteResult, error) {
 	syncResult := &types.DeleteResult{}
 
 	syncResult.Total += len(app.resources)
@@ -299,18 +302,18 @@ func (m *syncManager) deleteApp(ctx context.Context, app *cachedApp) (*types.Del
 
 }
 
-func (m *syncManager) getCacheKey(application *v1.AnyApplication) string {
+func (m *applications) getCacheKey(application *v1.AnyApplication) string {
 	version := application.Spec.Source.HelmSelector.Version
 	return fmt.Sprintf("%s-%s-%s", application.Name, application.Namespace, version)
 }
 
-func (m *syncManager) GetInstanceId(application *v1.AnyApplication) string {
+func (m *applications) GetInstanceId(application *v1.AnyApplication) string {
 	releaseName := application.Name
 	helmSelector := application.Spec.Source.HelmSelector
 	return fmt.Sprintf("%s-%s-%s", helmSelector.Chart, helmSelector.Version, releaseName)
 }
 
-func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.GlobalApplication, error) {
+func (m *applications) LoadApplication(application *v1.AnyApplication) (types.GlobalApplication, error) {
 	localApplication, err := m.loadLocalApplication(application)
 	if err != nil {
 		return nil, errors.Wrap(err, "Fail to create local application")
@@ -320,7 +323,7 @@ func (m *syncManager) LoadApplication(application *v1.AnyApplication) (types.Glo
 	return globalApplication, nil
 }
 
-func (m *syncManager) loadLocalApplication(application *v1.AnyApplication) (mo.Option[local.LocalApplication], error) {
+func (m *applications) loadLocalApplication(application *v1.AnyApplication) (mo.Option[local.LocalApplication], error) {
 	app, err := m.getOrRenderApp(application)
 	if err != nil {
 		return mo.None[local.LocalApplication](), err
@@ -335,7 +338,7 @@ func (m *syncManager) loadLocalApplication(application *v1.AnyApplication) (mo.O
 	return localApplication, nil
 }
 
-func (m *syncManager) findAvailableApplicationResources(application *v1.AnyApplication) []*unstructured.Unstructured {
+func (m *applications) findAvailableApplicationResources(application *v1.AnyApplication) []*unstructured.Unstructured {
 	instanceId := m.GetInstanceId(application)
 
 	cachedResources := m.clusterCache.FindResources("", func(r *cache.Resource) bool {

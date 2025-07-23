@@ -42,7 +42,7 @@ var (
 	runtimeConfig config.ApplicationRuntimeConfig
 	jobContext    types.AsyncJobContext
 	fakeEvents    events.Events
-	syncManager   types.SyncManager
+	applications  types.Applications
 	stopFunc      engine.StopFunc
 )
 
@@ -111,7 +111,6 @@ var _ = BeforeEach(func() {
 			Major:   "1",
 			Minor:   "23",
 		},
-		UpgradeCRDs: true,
 	})
 	if err != nil {
 		panic("error " + err.Error())
@@ -135,10 +134,10 @@ var _ = BeforeEach(func() {
 	if err != nil {
 		panic("error " + err.Error())
 	}
+	fakeCharts := sync.NewFakeCharts()
+	applications = sync.NewApplications(k8sClient, helmClient, fakeCharts, clusterCache, theClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
-	syncManager = sync.NewSyncManager(k8sClient, helmClient, clusterCache, theClock, &runtimeConfig, gitOpsEngine, logf.Log)
-
-	jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, syncManager)
+	jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, applications)
 })
 
 var _ = AfterEach(func() {

@@ -63,6 +63,7 @@ configuration:
     zone: zone
     operationalPollDuration: 5s
     syncPollDuration: 60s
+    chartVersionPollDuration: 60s    
     defaultSyncTimeout: 180s
     defaultUndeployTimeout: 180s
   api:

@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"testing"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
@@ -28,23 +27,10 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func TestJobs(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Sync Suite")
-}
-
-// func loadKubeConfig() (*rest.Config, error) {
-// 	if home := homedir.HomeDir(); home != "" {
-// 		kubeconfig := filepath.Join(home, ".kube", "config")
-// 		return clientcmd.BuildConfigFromFlags("", kubeconfig)
-// 	}
-// 	return rest.InClusterConfig()
-// }
-
 var _ = Describe("SyncManager", func() {
 	var (
 		fakeClock     clock.Clock
-		syncManager   types.SyncManager
+		applications  types.Applications
 		kubeClient    client.Client
 		helmClient    helm.HelmClient
 		application   *v1.AnyApplication
@@ -53,6 +39,7 @@ var _ = Describe("SyncManager", func() {
 		runtimeConfig config.ApplicationRuntimeConfig
 		gitOpsEngine  *fixture.FakeGitOpsEngine
 		updateFuncs   []cache.UpdateSettingsFunc
+		fakeCharts    types.Charts
 	)
 
 	BeforeEach(func() {
@@ -94,33 +81,6 @@ var _ = Describe("SyncManager", func() {
 		application = application.DeepCopy()
 	})
 
-	// BeforeEach(func() {
-	// 	config, _ := loadKubeConfig()
-
-	// 	mgr, err := ctrl.NewManager(config, ctrl.Options{})
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-
-	// 	kubeClient = mgr.GetClient()
-
-	// 	options := helm.HelmClientOptions{
-	// 		RestConfig: config,
-	// 		KubeVersion: &chartutil.KubeVersion{
-	// 			Version: fmt.Sprintf("v%s.%s.0", "1", "23"),
-	// 			Major:   "1",
-	// 			Minor:   "23",
-	// 		},
-	// 	}
-	// 	helmClient, err = helm.NewHelmClient(&options)
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-
-	// 	clusterCache = cache.NewClusterCache(config)
-	// 	syncManager = NewSyncManager(kubeClient, helmClient, clusterCache)
-	// })
-
 	BeforeEach(func() {
 		config := &rest.Config{
 			Host: "https://test",
@@ -154,24 +114,25 @@ var _ = Describe("SyncManager", func() {
 		}
 
 		gitOpsEngine = fixture.NewFakeGitopsEngine()
-		syncManager = NewSyncManager(kubeClient, helmClient, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+		fakeCharts = NewFakeCharts()
+		applications = NewApplications(kubeClient, helmClient, fakeCharts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 	})
 
 	It("should return unique instance id for helm chart version and release", func() {
-		instanceId := syncManager.GetInstanceId(application)
+		instanceId := applications.GetInstanceId(application)
 
 		Expect(instanceId).To(Equal("nginx-ingress-2.0.1-test-app"))
 	})
 
 	It("should return aggregated status for application", func() {
-		status := syncManager.GetAggregatedStatus(application)
+		status := applications.GetAggregatedStatus(application)
 
 		Expect(status.Status).To(Equal(health.HealthStatusMissing))
 		Expect(status.Message).To(Equal(". "))
 	})
 
 	It("should load application from cluster cache", func() {
-		application, _ := syncManager.LoadApplication(application)
+		application, _ := applications.LoadApplication(application)
 
 		Expect(application.IsDeployed()).To(BeFalse())
 		Expect(application.IsPresent()).To(BeFalse())
@@ -202,7 +163,7 @@ var _ = Describe("SyncManager", func() {
 			},
 		})
 
-		syncResult, err := syncManager.Sync(context.Background(), application)
+		syncResult, err := applications.Sync(context.Background(), application)
 
 		fmt.Printf("syncResult %v \n", syncResult)
 
@@ -222,10 +183,10 @@ var _ = Describe("SyncManager", func() {
 	})
 
 	It("should delete helm release or fail", func() {
-		_, err := syncManager.Sync(context.Background(), application)
+		_, err := applications.Sync(context.Background(), application)
 		Expect(err).NotTo(HaveOccurred())
 
-		syncResult, err := syncManager.Delete(context.TODO(), application)
+		syncResult, err := applications.Delete(context.TODO(), application)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(syncResult.Total).To(Equal(23))

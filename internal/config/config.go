@@ -15,6 +15,7 @@ type ApplicationRuntimeConfig struct {
 	ZoneId                        string        `yaml:"zone"`
 	PollOperationalStatusInterval time.Duration `yaml:"operationalPollDuration"`
 	PollSyncStatusInterval        time.Duration `yaml:"syncPollDuration"`
+	ChartVersionPollInterval      time.Duration `yaml:"chartVersionPollDuration"`
 	DefaultSyncTimeout            time.Duration `yaml:"defaultSyncTimeout"`
 	DefaultUndeployTimeout        time.Duration `yaml:"defaultUndeployTimeout"`
 }

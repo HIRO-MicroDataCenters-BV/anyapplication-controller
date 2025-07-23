@@ -34,7 +34,7 @@ type AsyncJobContext interface {
 	GetHelmClient() helm.HelmClient
 	GetKubeClient() client.Client
 	GetGoContext() context.Context
-	GetSyncManager() SyncManager
+	GetApplications() Applications
 	WithCancel() (AsyncJobContext, context.CancelFunc)
 }
 

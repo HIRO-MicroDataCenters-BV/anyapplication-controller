@@ -82,7 +82,26 @@ controller:
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("should list chart versions", func() {
+
+			versions, err := client.FetchVersions("https://helm.nginx.com/stable", "nginx-ingress")
+			versions = versions[len(versions)-3:]
+
+			actualVersionsStr := make([]string, 0)
+			for _, v := range versions {
+				actualVersionsStr = append(actualVersionsStr, v.String())
+			}
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actualVersionsStr).To(Equal([]string{
+				"0.3.0",
+				"0.2.1",
+				"0.2.0",
+			}))
+		})
+
 	})
+
 })
 
 var _ = Describe("DeriveUniqueHelmRepoName", func() {

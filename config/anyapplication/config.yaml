@@ -4,6 +4,10 @@ runtime:
   zone: kind-kind-cluster1
   operationalPollDuration: 5s
   syncPollDuration: 10s
+  chartVersionPollDuration: 60s
+  defaultSyncTimeout: 180s
+  defaultUndeployTimeout: 180s
+
 cache:
   excludes:
     - projectcalico.org/FelixConfiguration

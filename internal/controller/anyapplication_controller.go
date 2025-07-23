@@ -43,14 +43,14 @@ const anyApplicationFinalizerName = "finalizers.dcp.hiro.io/anyapplication"
 // AnyApplicationReconciler reconciles a AnyApplication object
 type AnyApplicationReconciler struct {
 	client.Client
-	Recorder    record.EventRecorder
-	Scheme      *runtime.Scheme
-	Config      *config.ApplicationRuntimeConfig
-	SyncManager types.SyncManager
-	Jobs        types.AsyncJobs
-	Reconciler  reconciler.Reconciler
-	Log         logr.Logger
-	Events      *events.Events
+	Recorder     record.EventRecorder
+	Scheme       *runtime.Scheme
+	Config       *config.ApplicationRuntimeConfig
+	Applications types.Applications
+	Jobs         types.AsyncJobs
+	Reconciler   reconciler.Reconciler
+	Log          logr.Logger
+	Events       *events.Events
 }
 
 // +kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch;create;update;patch;delete
@@ -85,7 +85,7 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.addFinalizer(ctx, resource)
 	}
 
-	globalApplication, err := r.SyncManager.LoadApplication(resource)
+	globalApplication, err := r.Applications.LoadApplication(resource)
 	if err != nil {
 		r.Log.Error(err, "failed to load application state")
 		return ctrl.Result{
@@ -209,7 +209,7 @@ func (r *AnyApplicationReconciler) resourceCleanup(ctx context.Context, resource
 			Namespace: resource.Namespace,
 		}
 		r.Jobs.Stop(applicationId)
-		if _, err := r.SyncManager.Delete(ctx, resource); err != nil {
+		if _, err := r.Applications.Delete(ctx, resource); err != nil {
 			return ctrl.Result{}, err
 		}
 

@@ -248,7 +248,6 @@ func main() {
 			Major:   "1",
 			Minor:   "23",
 		},
-		UpgradeCRDs: true,
 	})
 	failIfError(err, setupLog, "unable to create helm client")
 
@@ -275,9 +274,16 @@ func main() {
 	stopFunc, err := gitOpsEngine.Run()
 	failIfError(err, setupLog, "unable to start gitops engine")
 
-	syncManager := sync.NewSyncManager(
+	charts := sync.NewCharts(context.Background(), helmClient, &sync.ChartsOptions{
+		SyncPeriod: controllerConfig.Runtime.ChartVersionPollInterval,
+	}, loggers["SyncManager"])
+
+	go charts.RunSynchronization()
+
+	applications := sync.NewApplications(
 		kubeClient,
 		helmClient,
+		charts,
 		clusterCache,
 		clock,
 		&applicationConfig,
@@ -285,22 +291,22 @@ func main() {
 		loggers["SyncManager"],
 	)
 
-	jobContext := job.NewAsyncJobContext(helmClient, kubeClient, context.Background(), syncManager)
+	jobContext := job.NewAsyncJobContext(helmClient, kubeClient, context.Background(), applications)
 	jobs := job.NewJobs(jobContext)
 	events := events.NewEvents(mgr.GetEventRecorderFor("Controller"))
 	jobFactory := job.NewAsyncJobFactory(&applicationConfig, clock, loggers["Jobs"], &events)
 	reconciler := reconciler.NewReconciler(jobs, jobFactory)
 
 	if err = (&controller.AnyApplicationReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		Config:      &applicationConfig,
-		SyncManager: syncManager,
-		Jobs:        jobs,
-		Reconciler:  reconciler,
-		Recorder:    mgr.GetEventRecorderFor("Controller"),
-		Log:         loggers["Controller"],
-		Events:      &events,
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		Config:       &applicationConfig,
+		Applications: applications,
+		Jobs:         jobs,
+		Reconciler:   reconciler,
+		Recorder:     mgr.GetEventRecorderFor("Controller"),
+		Log:          loggers["Controller"],
+		Events:       &events,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AnyApplication")
 		os.Exit(1)
@@ -327,7 +333,7 @@ func main() {
 	applicationReports := errorctx.NewApplicationReports(clusterCache, logFetcher)
 
 	options := httpapi.ApplicationApiOptions{Address: controllerConfig.Api.BindAddress}
-	httpServer := httpapi.NewHttpServer(options, applicationReports, &syncManager, kubeClient)
+	httpServer := httpapi.NewHttpServer(options, applicationReports, &applications, kubeClient)
 
 	go func() {
 		if err := httpServer.Start(); err != nil {
