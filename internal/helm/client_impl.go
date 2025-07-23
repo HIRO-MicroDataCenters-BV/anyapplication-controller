@@ -1,11 +1,13 @@
 package helm
 
 import (
+	"fmt"
 	"time"
 
 	"net/url"
 	"strings"
 
+	semver "github.com/Masterminds/semver/v3"
 	helmclient "github.com/mittwald/go-helm-client"
 	"github.com/mittwald/go-helm-client/values"
 	"sigs.k8s.io/yaml"
@@ -56,9 +58,18 @@ type TemplateArgs struct {
 }
 
 func (h *HelmClientImpl) AddOrUpdateChartRepo(repoURL string) (string, error) {
+
+	chartRepo, err := h.addOrUpdateChartRepo(repoURL)
+	if err != nil {
+		return "", err
+	}
+	return chartRepo.Name, nil
+}
+
+func (h *HelmClientImpl) addOrUpdateChartRepo(repoURL string) (*repo.Entry, error) {
 	repoName, err := DeriveUniqueHelmRepoName(repoURL)
 	if err != nil {
-		return "", errors.Wrap(err, "Failed to derive unique helm repo name")
+		return nil, errors.Wrap(err, "Failed to derive unique helm repo name")
 	}
 
 	// Define a private chart repository
@@ -70,13 +81,56 @@ func (h *HelmClientImpl) AddOrUpdateChartRepo(repoURL string) (string, error) {
 
 	// Add a chart-repository to the client.
 	if err := h.client.AddOrUpdateChartRepo(chartRepo); err != nil {
-		return "", errors.Wrap(err, "Failed to add or update chart repo")
+		return nil, errors.Wrap(err, "Failed to add or update chart repo")
 	}
-	return repoName, nil
+	return &chartRepo, nil
 }
 
 func (h *HelmClientImpl) SyncRepositories() {
 	h.client.UpdateChartRepos()
+}
+
+func (h *HelmClientImpl) FetchVersions(repoURL string, chartName string) ([]*semver.Version, error) {
+	if repoURL == "" {
+		return nil, errors.New("repoURL cannot be empty")
+	}
+
+	entry, err := h.addOrUpdateChartRepo(repoURL)
+	if err != nil {
+		return nil, err
+	}
+
+	chartRepo, err := repo.NewChartRepository(entry, h.client.GetProviders())
+	if err != nil {
+		return nil, err
+	}
+
+	indexFile, err := chartRepo.DownloadIndexFile()
+	if err != nil {
+		return nil, fmt.Errorf("looks like %q is not a valid chart repository or cannot be reached: %w", repoURL, err)
+	}
+
+	repoIndex, err := repo.LoadIndexFile(indexFile)
+	if err != nil {
+		return nil, err
+	}
+
+	if entries, ok := repoIndex.Entries[chartName]; ok {
+		versions := make([]*semver.Version, 0, len(entries))
+		for _, entry := range entries {
+			if entry.Version != "" {
+				version, err := semver.NewVersion(entry.Version)
+				if err != nil {
+					fmt.Printf("Failed to parse version %s for chart %s in repository %s: %v", entry.Version, chartName, repoURL, err)
+					continue
+				}
+				versions = append(versions, version)
+			}
+		}
+		return versions, nil
+	}
+
+	return nil, nil
 }
 
 func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
@@ -196,3 +250,32 @@ func AddLabelsToManifest(manifest string, newLabels map[string]string) (string, 
 
 	return strings.Join(output, "---\n"), nil
 }
+
+// func (c *helmclient.HelmClient) AddOrUpdateChartRepo(entry repo.Entry) error {
+// 	chartRepo, err := repo.NewChartRepository(&entry, c.Providers)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	chartRepo.CachePath = c.Settings.RepositoryCache
+
+// 	if c.storage.Has(entry.Name) {
+// 		c.DebugLog("WARNING: repository name %q already exists", entry.Name)
+// 		return nil
+// 	}
+
+// 	if !registry.IsOCI(entry.URL) {
+// 		_, err = chartRepo.DownloadIndexFile()
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+
+// 	c.storage.Update(&entry)
+// 	err = c.storage.WriteFile(c.Settings.RepositoryConfig, 0o644)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	return nil
+// }

@@ -47,6 +47,10 @@ type SpecificVersion struct {
 	version semver.Version
 }
 
+func NewFromSemantic(version *semver.Version) (*SpecificVersion, error) {
+	return &SpecificVersion{version: *version}, nil
+}
+
 func NewSpecificVersion(version string) (*SpecificVersion, error) {
 	v, err := semver.NewVersion(version)
 	if err == nil {
