@@ -36,7 +36,7 @@ type Chart struct {
 type Charts interface {
 	RunSynchronization()
 	Render(chartKey *ChartKey, instance *ApplicationInstance) (*RenderedChart, error)
-	AddChart(chartName string, repoUrl string, version ChartVersion) (*ChartKey, error)
+	AddAndGetLatest(chartName string, repoUrl string, version ChartVersion) (*ChartKey, error)
 }
 
 type ChartVersion interface {
@@ -65,6 +65,10 @@ func (v *SpecificVersion) IsNewerThan(other *SpecificVersion) bool {
 
 type VersionRange struct {
 	constraint semver.Constraints
+}
+
+func (v *VersionRange) Contains(version *SpecificVersion) bool {
+	return v.constraint.Check(&version.version)
 }
 
 func (v *VersionRange) ToString() string {

@@ -19,7 +19,7 @@ func (f *FakeCharts) Render(chartKey *types.ChartKey, instance *types.Applicatio
 		Instance: *instance,
 	}, nil
 }
-func (f *FakeCharts) AddChart(chartName string, repoUrl string, chartVersion types.ChartVersion) (*types.ChartKey, error) {
+func (f *FakeCharts) AddAndGetLatest(chartName string, repoUrl string, chartVersion types.ChartVersion) (*types.ChartKey, error) {
 
 	version, err := types.NewSpecificVersion(chartVersion.ToString())
 	if err != nil {

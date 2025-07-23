@@ -48,10 +48,34 @@ var _ = Describe("Charts", func() {
 
 		fmt.Printf("Version: %s, Version2: %s\n", version.ToString(), version2.ToString())
 
-		charts.AddChart("nginx-ingress", "https://helm.nginx.com/stable", version)
+		latest, err := charts.AddAndGetLatest("nginx-ingress", "https://helm.nginx.com/stable", version)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(latest).NotTo(BeNil())
+		Expect(latest.ChartId.RepoUrl).To(Equal("https://helm.nginx.com/stable"))
+		Expect(latest.ChartId.ChartName).To(Equal("nginx-ingress"))
+		Expect(latest.Version.ToString()).To(Equal("2.0.1"))
 	})
 
 	It("Sync new version of chart", func() {
+		version, err := types.NewChartVersion("2.0.0")
+		Expect(err).NotTo(HaveOccurred())
+
+		versionRange, err2 := types.NewChartVersion("^2.x")
+		Expect(err2).NotTo(HaveOccurred())
+
+		latest, err := charts.AddAndGetLatest("nginx-ingress", "https://helm.nginx.com/stable", version)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(latest).NotTo(BeNil())
+		Expect(latest.ChartId.RepoUrl).To(Equal("https://helm.nginx.com/stable"))
+		Expect(latest.ChartId.ChartName).To(Equal("nginx-ingress"))
+		Expect(latest.Version.ToString()).To(Equal("2.0.0"))
+
+		newLatest, err := charts.AddAndGetLatest("nginx-ingress", "https://helm.nginx.com/stable", versionRange)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(newLatest).NotTo(BeNil())
+		Expect(newLatest.ChartId.RepoUrl).To(Equal("https://helm.nginx.com/stable"))
+		Expect(newLatest.ChartId.ChartName).To(Equal("nginx-ingress"))
+		Expect(newLatest.Version.ToString()).To(Equal("2.0.1"))
 	})
 
 })

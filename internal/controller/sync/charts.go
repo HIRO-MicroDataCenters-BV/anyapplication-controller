@@ -35,7 +35,10 @@ func NewCharts(
 	}
 }
 
-func (c *charts) AddChart(chartName string, repoUrl string, chartVersion types.ChartVersion) (*types.ChartKey, error) {
+func (c *charts) AddAndGetLatest(chartName string, repoUrl string, chartVersion types.ChartVersion) (*types.ChartKey, error) {
+
+	specificVersion, isSpecificVersion := chartVersion.(*types.SpecificVersion)
+	versionRange, _ := chartVersion.(*types.VersionRange)
 	chartId := types.ChartId{RepoUrl: repoUrl, ChartName: chartName}
 
 	chartVersions, err := c.getOrCreateVersions(&chartId)
@@ -43,20 +46,26 @@ func (c *charts) AddChart(chartName string, repoUrl string, chartVersion types.C
 		return nil, errors.Wrap(err, "Failed to get or create chart versions")
 	}
 	if chartVersions.isEmpty() {
-		c.probeNewVersion(&chartId, chartVersions)
+		c.updateIndexAndFetchLatest(&chartId, chartVersions)
 	}
-
-	if chartVersions.Exists(chartVersion) {
-		specificVersion, err := chartVersions.GetLatestVersion(chartVersion)
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to get latest version of chart")
+	if isSpecificVersion {
+		c.fetchSpecific(&chartId, chartVersions, specificVersion)
+		if chartVersions.Exists(specificVersion) {
+			return &types.ChartKey{
+				ChartId: chartId,
+				Version: *specificVersion,
+			}, nil
 		}
-		return &types.ChartKey{
-			ChartId: chartId,
-			Version: *specificVersion,
-		}, nil
+		return nil, errors.Errorf("Specific version %s not found for chart %s", specificVersion.ToString(), chartName)
+	} else {
+		if specificVersion, found := chartVersions.getLatestFor(versionRange); found {
+			return &types.ChartKey{
+				ChartId: chartId,
+				Version: *specificVersion,
+			}, nil
+		}
+		return nil, errors.Errorf("Latest version not found for chart %s", chartName)
 	}
-	return nil, nil
 }
 
 func (c *charts) getOrCreateVersions(chartId *types.ChartId) (*ChartVersions, error) {
@@ -95,13 +104,24 @@ func (c *charts) runSyncCycle() bool {
 	c.charts.Range(func(key, value any) bool {
 		chartId := key.(*types.ChartId)
 		versions := value.(*ChartVersions)
-		c.probeNewVersion(chartId, versions)
+		c.updateIndexAndFetchLatest(chartId, versions)
 		return true
 	})
 	return false
 }
 
-func (c *charts) probeNewVersion(chartId *types.ChartId, versions *ChartVersions) {
+func (c *charts) updateIndexAndFetchLatest(chartId *types.ChartId, versions *ChartVersions) {
+	// specificVersion, isSpecific := chartVersion.(*types.SpecificVersion)
+
+	// TODO
+}
+
+func (c *charts) fetchSpecific(chartId *types.ChartId, versions *ChartVersions, specificVersion *types.SpecificVersion) {
+
+	if versions.Exists(specificVersion) {
+		return
+	}
+	// fetch from helm repo
 	// TODO
 }
 
@@ -177,20 +197,28 @@ func (cv *ChartVersions) isEmpty() bool {
 	return isEmpty
 }
 
-func (cv *ChartVersions) GetLatestVersion(chartVersion types.ChartVersion) (*types.SpecificVersion, error) {
-	// var hasLatestVersion = false
-	// var latestChartVersion *types.SpecificVersion
+func (cv *ChartVersions) getLatestFor(versionRange *types.VersionRange) (*types.SpecificVersion, bool) {
+	if versionRange == nil {
+		return nil, false
+	}
 
-	// cv.charts.Range(func(key, value any) bool {
-	// 	chartVersionIter := key.(*types.SpecificVersion)
-	// 	if chartVersionIter.IsNewerThan(&chartVersion) {
-	// 		hasLatestVersion = true
-	// 		latestChartVersion = chartVersionIter
-	// 	}
-	// 	return true
-	// })
-	// if hasLatestVersion {
-	// 	return latestChartVersion, nil
-	// }
-	return nil, nil
+	var latestChartVersion *types.SpecificVersion
+
+	cv.charts.Range(func(key, value any) bool {
+		chartVersionIter := key.(*types.SpecificVersion)
+		if !versionRange.Contains(chartVersionIter) {
+			return true
+		}
+		if latestChartVersion == nil {
+			latestChartVersion = chartVersionIter
+		} else if latestChartVersion != nil && chartVersionIter.IsNewerThan(latestChartVersion) {
+			latestChartVersion = chartVersionIter
+		}
+		return true
+	})
+	if latestChartVersion != nil {
+		return latestChartVersion, true
+	}
+	return nil, false
+
 }
