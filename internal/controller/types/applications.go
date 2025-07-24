@@ -45,10 +45,15 @@ func (s *SyncResult) AddResult(r *common.ResourceSyncResult) {
 
 type Applications interface {
 	GetAggregatedStatus(application *v1.AnyApplication) *health.HealthStatus
+	GetAggregatedStatusVersion(application *v1.AnyApplication, version *SpecificVersion) *health.HealthStatus
 	Sync(ctx context.Context, application *v1.AnyApplication) (*SyncResult, error)
 	Delete(ctx context.Context, application *v1.AnyApplication) (*DeleteResult, error)
 	GetInstanceId(application *v1.AnyApplication) string
 	LoadApplication(application *v1.AnyApplication) (GlobalApplication, error)
+
+	SyncVersion(ctx context.Context, application *v1.AnyApplication, version *SpecificVersion) (*SyncResult, error)
+	DeleteVersion(ctx context.Context, application *v1.AnyApplication, version *SpecificVersion) (*DeleteResult, error)
+	DetermineTargetVersion(application *v1.AnyApplication) (*SpecificVersion, error)
 }
 
 type ResourceInfo struct {
