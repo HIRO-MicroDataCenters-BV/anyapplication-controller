@@ -14,6 +14,13 @@ import (
 	"hiro.io/anyapplication/internal/helm"
 )
 
+const (
+	LABEL_MANAGED_BY           = "dcp.hiro.io/managed-by"
+	LABEL_CHART_VERSION        = "dcp.hiro.io/chart-version"
+	LABEL_INSTANCE_ID          = "dcp.hiro.io/instance-id"
+	LABEL_VALUE_MANAGED_BY_DCP = "dcp"
+)
+
 type ChartsOptions struct {
 	SyncPeriod time.Duration
 }
@@ -126,8 +133,9 @@ func (c *charts) updateAvailableVersions(chartId *types.ChartId, versions *Chart
 func (c *charts) Render(chartKey *types.ChartKey, instance *types.ApplicationInstance) (*types.RenderedChart, error) {
 
 	labels := map[string]string{
-		"dcp.hiro.io/managed-by":  "dcp",
-		"dcp.hiro.io/instance-id": instance.InstanceId,
+		LABEL_MANAGED_BY:    LABEL_VALUE_MANAGED_BY_DCP,
+		LABEL_CHART_VERSION: chartKey.Version.ToString(),
+		LABEL_INSTANCE_ID:   instance.InstanceId,
 	}
 
 	template, err := c.helmClient.Template(&helm.TemplateArgs{

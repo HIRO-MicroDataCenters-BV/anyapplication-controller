@@ -277,6 +277,11 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 		if !currentExists {
 			zoneStatus = currentStatus.GetOrCreateStatusFor(zone)
 		}
+		if zoneStatus.ChartVersion != newZoneStatus.ChartVersion {
+			msg += "Chart version changed to '" + newZoneStatus.ChartVersion + "'."
+			zoneStatus.ChartVersion = newZoneStatus.ChartVersion
+			updated = true
+		}
 		if newZoneStatus.Conditions != nil {
 			for _, newCondition := range newZoneStatus.Conditions {
 				found := false

@@ -26,6 +26,7 @@ var _ = Describe("GlobalApplication", func() {
 		}
 		events := events.NewFakeEvents()
 		jobFactory := job.NewAsyncJobFactory(runtimeConfig, fakeClock, logf.Log, &events)
+		version, _ := types.NewSpecificVersion("1.0.0")
 
 		It("transit to placement state", func() {
 			applicationResource := makeApplication()
@@ -223,7 +224,7 @@ var _ = Describe("GlobalApplication", func() {
 				LastTransitionTime: fakeClock.NowTime(),
 			}, types.AsyncJobTypeDeploy)
 
-			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock, true))
+			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, version, fakeClock, true))
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -391,7 +392,7 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.FromCondition(localJobCondition, types.AsyncJobTypeLocalOperation)
 
-			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock, true))
+			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, version, fakeClock, true))
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -535,7 +536,7 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.EmptyJobConditions()
 
-			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock, true))
+			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, version, fakeClock, true))
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -606,7 +607,7 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.EmptyJobConditions()
 
-			fakeLocalApp := local.FakeLocalApplication(runtimeConfig, fakeClock, false)
+			fakeLocalApp := local.FakeLocalApplication(runtimeConfig, version, fakeClock, false)
 
 			localApplication := mo.Some(fakeLocalApp)
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
@@ -679,7 +680,7 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.EmptyJobConditions()
 
-			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, fakeClock, true))
+			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, version, fakeClock, true))
 			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeTrue())

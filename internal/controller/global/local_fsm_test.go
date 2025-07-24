@@ -25,6 +25,7 @@ var _ = Describe("Local Application FSM", func() {
 		localApplication  mo.Option[local.LocalApplication]
 		globalApplication types.GlobalApplication
 		fakeEvents        events.Events
+		version           *types.SpecificVersion
 	)
 
 	BeforeEach(func() {
@@ -61,6 +62,7 @@ var _ = Describe("Local Application FSM", func() {
 				State: v1.UnknownGlobalState,
 			},
 		}
+		version, _ = types.NewSpecificVersion("1.0.0")
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 
 	})
@@ -188,7 +190,7 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock, true))
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -263,7 +265,7 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock, true))
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -317,7 +319,7 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock, true))
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())
@@ -387,7 +389,7 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, fakeClock, true))
+		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true))
 		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())

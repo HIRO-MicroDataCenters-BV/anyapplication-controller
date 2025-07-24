@@ -122,9 +122,10 @@ type AnyApplicationStatus struct {
 }
 
 type ZoneStatus struct {
-	ZoneId      string            `json:"zoneId"`
-	ZoneVersion int64             `json:"version"`
-	Conditions  []ConditionStatus `json:"conditions,omitempty"`
+	ZoneId       string            `json:"zoneId"`
+	ZoneVersion  int64             `json:"version"`
+	ChartVersion string            `json:"chartVersion,omitempty"`
+	Conditions   []ConditionStatus `json:"conditions,omitempty"`
 }
 
 type Placement struct {

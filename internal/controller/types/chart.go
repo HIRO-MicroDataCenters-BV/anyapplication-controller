@@ -1,14 +1,24 @@
 package types
 
 import (
+	"encoding/json"
+
 	semver "github.com/Masterminds/semver/v3"
 	"github.com/pkg/errors"
+	v1 "hiro.io/anyapplication/api/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 type ChartId struct {
 	RepoUrl   string
 	ChartName string
+}
+
+func NewChartId(application *v1.AnyApplication) ChartId {
+	return ChartId{
+		RepoUrl:   application.Spec.Source.HelmSelector.Repository,
+		ChartName: application.Spec.Source.HelmSelector.Chart,
+	}
 }
 
 type ChartKey struct {
@@ -30,8 +40,7 @@ type RenderedChart struct {
 	Resources []*unstructured.Unstructured
 }
 
-type Chart struct {
-}
+type Chart struct{}
 
 type Charts interface {
 	RunSynchronization()
@@ -65,6 +74,23 @@ func (v *SpecificVersion) ToString() string {
 
 func (v *SpecificVersion) IsNewerThan(other *SpecificVersion) bool {
 	return v.version.GreaterThan(&other.version)
+}
+
+func (v *SpecificVersion) UnmarshalJSON(data []byte) error {
+	var versionString string
+	if err := json.Unmarshal(data, &versionString); err != nil {
+		return errors.Wrap(err, "failed to unmarshal SpecificVersion")
+	}
+	version, err := semver.NewVersion(versionString)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse SpecificVersion")
+	}
+	v.version = *version
+	return nil
+}
+
+func (v *SpecificVersion) MarshalJSON() ([]byte, error) {
+	return json.Marshal(v.ToString())
 }
 
 type VersionRange struct {
