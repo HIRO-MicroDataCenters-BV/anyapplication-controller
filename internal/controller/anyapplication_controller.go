@@ -209,7 +209,7 @@ func (r *AnyApplicationReconciler) resourceCleanup(ctx context.Context, resource
 			Namespace: resource.Namespace,
 		}
 		r.Jobs.Stop(applicationId)
-		if _, err := r.Applications.Delete(ctx, resource); err != nil {
+		if _, err := r.Applications.Cleanup(ctx, resource); err != nil {
 			return ctrl.Result{}, err
 		}
 

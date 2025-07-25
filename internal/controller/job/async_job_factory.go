@@ -25,8 +25,8 @@ func NewAsyncJobFactory(config *config.ApplicationRuntimeConfig, clock clock.Clo
 	}
 }
 
-func (f AsyncJobFactoryImpl) CreateDeployJob(application *v1.AnyApplication) types.AsyncJob {
-	return NewDeployJob(application, f.config, f.clock, f.log, f.events)
+func (f AsyncJobFactoryImpl) CreateDeployJob(application *v1.AnyApplication, version *types.SpecificVersion) types.AsyncJob {
+	return NewDeployJob(application, version, f.config, f.clock, f.log, f.events)
 }
 
 func (f AsyncJobFactoryImpl) CreateOnwershipTransferJob(application *v1.AnyApplication) types.AsyncJob {

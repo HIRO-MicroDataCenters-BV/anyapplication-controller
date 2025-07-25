@@ -2,16 +2,19 @@ package sync
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"sync"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
 	"github.com/argoproj/gitops-engine/pkg/engine"
-	"github.com/argoproj/gitops-engine/pkg/health"
 	gitops_sync "github.com/argoproj/gitops-engine/pkg/sync"
 	"github.com/argoproj/gitops-engine/pkg/sync/common"
 	"github.com/argoproj/gitops-engine/pkg/utils/kube"
 	"github.com/cockroachdb/errors"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
@@ -26,13 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type cachedApp struct {
-	application *v1.AnyApplication
-	resources   []*unstructured.Unstructured
-	revision    string
-	instanceId  string
-	namespace   string
-}
+type IsManagedResourceFunc func(*cache.Resource) bool
 
 type applications struct {
 	helmClient   helm.HelmClient
@@ -57,6 +54,7 @@ func NewApplications(
 	logger logr.Logger,
 ) types.Applications {
 	log := logger.WithName("SyncManager")
+
 	return &applications{
 		kubeClient:   kubeClient,
 		charts:       charts,
@@ -70,64 +68,151 @@ func NewApplications(
 	}
 }
 
-func (m *applications) Sync(ctx context.Context, application *v1.AnyApplication) (*types.SyncResult, error) {
-	app, err := m.getOrRenderApp(application)
+func (m *applications) DetermineTargetVersion(
+	application *v1.AnyApplication,
+) (*types.SpecificVersion, error) {
+
+	helmSource := application.Spec.Source.HelmSelector
+	chartVersion, err := types.NewChartVersion(helmSource.Version)
+	if err != nil {
+		return nil, err
+	}
+
+	if chartKey, err := m.charts.AddAndGetLatest(helmSource.Chart, helmSource.Repository, chartVersion); err == nil {
+		return &chartKey.Version, nil
+	}
+	return nil, err
+}
+
+func (m *applications) SyncVersion(
+	ctx context.Context,
+	application *v1.AnyApplication,
+	version *types.SpecificVersion,
+) (*types.SyncResult, error) {
+	app, err := m.getOrRenderAppVersion(application, version)
 	if err != nil {
 		return types.NewSyncResult(), err
 	}
 	return m.sync(ctx, app)
 }
 
-func (m *applications) getOrRenderApp(application *v1.AnyApplication) (*cachedApp, error) {
-	appKey := m.getCacheKey(application)
-	existing, found := m.appCache.Load(appKey)
-	if !found {
-		app, err := m.render(application)
+func (m *applications) getOrRenderAppVersion(
+	application *v1.AnyApplication,
+	version *types.SpecificVersion,
+) (*cachedApp, error) {
+	appKey := m.getApplicationKey(application)
+	chartKey := types.ChartKey{
+		ChartId: types.NewChartId(application),
+		Version: *version,
+	}
+
+	instances := m.getOrCreateInstances(appKey)
+	uniqueConfiguration := m.buildInstanceKey(application, &chartKey)
+
+	cachedApp, exists := instances.Get(&uniqueConfiguration)
+	if !exists {
+		newApp, err := m.render(application, &uniqueConfiguration)
 		if err != nil {
-			return nil, errors.Wrap(err, "Fail to render application")
+			return nil, err
 		}
-		m.appCache.Store(appKey, app)
-		existing = app
+		instances.Put(&uniqueConfiguration, newApp)
+		cachedApp = newApp
 	}
-	cached, ok := existing.(*cachedApp)
-	if !ok {
-		return nil, errors.New("type assertion to *cachedApp failed")
-	}
-	return cached, nil
+	return cachedApp, nil
 }
 
-func (m *applications) render(application *v1.AnyApplication) (*cachedApp, error) {
-	releaseName := application.Name
-	helmSelector := application.Spec.Source.HelmSelector
-	instanceId := m.GetInstanceId(application)
+// func (m *applications) Sync(ctx context.Context, application *v1.AnyApplication) (*types.SyncResult, error) {
+// 	app, err := m.getOrRenderApp(application)
+// 	if err != nil {
+// 		return types.NewSyncResult(), err
+// 	}
+// 	return m.sync(ctx, app)
+// }
 
-	labels := map[string]string{
-		"dcp.hiro.io/managed-by":  "dcp",
-		"dcp.hiro.io/instance-id": instanceId,
+// func (m *applications) getOrRenderApp(application *v1.AnyApplication) (*cachedApp, error) {
+// 	appKey := m.getApplicationKey(application)
+// 	instances := m.getOrCreateInstances(appKey)
+
+// 	var cached *cachedApp
+// 	if instances.IsEmpty() {
+// 		newApp, err := m.populateInstances(application, instances)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		cached = newApp
+// 	} else {
+// 		// cached = instances.GetCurrent()
+// 	}
+
+// 	return cached, nil
+// }
+
+func (m *applications) getOrCreateInstances(appKey string) *cachedInstances {
+	instances, exists := m.appCache.Load(appKey)
+	if !exists {
+		instances = NewCachedInstances()
+		m.appCache.Store(appKey, instances)
+	}
+	return instances.(*cachedInstances)
+}
+
+func (m *applications) buildInstanceKey(application *v1.AnyApplication, chartKey *types.ChartKey) instanceKey {
+	return instanceKey{
+		ChartKey: chartKey,
+		Instance: &types.ApplicationInstance{
+			InstanceId:  m.GetInstanceId(application),
+			Name:        application.Name,
+			Namespace:   application.Namespace,
+			ReleaseName: application.Name,
+			ValuesYaml:  application.Spec.Source.HelmSelector.Values,
+		},
+	}
+}
+
+// func (m *applications) populateInstances(application *v1.AnyApplication, instances *cachedInstances) (*cachedApp, error) {
+
+// 	helmSelector := application.Spec.Source.HelmSelector
+
+// 	chartVersion, err := types.NewChartVersion(helmSelector.Version)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	chartKey, err := m.charts.AddAndGetLatest(helmSelector.Chart, helmSelector.Repository, chartVersion)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	instanceKey := m.buildInstanceKey(application, chartKey)
+
+// 	cachedApp, err := m.render(application, &instanceKey)
+// 	if err != nil {
+// 		m.log.Error(err, "Failed to render application", "application", application.Name)
+// 		return nil, err
+// 	}
+
+// 	instances.Put(&instanceKey, cachedApp)
+// 	return cachedApp, nil
+// }
+
+func (m *applications) render(application *v1.AnyApplication, configuration *instanceKey) (*cachedApp, error) {
+
+	renderedChart, err := m.charts.Render(configuration.ChartKey, configuration.Instance)
+	if err != nil {
+		return nil, errors.Wrap(err, "Fail to render chart")
 	}
 
-	template, err := m.helmClient.Template(&helm.TemplateArgs{
-		ReleaseName: releaseName,
-		RepoUrl:     helmSelector.Repository,
-		ChartName:   helmSelector.Chart,
-		Namespace:   helmSelector.Namespace,
-		Version:     helmSelector.Version,
-		ValuesYaml:  helmSelector.Values,
-		Labels:      labels,
-	})
+	revision, err := configuration.Revision()
 	if err != nil {
-		return nil, errors.Wrap(err, "Helm template failure")
+		return nil, err
 	}
-	objs, err := kube.SplitYAML([]byte(template))
-	if err != nil {
-		return nil, errors.Wrap(err, "Fail to split YAML")
-	}
+
 	app := cachedApp{
-		resources:   objs,
-		revision:    helmSelector.Version,
-		instanceId:  instanceId,
-		namespace:   helmSelector.Namespace,
-		application: application.DeepCopy(),
+		application:   application.DeepCopy(),
+		chartKey:      configuration.ChartKey,
+		instance:      configuration.Instance,
+		revision:      revision,
+		renderedChart: renderedChart,
 	}
 	return &app, nil
 }
@@ -137,12 +222,15 @@ func (m *applications) sync(ctx context.Context, app *cachedApp) (*types.SyncRes
 	syncResult := types.NewSyncResult()
 	prune := true
 
-	resourceSyncResults, err := m.gitOpsEngine.Sync(ctx, app.resources, func(r *cache.Resource) bool {
-		if r.Resource == nil {
-			return false
-		}
-		return r.Resource.GetLabels()["dcp.hiro.io/instance-id"] == app.instanceId
-	}, app.revision, app.namespace, gitops_sync.WithPrune(prune), gitops_sync.WithLogr(m.log))
+	resourceSyncResults, err := m.gitOpsEngine.Sync(
+		ctx,
+		app.renderedChart.Resources,
+		m.isManagedFunc(app.instance.InstanceId),
+		app.revision,
+		app.instance.Namespace,
+		gitops_sync.WithPrune(prune),
+		gitops_sync.WithLogr(m.log),
+	)
 	if err != nil {
 		m.log.Error(err, "Failed to synchronize cluster state")
 		return syncResult, errors.Wrap(err, "Failed to synchronize cluster state")
@@ -150,10 +238,10 @@ func (m *applications) sync(ctx context.Context, app *cachedApp) (*types.SyncRes
 
 	m.addAndLogResults(resourceSyncResults, syncResult)
 
-	syncResult.Status = m.getAggregatedStatus(app)
+	syncResult.AggregatedStatus = m.getAggregatedStatus(app)
 
-	localApplicationOpt, err := m.loadLocalApplication(app.application)
-	localApplication, exists := localApplicationOpt.Get()
+	localApplications, err := m.loadLocalApplicationVersions(app.application)
+	localApplication, exists := localApplications[app.chartKey.Version]
 	if err == nil {
 		syncResult.ApplicationResourcesPresent = exists
 		if exists {
@@ -183,18 +271,26 @@ func (m *applications) addAndLogResults(resourceSyncResults []common.ResourceSyn
 	}
 }
 
-func (m *applications) GetAggregatedStatus(application *v1.AnyApplication) *health.HealthStatus {
-	app, err := m.getOrRenderApp(application)
-	if err != nil {
-		m.log.Error(err, "Failed to get or render application")
+func (m *applications) isManagedFunc(instanceId string) IsManagedResourceFunc {
+	return func(r *cache.Resource) bool {
+		if r.Resource == nil {
+			return false
+		}
+		return r.Resource.GetLabels()[LABEL_INSTANCE_ID] == instanceId
 	}
-	return m.getAggregatedStatus(app)
 }
 
-func (m *applications) getAggregatedStatus(app *cachedApp) *health.HealthStatus {
-	statusCounts := 0
-	code := health.HealthStatusHealthy
-	msg := ""
+// func (m *applications) GetAggregatedStatus(application *v1.AnyApplication) *types.AggregatedStatus {
+// 	currentVersion := m.GetTargetVersion(application)
+
+// 	app, err := m.getOrRenderAppVersion(application, currentVersion)
+// 	if err != nil {
+// 		m.log.Error(err, "Failed to get or render application")
+// 	}
+// 	return m.getAggregatedStatus(app)
+// }
+
+func (m *applications) getAggregatedStatus(app *cachedApp) *types.AggregatedStatus {
 
 	managedResources := m.findAvailableApplicationResources(app.application)
 	managedResourcesByKey := make(map[kube.ResourceKey]*unstructured.Unstructured)
@@ -203,45 +299,30 @@ func (m *applications) getAggregatedStatus(app *cachedApp) *health.HealthStatus 
 		managedResourcesByKey[key] = res
 	}
 
-	for _, obj := range app.resources {
-		fullName := getFullName(obj)
-		resourceKey := kube.GetResourceKey(obj)
-
-		liveObj := managedResourcesByKey[resourceKey]
-		status := health.HealthStatusHealthy
-		message := ""
-		if liveObj != nil {
-			h, err := health.GetResourceHealth(liveObj, nil)
-			if err != nil {
-				m.log.Error(err, "GetResourceHealth failed", "Resource", fullName)
-				continue
-			}
-			if h != nil {
-				status = h.Status
-				message = h.Message
-			}
-		} else {
-			status = health.HealthStatusMissing
-		}
-		statusCounts += 1
-		if health.IsWorse(code, status) {
-			code = status
-			msg = msg + ". " + message
-		}
+	healthStatus := GetAggregatedStatus(app.renderedChart.Resources, managedResourcesByKey, m.log)
+	return &types.AggregatedStatus{
+		HealthStatus: healthStatus,
+		ChartVersion: &app.chartKey.Version,
 	}
-	if statusCounts == 0 {
-		code = health.HealthStatusUnknown
-	}
-
-	status := health.HealthStatus{
-		Status:  code,
-		Message: msg,
-	}
-	return &status
 }
 
-func (m *applications) Delete(ctx context.Context, application *v1.AnyApplication) (*types.DeleteResult, error) {
-	app, err := m.getOrRenderApp(application)
+func (m *applications) GetAggregatedStatusVersion(
+	application *v1.AnyApplication,
+	version *types.SpecificVersion,
+) *types.AggregatedStatus {
+	app, err := m.getOrRenderAppVersion(application, version)
+	if err != nil {
+		m.log.Error(err, "Failed to get or render application")
+	}
+	return m.getAggregatedStatus(app)
+}
+
+func (m *applications) DeleteVersion(
+	ctx context.Context,
+	application *v1.AnyApplication,
+	version *types.SpecificVersion,
+) (*types.DeleteResult, error) {
+	app, err := m.getOrRenderAppVersion(application, version)
 	if err != nil {
 		return nil, err
 	}
@@ -249,10 +330,27 @@ func (m *applications) Delete(ctx context.Context, application *v1.AnyApplicatio
 	return m.deleteApp(ctx, app)
 }
 
+func (m *applications) Cleanup(ctx context.Context, application *v1.AnyApplication) ([]*types.DeleteResult, error) {
+	allDeployedVersions, err := m.GetAllPresentVersions(application)
+	if err != nil {
+		return nil, err
+	}
+
+	deleteResults := make([]*types.DeleteResult, 0)
+	for version := range allDeployedVersions.Iter() {
+		deleteResult, err := m.DeleteVersion(ctx, application, version)
+		if err != nil {
+			return nil, err
+		}
+		deleteResults = append(deleteResults, deleteResult)
+	}
+	return deleteResults, nil
+}
+
 func (m *applications) deleteApp(ctx context.Context, app *cachedApp) (*types.DeleteResult, error) {
 	syncResult := &types.DeleteResult{}
 
-	syncResult.Total += len(app.resources)
+	syncResult.Total += len(app.renderedChart.Resources)
 
 	managedResources := m.findAvailableApplicationResources(app.application)
 	managedResourcesByKey := make(map[kube.ResourceKey]*unstructured.Unstructured)
@@ -261,7 +359,7 @@ func (m *applications) deleteApp(ctx context.Context, app *cachedApp) (*types.De
 		managedResourcesByKey[key] = res
 	}
 	// Deleting known managed resources
-	for _, obj := range app.resources {
+	for _, obj := range app.renderedChart.Resources {
 		fullName := getFullName(obj)
 		resourceKey := kube.GetResourceKey(obj)
 		m.log.V(1).Info("Deleting resource", "Resource", fullName)
@@ -270,7 +368,7 @@ func (m *applications) deleteApp(ctx context.Context, app *cachedApp) (*types.De
 		if live == nil {
 			syncResult.Deleted += 1
 		} else {
-			err := m.kubeClient.Delete(ctx, obj)
+			err := m.kubeClient.Delete(ctx, live)
 			if err != nil {
 				syncResult.DeleteFailed += 1
 			} else {
@@ -302,41 +400,131 @@ func (m *applications) deleteApp(ctx context.Context, app *cachedApp) (*types.De
 
 }
 
-func (m *applications) getCacheKey(application *v1.AnyApplication) string {
-	version := application.Spec.Source.HelmSelector.Version
-	return fmt.Sprintf("%s-%s-%s", application.Name, application.Namespace, version)
+func (m *applications) getApplicationKey(application *v1.AnyApplication) string {
+	return fmt.Sprintf("%s-%s", application.Name, application.Namespace)
 }
 
 func (m *applications) GetInstanceId(application *v1.AnyApplication) string {
-	releaseName := application.Name
-	helmSelector := application.Spec.Source.HelmSelector
-	return fmt.Sprintf("%s-%s-%s", helmSelector.Chart, helmSelector.Version, releaseName)
+	appName := application.Name
+	appNamespace := application.Namespace
+	return fmt.Sprintf("%s-%s", appNamespace, appName)
 }
 
 func (m *applications) LoadApplication(application *v1.AnyApplication) (types.GlobalApplication, error) {
-	localApplication, err := m.loadLocalApplication(application)
+	localApplications, err := m.loadLocalApplicationVersions(application)
 	if err != nil {
 		return nil, errors.Wrap(err, "Fail to create local application")
 	}
 
-	globalApplication := global.NewFromLocalApplication(localApplication, m.clock, application, m.config, m.log)
+	newVersion := mo.None[*types.SpecificVersion]()
+
+	activeVersionOpt := m.GetTargetVersion(application)
+	targetVersion, err := m.DetermineTargetVersion(application)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to determine target version")
+	}
+	activeVersion, exists := activeVersionOpt.Get()
+	if !exists || targetVersion.IsNewerThan(activeVersion) {
+		newVersion = mo.Some(targetVersion)
+	}
+
+	globalApplication := global.NewFromLocalApplication(
+		localApplications,
+		activeVersionOpt,
+		newVersion,
+		m.clock,
+		application,
+		m.config,
+		m.log,
+	)
 	return globalApplication, nil
 }
 
-func (m *applications) loadLocalApplication(application *v1.AnyApplication) (mo.Option[local.LocalApplication], error) {
-	app, err := m.getOrRenderApp(application)
-	if err != nil {
-		return mo.None[local.LocalApplication](), err
+func (m *applications) GetTargetVersion(application *v1.AnyApplication) mo.Option[*types.SpecificVersion] {
+	zone, found := application.Status.GetStatusFor(m.config.ZoneId)
+	if !found {
+		return mo.None[*types.SpecificVersion]()
 	}
-	expectedResources := app.resources
-	availableResources := m.findAvailableApplicationResources(application)
-	version := application.ResourceVersion
-	localApplication, err := local.NewFromUnstructured(version, availableResources, expectedResources, m.config, m.clock, m.log)
+	version, err := types.NewSpecificVersion(zone.ChartVersion)
 	if err != nil {
-		return mo.None[local.LocalApplication](), errors.Wrap(err, "Fail to create local application")
+		m.log.Error(err, "Failed to parse chart version", "version", zone.ChartVersion)
+		return mo.None[*types.SpecificVersion]()
 	}
-	return localApplication, nil
+	return mo.Some(version)
 }
+
+// func (m *applications) loadLocalApplication(application *v1.AnyApplication, version *types.SpecificVersion) (mo.Option[local.LocalApplication], error) {
+// 	availableResources := m.findAvailableApplicationResourcesByVersion(application, version)
+
+// 	app, err := m.getOrRenderApp(application)
+// 	if err != nil {
+// 		return mo.None[local.LocalApplication](), err
+// 	}
+// 	expectedResources := app.renderedChart.Resources
+// 	localApplication, err := local.NewFromUnstructured(version, availableResources, expectedResources, m.config, m.clock, m.log)
+// 	if err != nil {
+// 		return mo.None[local.LocalApplication](), errors.Wrap(err, "Fail to create local application")
+// 	}
+// 	return localApplication, nil
+// }
+
+func (m *applications) loadLocalApplicationVersions(application *v1.AnyApplication) (map[types.SpecificVersion]*local.LocalApplication, error) {
+	availableResources := m.findAvailableApplicationResources(application)
+	availableResourcesByVersion, err := splitResourcesByVersion(availableResources)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to split resources by version")
+	}
+	localApplications := make(map[types.SpecificVersion]*local.LocalApplication)
+
+	for versionStr, resources := range availableResourcesByVersion {
+		if len(resources) == 0 {
+			continue
+		}
+
+		version, err := types.NewSpecificVersion(versionStr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Failed to parse version string %s", versionStr)
+		}
+		cachedApp, err := m.getOrRenderAppVersion(application, version)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Failed to get or render application for version %s", versionStr)
+		}
+		expectedResources := cachedApp.renderedChart.Resources
+
+		localApplication, err := local.NewFromUnstructured(version, resources, expectedResources, m.config, m.clock, m.log)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Failed to create local application for version %s", version)
+		}
+		local, ok := localApplication.Get()
+		if ok {
+			localApplications[*version] = &local
+		}
+
+	}
+	return localApplications, nil
+}
+
+// func (m *applications) findAvailableApplicationResourcesByVersion(
+// 	application *v1.AnyApplication,
+// 	version *types.SpecificVersion,
+// ) []*unstructured.Unstructured {
+// 	// TODO merge with findAvailableApplicationResources
+// 	instanceId := m.GetInstanceId(application)
+
+// 	cachedResources := m.clusterCache.FindResources("", func(r *cache.Resource) bool {
+// 		if r.Resource == nil {
+// 			return false
+// 		}
+// 		labels := r.Resource.GetLabels()
+// 		if labels == nil {
+// 			return false
+// 		}
+// 		return labels[LABEL_INSTANCE_ID] == instanceId && labels[LABEL_CHART_VERSION] == version.ToString()
+// 	})
+
+// 	resources := lo.Values(cachedResources)
+// 	return lo.Map(resources, func(r *cache.Resource, index int) *unstructured.Unstructured { return r.Resource })
+// }
 
 func (m *applications) findAvailableApplicationResources(application *v1.AnyApplication) []*unstructured.Unstructured {
 	instanceId := m.GetInstanceId(application)
@@ -346,11 +534,34 @@ func (m *applications) findAvailableApplicationResources(application *v1.AnyAppl
 			return false
 		}
 		labels := r.Resource.GetLabels()
-		return labels != nil && labels["dcp.hiro.io/instance-id"] == instanceId
+		return labels != nil && labels[LABEL_INSTANCE_ID] == instanceId
 	})
 
 	resources := lo.Values(cachedResources)
 	return lo.Map(resources, func(r *cache.Resource, index int) *unstructured.Unstructured { return r.Resource })
+}
+
+func (m *applications) GetAllPresentVersions(application *v1.AnyApplication) (mapset.Set[*types.SpecificVersion], error) {
+	availableResources := m.findAvailableApplicationResources(application)
+	availableResourcesByVersion, err := splitResourcesByVersion(availableResources)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to split resources by version")
+	}
+
+	deployedVersions := mapset.NewSet[*types.SpecificVersion]()
+	for versionStr, resources := range availableResourcesByVersion {
+		if len(resources) == 0 {
+			continue
+		}
+
+		version, err := types.NewSpecificVersion(versionStr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Failed to parse version string %s", versionStr)
+		}
+		deployedVersions.Add(version)
+	}
+
+	return deployedVersions, nil
 }
 
 func getFullName(obj *unstructured.Unstructured) string {
@@ -358,4 +569,86 @@ func getFullName(obj *unstructured.Unstructured) string {
 	name := obj.GetName()
 	namespace := obj.GetNamespace()
 	return fmt.Sprintf("%s/%s (%s)", namespace, name, gvk.Kind)
+}
+
+type cachedInstances struct {
+	// map[uniqueConfiguration]*cachedApp
+	configurations sync.Map
+}
+
+func NewCachedInstances() *cachedInstances {
+	return &cachedInstances{
+		configurations: sync.Map{},
+	}
+}
+
+func (m *cachedInstances) Contains(config *instanceKey) bool {
+	_, ok := m.configurations.Load(*config)
+	return ok
+}
+
+func (c *cachedInstances) Put(
+	config *instanceKey,
+	app *cachedApp,
+) {
+	c.configurations.Store(*config, app)
+}
+
+func (c *cachedInstances) Get(
+	config *instanceKey,
+) (*cachedApp, bool) {
+	if app, ok := c.configurations.Load(*config); ok {
+		return app.(*cachedApp), true
+	}
+	return nil, false
+}
+
+func (c *cachedInstances) IsEmpty() bool {
+	empty := true
+	c.configurations.Range(func(_, _ any) bool {
+		empty = false
+		return false // stop iteration
+	})
+	return empty
+}
+
+type cachedApp struct {
+	application   *v1.AnyApplication
+	chartKey      *types.ChartKey
+	instance      *types.ApplicationInstance
+	renderedChart *types.RenderedChart
+	revision      string
+}
+
+type instanceKey struct {
+	ChartKey *types.ChartKey
+	Instance *types.ApplicationInstance
+}
+
+func (c *instanceKey) Revision() (string, error) {
+	jsonBytes, err := json.Marshal(c)
+	if err != nil {
+		return "", err
+	}
+
+	hash := sha256.Sum256(jsonBytes)
+
+	return hex.EncodeToString(hash[:]), nil
+}
+
+func splitResourcesByVersion(resources []*unstructured.Unstructured) (map[string][]*unstructured.Unstructured, error) {
+	resourcesByVersion := make(map[string][]*unstructured.Unstructured)
+
+	for _, res := range resources {
+		version, found, err := unstructured.NestedString(res.Object, "metadata", "labels", LABEL_CHART_VERSION)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Failed to get version for resource %s", res.GetName())
+		}
+		if !found {
+			return nil, fmt.Errorf("resource %s does not have version label", res.GetName())
+		}
+		resourcesByVersion[version] = append(resourcesByVersion[version], res)
+	}
+
+	return resourcesByVersion, nil
 }

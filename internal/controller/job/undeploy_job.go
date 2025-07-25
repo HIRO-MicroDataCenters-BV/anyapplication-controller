@@ -86,12 +86,21 @@ func (job *UndeployJob) Run(jobContext types.AsyncJobContext) {
 func (job *UndeployJob) runInner(jobContext types.AsyncJobContext) bool {
 
 	applications := jobContext.GetApplications()
-	result, err := applications.Delete(jobContext.GetGoContext(), job.application)
+	versions, err := applications.GetAllPresentVersions(job.application)
+	if err != nil {
+		return job.maybeRetry(jobContext, "SyncError", fmt.Sprintf("Undeployment failed: %s", err.Error()))
+	}
+	if versions.IsEmpty() {
+		job.Success(jobContext)
+		return true
+	}
+	results, err := applications.Cleanup(jobContext.GetGoContext(), job.application)
 
 	if err != nil {
 		return job.maybeRetry(jobContext, "SyncError", fmt.Sprintf("Undeployment failed: %s", err.Error()))
 	} else {
-		if !result.ApplicationResourcesPresent {
+		applicationResourcesPresent := types.IsApplicationResourcesPresent(results)
+		if !applicationResourcesPresent {
 			job.Success(jobContext)
 			return true
 		}

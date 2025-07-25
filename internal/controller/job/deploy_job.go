@@ -16,6 +16,7 @@ import (
 
 type DeployJob struct {
 	application   *v1.AnyApplication
+	version       *types.SpecificVersion
 	runtimeConfig *config.ApplicationRuntimeConfig
 	status        v1.DeploymentStatus
 	clock         clock.Clock
@@ -32,6 +33,7 @@ type DeployJob struct {
 
 func NewDeployJob(
 	application *v1.AnyApplication,
+	version *types.SpecificVersion,
 	runtimeConfig *config.ApplicationRuntimeConfig,
 	clock clock.Clock,
 	log logr.Logger,
@@ -50,6 +52,7 @@ func NewDeployJob(
 	return &DeployJob{
 		status:        v1.DeploymentStatusPull,
 		application:   application,
+		version:       version,
 		runtimeConfig: runtimeConfig,
 		clock:         clock,
 		msg:           "",
@@ -87,8 +90,8 @@ func (job *DeployJob) Run(jobContext types.AsyncJobContext) {
 func (job *DeployJob) runSyncCycle(context types.AsyncJobContext) bool {
 	applications := context.GetApplications()
 
-	syncResult, err := applications.Sync(context.GetGoContext(), job.application)
-	healthStatus := syncResult.Status
+	syncResult, err := applications.SyncVersion(context.GetGoContext(), job.application, job.version)
+	healthStatus := syncResult.AggregatedStatus.HealthStatus
 
 	if err != nil {
 		job.Fail(context, err.Error(), "SyncError")

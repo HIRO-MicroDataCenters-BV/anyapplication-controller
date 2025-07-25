@@ -47,7 +47,7 @@ type AsyncJob interface {
 
 type AsyncJobFactory interface {
 	CreateLocalPlacementJob(application *v1.AnyApplication) AsyncJob
-	CreateDeployJob(application *v1.AnyApplication) AsyncJob
+	CreateDeployJob(application *v1.AnyApplication, version *SpecificVersion) AsyncJob
 	CreateUndeployJob(application *v1.AnyApplication) AsyncJob
 	CreateOperationJob(application *v1.AnyApplication) AsyncJob
 	CreateOnwershipTransferJob(application *v1.AnyApplication) AsyncJob
