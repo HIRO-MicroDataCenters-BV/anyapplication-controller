@@ -453,7 +453,8 @@ func (m *applications) GetTargetVersion(application *v1.AnyApplication) mo.Optio
 	return mo.Some(version)
 }
 
-// func (m *applications) loadLocalApplication(application *v1.AnyApplication, version *types.SpecificVersion) (mo.Option[local.LocalApplication], error) {
+// func (m *applications) loadLocalApplication(
+// 	application *v1.AnyApplication, version *types.SpecificVersion) (mo.Option[local.LocalApplication], error) {
 // 	availableResources := m.findAvailableApplicationResourcesByVersion(application, version)
 
 // 	app, err := m.getOrRenderApp(application)
@@ -461,14 +462,18 @@ func (m *applications) GetTargetVersion(application *v1.AnyApplication) mo.Optio
 // 		return mo.None[local.LocalApplication](), err
 // 	}
 // 	expectedResources := app.renderedChart.Resources
-// 	localApplication, err := local.NewFromUnstructured(version, availableResources, expectedResources, m.config, m.clock, m.log)
+// 	localApplication, err := local.NewFromUnstructured(version,
+// 		availableResources, expectedResources, m.config, m.clock, m.log)
 // 	if err != nil {
 // 		return mo.None[local.LocalApplication](), errors.Wrap(err, "Fail to create local application")
 // 	}
 // 	return localApplication, nil
 // }
 
-func (m *applications) loadLocalApplicationVersions(application *v1.AnyApplication) (map[types.SpecificVersion]*local.LocalApplication, error) {
+func (m *applications) loadLocalApplicationVersions(
+	application *v1.AnyApplication,
+) (map[types.SpecificVersion]*local.LocalApplication, error) {
+
 	availableResources := m.findAvailableApplicationResources(application)
 	availableResourcesByVersion, err := splitResourcesByVersion(availableResources)
 	if err != nil {
@@ -541,7 +546,10 @@ func (m *applications) findAvailableApplicationResources(application *v1.AnyAppl
 	return lo.Map(resources, func(r *cache.Resource, index int) *unstructured.Unstructured { return r.Resource })
 }
 
-func (m *applications) GetAllPresentVersions(application *v1.AnyApplication) (mapset.Set[*types.SpecificVersion], error) {
+func (m *applications) GetAllPresentVersions(
+	application *v1.AnyApplication,
+) (mapset.Set[*types.SpecificVersion], error) {
+
 	availableResources := m.findAvailableApplicationResources(application)
 	availableResourcesByVersion, err := splitResourcesByVersion(availableResources)
 	if err != nil {

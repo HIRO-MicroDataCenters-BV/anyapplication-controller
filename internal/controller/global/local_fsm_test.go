@@ -22,7 +22,7 @@ var _ = Describe("Local Application FSM", func() {
 		runtimeConfig     config.ApplicationRuntimeConfig
 		jobFactory        job.AsyncJobFactoryImpl
 		application       v1.AnyApplication
-		localApplication  mo.Option[local.LocalApplication]
+		localApplications map[types.SpecificVersion]*local.LocalApplication
 		globalApplication types.GlobalApplication
 		fakeEvents        events.Events
 		version           *types.SpecificVersion
@@ -35,7 +35,7 @@ var _ = Describe("Local Application FSM", func() {
 		}
 		fakeEvents = events.NewFakeEvents()
 		jobFactory = job.NewAsyncJobFactory(&runtimeConfig, fakeClock, logf.Log, &fakeEvents)
-		localApplication = mo.None[local.LocalApplication]()
+		localApplications = make(map[types.SpecificVersion]*local.LocalApplication)
 
 		application = v1.AnyApplication{
 			ObjectMeta: metav1.ObjectMeta{
@@ -63,7 +63,8 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 		version, _ = types.NewSpecificVersion("1.0.0")
-		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
+		globalApplication = NewFromLocalApplication(localApplications, mo.Some(version),
+			mo.None[*types.SpecificVersion](), fakeClock, &application, &runtimeConfig, logf.Log)
 
 	})
 
@@ -190,8 +191,12 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true))
-		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
+		localApp := local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true)
+		localApplications := map[types.SpecificVersion]*local.LocalApplication{
+			*version: &localApp,
+		}
+		globalApplication = NewFromLocalApplication(localApplications, mo.Some(version),
+			mo.None[*types.SpecificVersion](), fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())
 		Expect(globalApplication.IsPresent()).To(BeTrue())
@@ -265,8 +270,12 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true))
-		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
+		localApp := local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true)
+		localApplications := map[types.SpecificVersion]*local.LocalApplication{
+			*version: &localApp,
+		}
+		globalApplication = NewFromLocalApplication(localApplications, mo.Some(version),
+			mo.None[*types.SpecificVersion](), fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())
 		Expect(globalApplication.IsPresent()).To(BeTrue())
@@ -319,8 +328,10 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true))
-		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
+		localApp := local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true)
+		localApplications := map[types.SpecificVersion]*local.LocalApplication{*version: &localApp}
+		globalApplication = NewFromLocalApplication(localApplications, mo.Some(version),
+			mo.None[*types.SpecificVersion](), fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())
 		Expect(globalApplication.IsPresent()).To(BeTrue())
@@ -388,9 +399,10 @@ var _ = Describe("Local Application FSM", func() {
 				},
 			},
 		}
-
-		localApplication = mo.Some(local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true))
-		globalApplication = NewFromLocalApplication(localApplication, fakeClock, &application, &runtimeConfig, logf.Log)
+		localApp := local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true)
+		localApplications := map[types.SpecificVersion]*local.LocalApplication{*version: &localApp}
+		globalApplication = NewFromLocalApplication(localApplications, mo.Some(version),
+			mo.None[*types.SpecificVersion](), fakeClock, &application, &runtimeConfig, logf.Log)
 
 		Expect(globalApplication.IsDeployed()).To(BeTrue())
 		Expect(globalApplication.IsPresent()).To(BeTrue())
@@ -424,6 +436,11 @@ var _ = Describe("Local Application FSM", func() {
 		Expect(jobs.JobsToAdd).To(Equal(mo.None[types.AsyncJob]()))
 		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
 
+	})
+
+	It("switch to deployment if operational job finds new version", func() {
+		// TODO new version tests
+		Fail("Not implemented yet")
 	})
 
 })

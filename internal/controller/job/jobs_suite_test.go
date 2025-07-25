@@ -134,8 +134,8 @@ var _ = BeforeEach(func() {
 	if err != nil {
 		panic("error " + err.Error())
 	}
-	fakeCharts := sync.NewFakeCharts()
-	applications = sync.NewApplications(k8sClient, helmClient, fakeCharts, clusterCache, theClock, &runtimeConfig, gitOpsEngine, logf.Log)
+	charts := sync.NewCharts(context.TODO(), helmClient, &sync.ChartsOptions{SyncPeriod: 60 * time.Second}, logf.Log)
+	applications = sync.NewApplications(k8sClient, helmClient, charts, clusterCache, theClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
 	jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, applications)
 })

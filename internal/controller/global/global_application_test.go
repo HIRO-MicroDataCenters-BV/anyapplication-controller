@@ -31,8 +31,10 @@ var _ = Describe("GlobalApplication", func() {
 		It("transit to placement state", func() {
 			applicationResource := makeApplication()
 			applicationResource.Status.Owner = ""
-			localApplication := mo.None[local.LocalApplication]()
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApplication := make(map[types.SpecificVersion]*local.LocalApplication)
+			globalApplication := NewFromLocalApplication(localApplication,
+				mo.Some(version), mo.None[*types.SpecificVersion](), fakeClock, applicationResource, runtimeConfig, logf.Log,
+			)
 			jobFactory := job.NewAsyncJobFactory(runtimeConfig, fakeClock, logf.Log, &events)
 
 			Expect(globalApplication.IsDeployed()).To(BeFalse())
@@ -78,8 +80,9 @@ var _ = Describe("GlobalApplication", func() {
 			applicationResource := makeApplication()
 			applicationResource.Status.State = v1.PlacementGlobalState
 
-			localApplication := mo.None[local.LocalApplication]()
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApplications := make(map[types.SpecificVersion]*local.LocalApplication)
+			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version), mo.None[*types.SpecificVersion](),
+				fakeClock, applicationResource, runtimeConfig, logf.Log)
 			existingJobCondition := types.EmptyJobConditions()
 
 			Expect(globalApplication.IsDeployed()).To(BeFalse())
@@ -141,8 +144,9 @@ var _ = Describe("GlobalApplication", func() {
 			}
 			existingJobCondition := types.FromCondition(existingCondition, types.AsyncJobTypeLocalPlacement)
 
-			localApplication := mo.None[local.LocalApplication]()
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApplications := make(map[types.SpecificVersion]*local.LocalApplication)
+			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version), mo.None[*types.SpecificVersion](),
+				fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeFalse())
 			Expect(globalApplication.IsPresent()).To(BeFalse())
@@ -224,8 +228,10 @@ var _ = Describe("GlobalApplication", func() {
 				LastTransitionTime: fakeClock.NowTime(),
 			}, types.AsyncJobTypeDeploy)
 
-			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, version, fakeClock, true))
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApp := local.FakeLocalApplication(runtimeConfig, version, fakeClock, true)
+			localApplications := map[types.SpecificVersion]*local.LocalApplication{*version: &localApp}
+			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version),
+				mo.None[*types.SpecificVersion](), fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeTrue())
 			Expect(globalApplication.IsPresent()).To(BeTrue())
@@ -303,8 +309,9 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.EmptyJobConditions()
 
-			localApplication := mo.None[local.LocalApplication]()
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApplications := make(map[types.SpecificVersion]*local.LocalApplication)
+			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version),
+				mo.None[*types.SpecificVersion](), fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeFalse())
 			Expect(globalApplication.IsPresent()).To(BeFalse())
@@ -392,8 +399,12 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.FromCondition(localJobCondition, types.AsyncJobTypeLocalOperation)
 
-			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, version, fakeClock, true))
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApp := local.FakeLocalApplication(runtimeConfig, version, fakeClock, true)
+			localApplications := map[types.SpecificVersion]*local.LocalApplication{
+				*version: &localApp,
+			}
+			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version),
+				mo.None[*types.SpecificVersion](), fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeTrue())
 			Expect(globalApplication.IsPresent()).To(BeTrue())
@@ -472,8 +483,9 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.EmptyJobConditions()
 
-			localApplication := mo.None[local.LocalApplication]()
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApplications := make(map[types.SpecificVersion]*local.LocalApplication)
+			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version),
+				mo.None[*types.SpecificVersion](), fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeFalse())
 			Expect(globalApplication.IsPresent()).To(BeFalse())
@@ -536,8 +548,10 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.EmptyJobConditions()
 
-			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, version, fakeClock, true))
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApp := local.FakeLocalApplication(runtimeConfig, version, fakeClock, true)
+			localApplications := map[types.SpecificVersion]*local.LocalApplication{*version: &localApp}
+			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version),
+				mo.None[*types.SpecificVersion](), fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeTrue())
 			Expect(globalApplication.IsPresent()).To(BeTrue())
@@ -609,8 +623,9 @@ var _ = Describe("GlobalApplication", func() {
 
 			fakeLocalApp := local.FakeLocalApplication(runtimeConfig, version, fakeClock, false)
 
-			localApplication := mo.Some(fakeLocalApp)
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApplications := map[types.SpecificVersion]*local.LocalApplication{*version: &fakeLocalApp}
+			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version),
+				mo.None[*types.SpecificVersion](), fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeFalse())
 			Expect(globalApplication.IsPresent()).To(BeTrue())
@@ -680,8 +695,10 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.EmptyJobConditions()
 
-			localApplication := mo.Some(local.FakeLocalApplication(runtimeConfig, version, fakeClock, true))
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApp := local.FakeLocalApplication(runtimeConfig, version, fakeClock, true)
+			localApplications := map[types.SpecificVersion]*local.LocalApplication{*version: &localApp}
+			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version),
+				mo.None[*types.SpecificVersion](), fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeTrue())
 			Expect(globalApplication.IsPresent()).To(BeTrue())
@@ -746,8 +763,9 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.EmptyJobConditions()
 
-			localApplication := mo.None[local.LocalApplication]()
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApplications := make(map[types.SpecificVersion]*local.LocalApplication)
+			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version),
+				mo.None[*types.SpecificVersion](), fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeFalse())
 			Expect(globalApplication.IsPresent()).To(BeFalse())
@@ -809,8 +827,9 @@ var _ = Describe("GlobalApplication", func() {
 
 			existingJobCondition := types.EmptyJobConditions()
 
-			localApplication := mo.None[local.LocalApplication]()
-			globalApplication := NewFromLocalApplication(localApplication, fakeClock, applicationResource, runtimeConfig, logf.Log)
+			localApplications := make(map[types.SpecificVersion]*local.LocalApplication)
+			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version),
+				mo.None[*types.SpecificVersion](), fakeClock, applicationResource, runtimeConfig, logf.Log)
 
 			Expect(globalApplication.IsDeployed()).To(BeFalse())
 			Expect(globalApplication.IsPresent()).To(BeFalse())
@@ -856,6 +875,21 @@ var _ = Describe("GlobalApplication", func() {
 
 		})
 
+	})
+
+	It("switch to deployment if operational job finds new version", func() {
+		// TODO new version tests
+		Fail("Not implemented yet")
+	})
+
+	It("should set initial version in status", func() {
+		// TODO new version tests
+		Fail("Not implemented yet")
+	})
+
+	It("should update to new version in status", func() {
+		// TODO new version tests
+		Fail("Not implemented yet")
 	})
 
 })

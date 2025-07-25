@@ -12,7 +12,10 @@ func NewFakeCharts() *FakeCharts {
 func (f *FakeCharts) RunSynchronization() {
 	// No-op for fake implementation
 }
-func (f *FakeCharts) Render(chartKey *types.ChartKey, instance *types.ApplicationInstance) (*types.RenderedChart, error) {
+func (f *FakeCharts) Render(
+	chartKey *types.ChartKey,
+	instance *types.ApplicationInstance,
+) (*types.RenderedChart, error) {
 	// Return a dummy rendered chart for testing purposes
 	return &types.RenderedChart{
 		Key:      *chartKey,

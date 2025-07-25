@@ -14,6 +14,8 @@ type LocalFSM struct {
 	jobFactory          types.AsyncJobFactory
 	applicationPresent  bool
 	applicationDeployed bool
+	newVersionAvailable bool
+	version             *types.SpecificVersion
 	runningJobType      mo.Option[types.AsyncJobType]
 }
 
@@ -23,6 +25,8 @@ func NewLocalFSM(
 	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
 	applicationDeployed bool,
+	newVersionAvailable bool,
+	version *types.SpecificVersion,
 	runningJobType mo.Option[types.AsyncJobType],
 ) LocalFSM {
 	recoverStrategy := &application.Spec.RecoverStrategy
@@ -33,6 +37,8 @@ func NewLocalFSM(
 		jobFactory,
 		applicationPresent,
 		applicationDeployed,
+		newVersionAvailable,
+		version,
 		runningJobType,
 	}
 }
@@ -42,7 +48,9 @@ func (g *LocalFSM) NextState() types.NextStateResult {
 
 	placementsContainZone := placementsContainZone(status, g.config.ZoneId)
 
-	if !placementsContainZone && g.applicationPresent {
+	undeployOldVersion := g.applicationPresent && g.newVersionAvailable
+
+	if !placementsContainZone && g.applicationPresent || undeployOldVersion {
 		return g.handleUndeploy()
 	}
 
@@ -74,7 +82,7 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.LocalConditionType, g.config.ZoneId)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymentConditionType, g.config.ZoneId)
 
-	if !g.applicationDeployed {
+	if !g.applicationDeployed || g.newVersionAvailable {
 		if !g.isRunning(types.AsyncJobTypeDeploy) {
 			deploymentCondition, found := status.FindCondition(v1.DeploymentConditionType)
 			attemptsExhausted := false
@@ -84,8 +92,7 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 			}
 
 			if !attemptsExhausted {
-
-				deployJob := g.jobFactory.CreateDeployJob(g.application)
+				deployJob := g.jobFactory.CreateDeployJob(g.application, g.version)
 				deployJobOpt := mo.Some(deployJob)
 				deployCondition := deployJob.GetStatus()
 				deployConditionOpt := mo.EmptyableToOption(&deployCondition)

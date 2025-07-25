@@ -27,7 +27,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var _ = Describe("SyncManager", func() {
+var _ = Describe("Applications", func() {
 	var (
 		fakeClock     clock.Clock
 		applications  types.Applications
@@ -39,7 +39,7 @@ var _ = Describe("SyncManager", func() {
 		runtimeConfig config.ApplicationRuntimeConfig
 		gitOpsEngine  *fixture.FakeGitOpsEngine
 		updateFuncs   []cache.UpdateSettingsFunc
-		fakeCharts    types.Charts
+		charts        types.Charts
 	)
 
 	BeforeEach(func() {
@@ -102,7 +102,7 @@ var _ = Describe("SyncManager", func() {
 
 		updateFuncs = []cache.UpdateSettingsFunc{
 			cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
-				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()["dcp.hiro.io/managed-by"]}
+				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()[LABEL_MANAGED_BY]}
 				cacheManifest = true
 				return
 			}),
@@ -114,21 +114,43 @@ var _ = Describe("SyncManager", func() {
 		}
 
 		gitOpsEngine = fixture.NewFakeGitopsEngine()
-		fakeCharts = NewFakeCharts()
-		applications = NewApplications(kubeClient, helmClient, fakeCharts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+		charts = NewCharts(context.TODO(), helmClient, &ChartsOptions{SyncPeriod: 60 * time.Second}, logf.Log)
+		applications = NewApplications(kubeClient, helmClient, charts,
+			clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+	})
+
+	It("should get target version for the application", func() {
+		// GetTargetVersion(application *v1.AnyApplication) mo.Option[*SpecificVersion]
+		Fail("GetTargetVersion is not implemented yet")
+	})
+
+	It("should get aggregated status for the application", func() {
+		// GetAggregatedStatusVersion(application *v1.AnyApplication, version *SpecificVersion) *AggregatedStatus
+		Fail("GetAggregatedStatus is not implemented yet")
+	})
+
+	It("should cleanup all version", func() {
+		// Cleanup(ctx context.Context, application *v1.AnyApplication) ([]*DeleteResult, error)
+		Fail("Cleanup is not implemented yet")
+	})
+
+	It("should determine target version for the application", func() {
+		// DetermineTargetVersion(application *v1.AnyApplication) (*SpecificVersion, error)
+		Fail("DetermineTargetVersion is not implemented yet")
 	})
 
 	It("should return unique instance id for helm chart version and release", func() {
 		instanceId := applications.GetInstanceId(application)
 
-		Expect(instanceId).To(Equal("nginx-ingress-2.0.1-test-app"))
+		Expect(instanceId).To(Equal("default-test-app"))
 	})
 
-	It("should return aggregated status for application", func() {
-		status := applications.GetAggregatedStatus(application)
+	It("should return aggregated status for application when application is missing", func() {
+		version, _ := types.NewSpecificVersion("2.0.1")
+		status := applications.GetAggregatedStatusVersion(application, version)
 
-		Expect(status.Status).To(Equal(health.HealthStatusMissing))
-		Expect(status.Message).To(Equal(". "))
+		Expect(status.HealthStatus.Status).To(Equal(health.HealthStatusMissing))
+		Expect(status.HealthStatus.Message).To(Equal(". "))
 	})
 
 	It("should load application from cluster cache", func() {
@@ -136,6 +158,7 @@ var _ = Describe("SyncManager", func() {
 
 		Expect(application.IsDeployed()).To(BeFalse())
 		Expect(application.IsPresent()).To(BeFalse())
+		Expect(application.IsNewVersionAvailable()).To(BeTrue())
 	})
 
 	It("should sync helm release", func() {
@@ -163,9 +186,9 @@ var _ = Describe("SyncManager", func() {
 			},
 		})
 
-		syncResult, err := applications.Sync(context.Background(), application)
+		newVersion, _ := types.NewSpecificVersion("2.0.1")
 
-		fmt.Printf("syncResult %v \n", syncResult)
+		syncResult, err := applications.SyncVersion(context.Background(), application, newVersion)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(syncResult.Total).To(Equal(2))
@@ -179,14 +202,15 @@ var _ = Describe("SyncManager", func() {
 			"Synced": 2,
 		}))
 
-		Expect(syncResult.Status.Status).To(Equal(health.HealthStatusMissing))
+		Expect(syncResult.AggregatedStatus.HealthStatus.Status).To(Equal(health.HealthStatusMissing))
 	})
 
 	It("should delete helm release or fail", func() {
-		_, err := applications.Sync(context.Background(), application)
+		version, _ := types.NewSpecificVersion("2.0.1")
+		_, err := applications.SyncVersion(context.Background(), application, version)
 		Expect(err).NotTo(HaveOccurred())
 
-		syncResult, err := applications.Delete(context.TODO(), application)
+		syncResult, err := applications.DeleteVersion(context.TODO(), application, version)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(syncResult.Total).To(Equal(23))

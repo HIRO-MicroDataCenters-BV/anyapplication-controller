@@ -12,7 +12,7 @@ import (
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/fixture"
-	ctrl_sync "hiro.io/anyapplication/internal/controller/sync"
+	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	corev1 "k8s.io/api/core/v1"
@@ -83,8 +83,9 @@ var _ = Describe("UndeployJobUnitests", func() {
 				Name:      "test-pod",
 				Namespace: "default",
 				Labels: map[string]string{
-					"dcp.hiro.io/instance-id": "nginx-ingress-2.0.1-test-app",
-					"dcp.hiro.io/managed-by":  "dcp",
+					sync.LABEL_INSTANCE_ID:   "default-test-app",
+					sync.LABEL_CHART_VERSION: "2.0.0",
+					sync.LABEL_MANAGED_BY:    "dcp",
 				},
 				CreationTimestamp: metav1.NewTime(time.Now()),
 				UID:               "test-pod-uid",
@@ -147,16 +148,17 @@ var _ = Describe("UndeployJobUnitests", func() {
 			Fail("Failed to sync cluster cache: " + err.Error())
 		}
 
-		fakeCharts := ctrl_sync.NewFakeCharts()
+		charts := sync.NewCharts(context.TODO(), helmClient, &sync.ChartsOptions{SyncPeriod: 60 * time.Second}, logf.Log)
 
-		applications := ctrl_sync.NewApplications(kubeClient, fakeHelmClient, fakeCharts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+		applications := sync.NewApplications(kubeClient, fakeHelmClient,
+			charts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
 		jobContext = NewAsyncJobContext(fakeHelmClient, kubeClient, ctx, applications)
 
 		undeployJob = NewUndeployJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
 	})
 
-	It("Deployment should retry and fail after several attempts", func() {
+	It("should retry and fail after several attempts", func() {
 		jobContext, cancel := jobContext.WithCancel()
 		defer cancel()
 
@@ -179,6 +181,10 @@ var _ = Describe("UndeployJobUnitests", func() {
 		waitForJobStatus(undeployJob, string(v1.UndeploymentStatusFailure))
 
 		Expect(undeployJob.GetStatus().Msg).To(Equal("Undeploy failure: Failure after 3 attempts."))
+	})
+
+	It("should undeploy multiple versions", func() {
+		Fail("This test is not implemented yet")
 	})
 
 })
