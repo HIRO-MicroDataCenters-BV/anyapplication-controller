@@ -62,7 +62,7 @@ var _ = Describe("Applications", func() {
 					HelmSelector: &v1.ApplicationSourceHelm{
 						Repository: "https://helm.nginx.com/stable",
 						Chart:      "nginx-ingress",
-						Version:    "2.0.1",
+						Version:    "~2.0.0",
 						Namespace:  "default",
 					},
 				},
@@ -120,11 +120,24 @@ var _ = Describe("Applications", func() {
 	})
 
 	It("should get target version for the application", func() {
-		// GetTargetVersion(application *v1.AnyApplication) mo.Option[*SpecificVersion]
-		Fail("GetTargetVersion is not implemented yet")
+		versionOpt := applications.GetTargetVersion(application)
+		_, ok := versionOpt.Get()
+		Expect(ok).To(BeFalse())
+
+		// Set the active version in the application status
+		zoneStatus := application.Status.GetOrCreateStatusFor("zone")
+		zoneStatus.ChartVersion = "2.0.1"
+
+		versionOpt = applications.GetTargetVersion(application)
+		version, ok := versionOpt.Get()
+		Expect(ok).To(BeTrue())
+		Expect(version.ToString()).To(Equal("2.0.1"))
 	})
 
-	It("should get aggregated status for the application", func() {
+	It("should get aggregated status for the version of application", func() {
+		// version, _ := types.NewSpecificVersion("2.0.1")
+		// status := applications.GetAggregatedStatusVersion(application, version)
+
 		// GetAggregatedStatusVersion(application *v1.AnyApplication, version *SpecificVersion) *AggregatedStatus
 		Fail("GetAggregatedStatus is not implemented yet")
 	})
@@ -134,9 +147,25 @@ var _ = Describe("Applications", func() {
 		Fail("Cleanup is not implemented yet")
 	})
 
-	It("should determine target version for the application", func() {
-		// DetermineTargetVersion(application *v1.AnyApplication) (*SpecificVersion, error)
-		Fail("DetermineTargetVersion is not implemented yet")
+	It("should determine target version for the application if version is not set for zone", func() {
+		targetVersion, _ := applications.DetermineTargetVersion(application)
+		Expect(targetVersion.ToString()).To(Equal("2.0.1"))
+	})
+
+	It("should determine target version for the application if latest version is set for zone", func() {
+		zoneStatus := application.Status.GetOrCreateStatusFor("zone")
+		zoneStatus.ChartVersion = "2.0.1"
+
+		targetVersion, _ := applications.DetermineTargetVersion(application)
+		Expect(targetVersion.ToString()).To(Equal("2.0.1"))
+	})
+
+	It("should determine target version for the application if old version is set for zone", func() {
+		zoneStatus := application.Status.GetOrCreateStatusFor("zone")
+		zoneStatus.ChartVersion = "2.0.0"
+
+		targetVersion, _ := applications.DetermineTargetVersion(application)
+		Expect(targetVersion.ToString()).To(Equal("2.0.1"))
 	})
 
 	It("should return unique instance id for helm chart version and release", func() {

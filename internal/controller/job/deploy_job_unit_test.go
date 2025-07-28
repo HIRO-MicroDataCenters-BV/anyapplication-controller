@@ -81,7 +81,8 @@ var _ = Describe("DeployJobUnitests", func() {
 
 		clusterCache, _ := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
 		fakeCharts := ctrl_sync.NewFakeCharts()
-		applications := ctrl_sync.NewApplications(kubeClient, helmClient, fakeCharts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+		applications := ctrl_sync.NewApplications(kubeClient, helmClient,
+			fakeCharts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
 		jobContext = NewAsyncJobContext(helmClient, kubeClient, ctx, applications)
 

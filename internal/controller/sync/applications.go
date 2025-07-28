@@ -68,6 +68,21 @@ func NewApplications(
 	}
 }
 
+func (m *applications) GetTargetVersion(
+	application *v1.AnyApplication,
+) mo.Option[*types.SpecificVersion] {
+	zone, found := application.Status.GetStatusFor(m.config.ZoneId)
+	if !found {
+		return mo.None[*types.SpecificVersion]()
+	}
+	version, err := types.NewSpecificVersion(zone.ChartVersion)
+	if err != nil {
+		m.log.Error(err, "Failed to parse chart version", "version", zone.ChartVersion)
+		return mo.None[*types.SpecificVersion]()
+	}
+	return mo.Some(version)
+}
+
 func (m *applications) DetermineTargetVersion(
 	application *v1.AnyApplication,
 ) (*types.SpecificVersion, error) {
@@ -438,19 +453,6 @@ func (m *applications) LoadApplication(application *v1.AnyApplication) (types.Gl
 		m.log,
 	)
 	return globalApplication, nil
-}
-
-func (m *applications) GetTargetVersion(application *v1.AnyApplication) mo.Option[*types.SpecificVersion] {
-	zone, found := application.Status.GetStatusFor(m.config.ZoneId)
-	if !found {
-		return mo.None[*types.SpecificVersion]()
-	}
-	version, err := types.NewSpecificVersion(zone.ChartVersion)
-	if err != nil {
-		m.log.Error(err, "Failed to parse chart version", "version", zone.ChartVersion)
-		return mo.None[*types.SpecificVersion]()
-	}
-	return mo.Some(version)
 }
 
 // func (m *applications) loadLocalApplication(

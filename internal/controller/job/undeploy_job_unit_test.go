@@ -137,7 +137,7 @@ var _ = Describe("UndeployJobUnitests", func() {
 		}
 		updateFuncs = []cache.UpdateSettingsFunc{
 			cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
-				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()["dcp.hiro.io/managed-by"]}
+				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()[sync.LABEL_MANAGED_BY]}
 				cacheManifest = true
 				return
 			}),

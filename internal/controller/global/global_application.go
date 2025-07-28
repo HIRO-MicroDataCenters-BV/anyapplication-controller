@@ -63,7 +63,7 @@ func (g *globalApplication) IsPresent() bool {
 	return len(g.localApplications) > 0
 }
 
-func (g *globalApplication) IsNewVersionAvailable() bool {
+func (g *globalApplication) IsVersionChanged() bool {
 	return g.newVersion.IsPresent()
 }
 
@@ -105,7 +105,7 @@ func (g *globalApplication) DeriveNewStatus(
 		jobFactory,
 		g.IsPresent(),
 		g.IsDeployed(),
-		g.IsNewVersionAvailable(),
+		g.IsVersionChanged(),
 		g.deriveTargetVersion(),
 		runningJobType,
 	)
