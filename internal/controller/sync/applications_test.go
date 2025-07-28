@@ -173,7 +173,7 @@ var _ = Describe("Applications", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		versions, _ := applications.GetAllPresentVersions(application)
-		Expect(len(versions.ToSlice())).To(Equal(2))
+		Expect(versions.ToSlice()).To(HaveLen(2))
 
 		status := applications.GetAggregatedStatusVersion(application, version200)
 		Expect(status.HealthStatus.Status).To(Equal(health.HealthStatusMissing))
@@ -217,14 +217,14 @@ var _ = Describe("Applications", func() {
 
 		result, err := applications.Cleanup(context.Background(), application)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(result)).To(Equal(2))
+		Expect(result).To(HaveLen(2))
 
 		if err := clusterCache.EnsureSynced(); err != nil {
 			Fail("Failed to sync cluster cache: " + err.Error())
 		}
 
 		versions, _ := applications.GetAllPresentVersions(application)
-		Expect(len(versions.ToSlice())).To(Equal(0))
+		Expect(versions.ToSlice()).To(BeEmpty())
 	})
 
 	It("should determine target version for the application if version is not set for zone", func() {
@@ -270,7 +270,7 @@ var _ = Describe("Applications", func() {
 		Expect(globalApplication.IsVersionChanged()).To(BeTrue())
 
 		versions, _ := applications.GetAllPresentVersions(application)
-		Expect(len(versions.ToSlice())).To(Equal(0))
+		Expect(versions.ToSlice()).To(BeEmpty())
 	})
 
 	It("should sync helm release", func() {
