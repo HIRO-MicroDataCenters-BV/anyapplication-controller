@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8sfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -32,17 +33,18 @@ import (
 
 var _ = Describe("Applications", func() {
 	var (
-		fakeClock     clock.Clock
-		applications  types.Applications
-		kubeClient    client.Client
-		helmClient    helm.HelmClient
-		application   *v1.AnyApplication
-		scheme        *runtime.Scheme
-		clusterCache  cache.ClusterCache
-		runtimeConfig config.ApplicationRuntimeConfig
-		gitOpsEngine  *fixture.FakeGitOpsEngine
-		updateFuncs   []cache.UpdateSettingsFunc
-		charts        types.Charts
+		fakeClock          clock.Clock
+		applications       types.Applications
+		kubeClient         client.Client
+		helmClient         helm.HelmClient
+		application        *v1.AnyApplication
+		scheme             *runtime.Scheme
+		clusterCache       cache.ClusterCache
+		clusterCacheClient *k8sfake.FakeDynamicClient
+		runtimeConfig      config.ApplicationRuntimeConfig
+		gitOpsEngine       *fixture.FakeGitOpsEngine
+		updateFuncs        []cache.UpdateSettingsFunc
+		charts             types.Charts
 	)
 
 	BeforeEach(func() {
@@ -99,9 +101,26 @@ var _ = Describe("Applications", func() {
 		}
 		helmClient, _ = helm.NewHelmClient(&options)
 
+		clusterCache, clusterCacheClient = fixture.NewTestClusterCacheWithOptions(updateFuncs)
+		if err := clusterCache.EnsureSynced(); err != nil {
+			Fail("Failed to sync cluster cache: " + err.Error())
+		}
+
 		kubeClient = fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithStatusSubresource(&v1.AnyApplication{}).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Delete: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					gvk := obj.GetObjectKind().GroupVersionKind()
+					resourcePlural, _ := meta.UnsafeGuessKindToResource(gvk)
+					err := clusterCacheClient.Tracker().Delete(
+						gvk.GroupVersion().WithResource(resourcePlural.Resource),
+						obj.GetNamespace(),
+						obj.GetName(),
+					)
+					return err
+				},
+			}).
 			Build()
 
 		updateFuncs = []cache.UpdateSettingsFunc{
@@ -110,11 +129,6 @@ var _ = Describe("Applications", func() {
 				cacheManifest = true
 				return
 			}),
-		}
-
-		clusterCache, _ = fixture.NewTestClusterCacheWithOptions(updateFuncs)
-		if err := clusterCache.EnsureSynced(); err != nil {
-			Fail("Failed to sync cluster cache: " + err.Error())
 		}
 
 		gitOpsEngine = fixture.NewFakeGitopsEngine()
@@ -188,7 +202,7 @@ var _ = Describe("Applications", func() {
 					gvk := obj.GetObjectKind().GroupVersionKind()
 					resourcePlural, _ := meta.UnsafeGuessKindToResource(gvk)
 					err := clusterCacheClient.Tracker().Delete(
-						obj.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resourcePlural.Resource),
+						gvk.GroupVersion().WithResource(resourcePlural.Resource),
 						obj.GetNamespace(),
 						obj.GetName(),
 					)

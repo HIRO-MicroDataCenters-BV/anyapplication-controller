@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
@@ -337,9 +338,14 @@ func (m *applications) Cleanup(ctx context.Context, application *v1.AnyApplicati
 	if err != nil {
 		return nil, err
 	}
+	allVersions := allDeployedVersions.ToSlice()
+
+	sort.Slice(allVersions, func(i, j int) bool {
+		return !allVersions[i].IsNewerThan(allVersions[j])
+	})
 
 	deleteResults := make([]*types.DeleteResult, 0)
-	for version := range allDeployedVersions.Iter() {
+	for _, version := range allVersions {
 		deleteResult, err := m.DeleteVersion(ctx, application, version)
 		if err != nil {
 			return nil, err
@@ -410,6 +416,7 @@ func (m *applications) deleteApp(ctx context.Context, app *cachedApp) (*types.De
 			m.log.V(1).Info("Deleted", "Resource", fullName)
 		}
 	}
+	deleteResult.Version = &app.chartKey.Version
 	deleteResult.ApplicationResourcesPresent = len(managedResourcesByKey) > 0
 	return deleteResult, nil
 

@@ -39,6 +39,7 @@ func (s *SyncResult) AddResult(r *common.ResourceSyncResult) {
 }
 
 type DeleteResult struct {
+	Version                     *SpecificVersion
 	Total                       int
 	Deleted                     int
 	DeleteFailed                int

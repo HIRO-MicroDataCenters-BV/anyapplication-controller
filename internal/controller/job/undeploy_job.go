@@ -91,24 +91,40 @@ func (job *UndeployJob) runInner(jobContext types.AsyncJobContext) bool {
 		return job.maybeRetry(jobContext, "SyncError", fmt.Sprintf("Undeployment failed: %s", err.Error()))
 	}
 	if versions.IsEmpty() {
-		job.Success(jobContext)
+		job.Success(jobContext, "No versions found, undeployment is complete")
 		return true
 	}
 	results, err := applications.Cleanup(jobContext.GetGoContext(), job.application)
-
+	details := resultsToDetails(results)
 	if err != nil {
 		return job.maybeRetry(jobContext, "SyncError", fmt.Sprintf("Undeployment failed: %s", err.Error()))
 	} else {
 		applicationResourcesPresent := types.IsApplicationResourcesPresent(results)
+
 		if !applicationResourcesPresent {
-			job.Success(jobContext)
+			job.Success(jobContext, details)
 			return true
 		}
 		if job.startTime.Add(job.runtimeConfig.DefaultUndeployTimeout).Before(job.clock.NowTime().Time) {
 			return job.maybeRetry(jobContext, "Timeout", "Undeployment timed out")
 		}
 	}
+	job.Progress(jobContext, details)
 	return false
+}
+
+func resultsToDetails(results []*types.DeleteResult) string {
+	details := ""
+	for _, result := range results {
+		details += fmt.Sprintf(
+			"Version %s (Total=%d, Deleted=%d, DeleteFailed=%d). ",
+			result.Version.ToString(),
+			result.Total,
+			result.Deleted,
+			result.DeleteFailed,
+		)
+	}
+	return details
 }
 
 func (job *UndeployJob) maybeRetry(jobContext types.AsyncJobContext, reason string, failureMsg string) bool {
@@ -149,10 +165,17 @@ func (job *UndeployJob) Fail(jobContext types.AsyncJobContext, msg string, reaso
 	job.updateStatus(jobContext)
 }
 
-func (job *UndeployJob) Success(context types.AsyncJobContext) {
+func (job *UndeployJob) Success(context types.AsyncJobContext, details string) {
 
 	job.status = v1.UndeploymentStatusDone
-	job.msg = "Undeploy state changed to '" + string(job.status) + "'. "
+	job.msg = "Undeploy state changed to '" + string(job.status) + "'." + details
+	job.reason = ""
+
+	job.updateStatus(context)
+}
+
+func (job *UndeployJob) Progress(context types.AsyncJobContext, details string) {
+	job.msg = details
 	job.reason = ""
 
 	job.updateStatus(context)
