@@ -26,6 +26,7 @@ var _ = Describe("Local Application FSM", func() {
 		globalApplication types.GlobalApplication
 		fakeEvents        events.Events
 		version           *types.SpecificVersion
+		newVersion        *types.SpecificVersion
 	)
 
 	BeforeEach(func() {
@@ -63,6 +64,7 @@ var _ = Describe("Local Application FSM", func() {
 			},
 		}
 		version, _ = types.NewSpecificVersion("1.0.0")
+		newVersion, _ = types.NewSpecificVersion("0.1.0")
 		globalApplication = NewFromLocalApplication(localApplications, mo.Some(version),
 			mo.None[*types.SpecificVersion](), fakeClock, &application, &runtimeConfig, logf.Log)
 
@@ -439,8 +441,67 @@ var _ = Describe("Local Application FSM", func() {
 	})
 
 	It("switch to deployment if operational job finds new version", func() {
-		// TODO new version tests
-		Fail("Not implemented yet")
+
+		operationCondition := v1.ConditionStatus{
+			Type:               v1.LocalConditionType,
+			ZoneId:             "zone",
+			Status:             string(health.HealthStatusProgressing),
+			LastTransitionTime: fakeClock.NowTime(),
+		}
+		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
+		application.Status.Owner = "zone"
+		application.Status.Zones = []v1.ZoneStatus{
+			{
+				ZoneId:       "zone",
+				ZoneVersion:  1,
+				ChartVersion: "1.0.0",
+				Conditions:   []v1.ConditionStatus{operationCondition},
+			},
+		}
+		localApp := local.FakeLocalApplication(&runtimeConfig, version, fakeClock, true)
+		localApplications := map[types.SpecificVersion]*local.LocalApplication{*version: &localApp}
+		globalApplication = NewFromLocalApplication(localApplications, mo.Some(version),
+			mo.Some(newVersion), fakeClock, &application, &runtimeConfig, logf.Log)
+
+		Expect(globalApplication.IsDeployed()).To(BeTrue())
+		Expect(globalApplication.IsPresent()).To(BeTrue())
+
+		statusResult := globalApplication.DeriveNewStatus(
+			types.FromCondition(operationCondition, types.AsyncJobTypeLocalOperation), jobFactory,
+		)
+		status := statusResult.Status.OrEmpty()
+		Expect(status).To(Equal(
+			v1.AnyApplicationStatus{
+				State:      v1.RelocationGlobalState,
+				Placements: []v1.Placement{{Zone: "zone"}},
+				Owner:      "zone",
+				Zones: []v1.ZoneStatus{
+					{
+						ZoneId:       "zone",
+						ZoneVersion:  1,
+						ChartVersion: "0.1.0",
+						Conditions: []v1.ConditionStatus{
+							{
+								Type:               v1.UndeploymentConditionType,
+								ZoneId:             "zone",
+								Status:             string(v1.UndeploymentStatusUndeploy),
+								LastTransitionTime: fakeClock.NowTime(),
+							},
+						},
+					},
+				},
+			},
+		))
+		jobs := statusResult.Jobs
+		jobToAdd := jobs.JobsToAdd.OrEmpty()
+		Expect(jobToAdd.GetStatus()).To(Equal(v1.ConditionStatus{
+			Type:               v1.UndeploymentConditionType,
+			ZoneId:             "zone",
+			Status:             string(v1.UndeploymentStatusUndeploy),
+			LastTransitionTime: fakeClock.NowTime(),
+		}))
+		Expect(jobs.JobsToRemove).To(Equal(mo.None[types.AsyncJobType]()))
+
 	})
 
 })

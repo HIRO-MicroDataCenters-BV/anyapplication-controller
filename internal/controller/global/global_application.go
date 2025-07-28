@@ -107,6 +107,7 @@ func (g *globalApplication) DeriveNewStatus(
 		g.IsDeployed(),
 		g.IsVersionChanged(),
 		g.deriveTargetVersion(),
+		g.newVersion,
 		runningJobType,
 	)
 
@@ -148,6 +149,7 @@ func updateState(
 	applicationDeployed bool,
 	newVersionAvailable bool,
 	version *types.SpecificVersion,
+	newVersion mo.Option[*types.SpecificVersion],
 	runningJobType mo.Option[types.AsyncJobType],
 ) (bool, types.NextJobs) {
 	status := &applicationMut.Status
@@ -163,6 +165,7 @@ func updateState(
 			applicationDeployed,
 			newVersionAvailable,
 			version,
+			newVersion,
 			runningJobType,
 		)
 	}
@@ -240,6 +243,7 @@ func localStateMachine(
 	applicationDeployed bool,
 	newVersionAvailable bool,
 	version *types.SpecificVersion,
+	newVersion mo.Option[*types.SpecificVersion],
 	runningJobType mo.Option[types.AsyncJobType],
 ) (bool, types.NextJobs) {
 
@@ -253,6 +257,7 @@ func localStateMachine(
 		applicationDeployed,
 		newVersionAvailable,
 		version,
+		newVersion,
 		runningJobType,
 	)
 	nextStateResult := fsm.NextState()
@@ -260,17 +265,21 @@ func localStateMachine(
 	conditionsToAdd, conditionsToRemove := nextStateResult.ConditionsToAdd, nextStateResult.ConditionsToRemove
 	jobs := nextStateResult.Jobs
 
-	// TODO pick condition from jobs
 	for _, condition := range conditionsToRemove {
 		removeCondition(&applicationMut.Status, condition, config.ZoneId)
 		stateUpdated = true
 	}
 
-	// TODO pick condition from jobs
 	conditionsToAdd.ForEach(func(condition *v1.ConditionStatus) {
 		addOrUpdateCondition(&applicationMut.Status, condition, config.ZoneId)
 		stateUpdated = true
 	})
+
+	version, present := nextStateResult.NewVersion.Get()
+	if present {
+		setNewVersion(&applicationMut.Status, version, config.ZoneId)
+		stateUpdated = true
+	}
 
 	if jobs.JobsToAdd.IsPresent() || jobs.JobsToRemove.IsPresent() {
 		stateUpdated = true

@@ -16,6 +16,7 @@ type LocalFSM struct {
 	applicationDeployed bool
 	newVersionAvailable bool
 	version             *types.SpecificVersion
+	newVersion          mo.Option[*types.SpecificVersion]
 	runningJobType      mo.Option[types.AsyncJobType]
 }
 
@@ -27,6 +28,7 @@ func NewLocalFSM(
 	applicationDeployed bool,
 	newVersionAvailable bool,
 	version *types.SpecificVersion,
+	newVersion mo.Option[*types.SpecificVersion],
 	runningJobType mo.Option[types.AsyncJobType],
 ) LocalFSM {
 	recoverStrategy := &application.Spec.RecoverStrategy
@@ -39,6 +41,7 @@ func NewLocalFSM(
 		applicationDeployed,
 		newVersionAvailable,
 		version,
+		newVersion,
 		runningJobType,
 	}
 }
@@ -131,6 +134,10 @@ func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 	if !g.isRunning(types.AsyncJobTypeUndeploy) {
 
 		if g.applicationPresent && !attemptsExhausted {
+			newVersion := mo.None[*types.SpecificVersion]()
+			if g.newVersionAvailable {
+				newVersion = mo.Some(g.version)
+			}
 			undeployJob := g.jobFactory.CreateUndeployJob(g.application)
 			undeployJobOpt := mo.Some(undeployJob)
 			undeployCondition := undeployJob.GetStatus()
@@ -140,6 +147,7 @@ func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 				ConditionsToAdd:    undeployConditionOpt,
 				ConditionsToRemove: conditionsToRemove,
 				Jobs:               types.NextJobs{JobsToAdd: undeployJobOpt},
+				NewVersion:         newVersion,
 			}
 		}
 	}

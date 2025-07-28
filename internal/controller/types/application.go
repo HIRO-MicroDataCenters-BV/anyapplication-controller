@@ -28,6 +28,7 @@ type NextStateResult struct {
 	NextState          mo.Option[v1.GlobalState]
 	ConditionsToAdd    mo.Option[*v1.ConditionStatus]
 	ConditionsToRemove []*v1.ConditionStatus
+	NewVersion         mo.Option[*SpecificVersion]
 	Jobs               NextJobs
 }
 
