@@ -18,6 +18,7 @@ var _ = Describe("Charts", func() {
 	var (
 		helmClient helm.HelmClient
 		charts     types.Charts
+		ctx        context.Context
 	)
 
 	BeforeEach(func() {
@@ -34,7 +35,9 @@ var _ = Describe("Charts", func() {
 		}
 		helmClient, _ = helm.NewHelmClient(&options)
 
-		charts = NewCharts(context.TODO(), helmClient, &ChartsOptions{
+		ctx = context.Background()
+
+		charts = NewCharts(ctx, helmClient, &ChartsOptions{
 			SyncPeriod: 100 * time.Millisecond,
 		}, logf.Log)
 
@@ -85,6 +88,21 @@ var _ = Describe("Charts", func() {
 		Expect(rendered.Instance).To(Equal(*instance))
 		Expect(rendered.Key).To(Equal(*latest))
 		Expect(rendered.Resources).To(HaveLen(23))
+	})
+
+	It("should sync new versions", func() {
+		err := charts.RegisterChart("nginx-ingress", "https://helm.nginx.com/stable")
+		Expect(err).NotTo(HaveOccurred())
+
+		charts.RunSyncCycle()
+
+		version, _ := types.NewChartVersion("2.0.1")
+		latest, err := charts.AddAndGetLatest("nginx-ingress", "https://helm.nginx.com/stable", version)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(latest).NotTo(BeNil())
+		Expect(latest.ChartId.RepoUrl).To(Equal("https://helm.nginx.com/stable"))
+		Expect(latest.ChartId.ChartName).To(Equal("nginx-ingress"))
+		Expect(latest.Version.ToString()).To(Equal("2.0.1"))
 	})
 
 })

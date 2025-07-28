@@ -44,8 +44,10 @@ type Chart struct{}
 
 type Charts interface {
 	RunSynchronization()
+	RunSyncCycle()
 	Render(chartKey *ChartKey, instance *ApplicationInstance) (*RenderedChart, error)
 	AddAndGetLatest(chartName string, repoUrl string, version ChartVersion) (*ChartKey, error)
+	RegisterChart(chartName string, repoUrl string) error
 }
 
 type ChartVersion interface {

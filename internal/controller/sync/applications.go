@@ -332,19 +332,6 @@ func (m *applications) getAggregatedStatus(app *cachedApp) *types.AggregatedStat
 	}
 }
 
-func (m *applications) DeleteVersion(
-	ctx context.Context,
-	application *v1.AnyApplication,
-	version *types.SpecificVersion,
-) (*types.DeleteResult, error) {
-	app, err := m.getOrRenderAppVersion(application, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return m.deleteApp(ctx, app)
-}
-
 func (m *applications) Cleanup(ctx context.Context, application *v1.AnyApplication) ([]*types.DeleteResult, error) {
 	allDeployedVersions, err := m.GetAllPresentVersions(application)
 	if err != nil {
@@ -362,10 +349,23 @@ func (m *applications) Cleanup(ctx context.Context, application *v1.AnyApplicati
 	return deleteResults, nil
 }
 
-func (m *applications) deleteApp(ctx context.Context, app *cachedApp) (*types.DeleteResult, error) {
-	syncResult := &types.DeleteResult{}
+func (m *applications) DeleteVersion(
+	ctx context.Context,
+	application *v1.AnyApplication,
+	version *types.SpecificVersion,
+) (*types.DeleteResult, error) {
+	app, err := m.getOrRenderAppVersion(application, version)
+	if err != nil {
+		return nil, err
+	}
 
-	syncResult.Total += len(app.renderedChart.Resources)
+	return m.deleteApp(ctx, app)
+}
+
+func (m *applications) deleteApp(ctx context.Context, app *cachedApp) (*types.DeleteResult, error) {
+	deleteResult := &types.DeleteResult{}
+
+	deleteResult.Total += len(app.renderedChart.Resources)
 
 	managedResources := m.findAvailableApplicationResources(app.application)
 	managedResourcesByKey := make(map[kube.ResourceKey]*unstructured.Unstructured)
@@ -381,14 +381,14 @@ func (m *applications) deleteApp(ctx context.Context, app *cachedApp) (*types.De
 		live := managedResourcesByKey[resourceKey]
 
 		if live == nil {
-			syncResult.Deleted += 1
+			deleteResult.Deleted += 1
 		} else {
 			err := m.kubeClient.Delete(ctx, live)
 			if err != nil {
-				syncResult.DeleteFailed += 1
+				deleteResult.DeleteFailed += 1
 			} else {
 				delete(managedResourcesByKey, resourceKey)
-				syncResult.Deleted += 1
+				deleteResult.Deleted += 1
 				m.log.V(1).Info("Deleted", "Resource", fullName)
 			}
 		}
@@ -403,15 +403,15 @@ func (m *applications) deleteApp(ctx context.Context, app *cachedApp) (*types.De
 		err := m.kubeClient.Delete(ctx, obj)
 
 		if err != nil {
-			syncResult.DeleteFailed += 1
+			deleteResult.DeleteFailed += 1
 		} else {
 			delete(managedResourcesByKey, resourceKey)
-			syncResult.Deleted += 1
+			deleteResult.Deleted += 1
 			m.log.V(1).Info("Deleted", "Resource", fullName)
 		}
 	}
-	syncResult.ApplicationResourcesPresent = len(managedResourcesByKey) > 0
-	return syncResult, nil
+	deleteResult.ApplicationResourcesPresent = len(managedResourcesByKey) > 0
+	return deleteResult, nil
 
 }
 

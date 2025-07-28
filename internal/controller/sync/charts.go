@@ -50,6 +50,14 @@ func NewCharts(
 
 func (c *charts) AddAndGetLatest(chartName string, repoUrl string, chartVersion types.ChartVersion) (*types.ChartKey, error) {
 
+	if err := c.RegisterChart(chartName, repoUrl); err != nil {
+		return nil, err
+	}
+
+	return c.pullVersion(chartName, repoUrl, chartVersion)
+}
+
+func (c *charts) pullVersion(chartName string, repoUrl string, chartVersion types.ChartVersion) (*types.ChartKey, error) {
 	specificVersion, isSpecificVersion := chartVersion.(*types.SpecificVersion)
 	versionRange, _ := chartVersion.(*types.VersionRange)
 	chartId := types.ChartId{RepoUrl: repoUrl, ChartName: chartName}
@@ -80,6 +88,16 @@ func (c *charts) AddAndGetLatest(chartName string, repoUrl string, chartVersion 
 	}
 }
 
+func (c *charts) RegisterChart(chartName string, repoUrl string) error {
+	chartId := types.ChartId{RepoUrl: repoUrl, ChartName: chartName}
+
+	_, err := c.getOrCreateVersions(&chartId)
+	if err != nil {
+		return errors.Wrap(err, "Failed to get or create chart versions")
+	}
+	return nil
+}
+
 func (c *charts) getOrCreateVersions(chartId *types.ChartId) (*ChartVersions, error) {
 	versions, exists := c.charts.Load(chartId)
 	if !exists {
@@ -101,14 +119,14 @@ func (c *charts) RunSynchronization() {
 	for {
 		select {
 		case <-ticker.C:
-			c.runSyncCycle()
+			c.RunSyncCycle()
 		case <-c.ctx.Done():
 			return
 		}
 	}
 }
 
-func (c *charts) runSyncCycle() {
+func (c *charts) RunSyncCycle() {
 	if err := c.helmClient.SyncRepositories(); err != nil {
 		c.logger.Error(err, "Failed to sync Helm repositories")
 

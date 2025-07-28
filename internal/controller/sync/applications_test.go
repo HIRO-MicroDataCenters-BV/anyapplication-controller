@@ -19,12 +19,14 @@ import (
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -140,12 +142,6 @@ var _ = Describe("Applications", func() {
 		pod200 := makePod("test-pod1", "2.0.0")
 		pod201 := makePod("test-pod2", "2.0.1")
 
-		kubeClient = fake.NewClientBuilder().
-			WithScheme(scheme).
-			WithStatusSubresource(&v1.AnyApplication{}).
-			WithObjects(application, &pod200, &pod201).
-			Build()
-
 		clusterCache, _ = fixture.NewTestClusterCacheWithOptions(updateFuncs, &pod200, &pod201)
 		if err := clusterCache.EnsureSynced(); err != nil {
 			Fail("Failed to sync cluster cache: " + err.Error())
@@ -176,8 +172,45 @@ var _ = Describe("Applications", func() {
 	})
 
 	It("should cleanup all version", func() {
-		// Cleanup(ctx context.Context, application *v1.AnyApplication) ([]*DeleteResult, error)
-		Fail("Cleanup is not implemented yet")
+		pod200 := makePod("test-pod1", "2.0.0")
+		pod201 := makePod("test-pod2", "2.0.1")
+
+		clusterCache, clusterCacheClient := fixture.NewTestClusterCacheWithOptions(updateFuncs, &pod200, &pod201)
+		if err := clusterCache.EnsureSynced(); err != nil {
+			Fail("Failed to sync cluster cache: " + err.Error())
+		}
+
+		kubeClient = fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(&v1.AnyApplication{}).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Delete: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					gvk := obj.GetObjectKind().GroupVersionKind()
+					resourcePlural, _ := meta.UnsafeGuessKindToResource(gvk)
+					err := clusterCacheClient.Tracker().Delete(
+						obj.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resourcePlural.Resource),
+						obj.GetNamespace(),
+						obj.GetName(),
+					)
+					return err
+				},
+			}).
+			WithObjects(application, &pod200, &pod201).
+			Build()
+
+		charts = NewCharts(context.Background(), helmClient, &ChartsOptions{SyncPeriod: 60 * time.Second}, logf.Log)
+		applications = NewApplications(kubeClient, helmClient, charts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+
+		result, err := applications.Cleanup(context.Background(), application)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(result)).To(Equal(2))
+
+		if err := clusterCache.EnsureSynced(); err != nil {
+			Fail("Failed to sync cluster cache: " + err.Error())
+		}
+
+		versions, _ := applications.GetAllPresentVersions(application)
+		Expect(len(versions.ToSlice())).To(Equal(0))
 	})
 
 	It("should determine target version for the application if version is not set for zone", func() {
@@ -216,11 +249,14 @@ var _ = Describe("Applications", func() {
 	})
 
 	It("should load application from cluster cache", func() {
-		application, _ := applications.LoadApplication(application)
+		globalApplication, _ := applications.LoadApplication(application)
 
-		Expect(application.IsDeployed()).To(BeFalse())
-		Expect(application.IsPresent()).To(BeFalse())
-		Expect(application.IsVersionChanged()).To(BeTrue())
+		Expect(globalApplication.IsDeployed()).To(BeFalse())
+		Expect(globalApplication.IsPresent()).To(BeFalse())
+		Expect(globalApplication.IsVersionChanged()).To(BeTrue())
+
+		versions, _ := applications.GetAllPresentVersions(application)
+		Expect(len(versions.ToSlice())).To(Equal(0))
 	})
 
 	It("should sync helm release", func() {

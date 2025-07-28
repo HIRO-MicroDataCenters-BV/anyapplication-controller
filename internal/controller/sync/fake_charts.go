@@ -36,3 +36,10 @@ func (f *FakeCharts) AddAndGetLatest(chartName string, repoUrl string, chartVers
 		Version: *version,
 	}, nil
 }
+
+func (f *FakeCharts) RegisterChart(chartName string, repoUrl string) error {
+	return nil
+}
+
+func (f *FakeCharts) RunSyncCycle() {
+}
