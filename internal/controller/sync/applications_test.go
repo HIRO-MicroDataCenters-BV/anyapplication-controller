@@ -18,6 +18,7 @@ import (
 	"hiro.io/anyapplication/internal/controller/fixture"
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,6 +47,7 @@ var _ = Describe("Applications", func() {
 		fakeClock = clock.NewFakeClock()
 		scheme = runtime.NewScheme()
 		_ = v1.AddToScheme(scheme)
+		_ = corev1.AddToScheme(scheme)
 
 		runtimeConfig = config.ApplicationRuntimeConfig{
 			ZoneId:                        "zone",
@@ -135,11 +137,42 @@ var _ = Describe("Applications", func() {
 	})
 
 	It("should get aggregated status for the version of application", func() {
-		// version, _ := types.NewSpecificVersion("2.0.1")
-		// status := applications.GetAggregatedStatusVersion(application, version)
+		pod200 := makePod("test-pod1", "2.0.0")
+		pod201 := makePod("test-pod2", "2.0.1")
 
-		// GetAggregatedStatusVersion(application *v1.AnyApplication, version *SpecificVersion) *AggregatedStatus
-		Fail("GetAggregatedStatus is not implemented yet")
+		kubeClient = fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(&v1.AnyApplication{}).
+			WithObjects(application, &pod200, &pod201).
+			Build()
+
+		clusterCache, _ = fixture.NewTestClusterCacheWithOptions(updateFuncs, &pod200, &pod201)
+		if err := clusterCache.EnsureSynced(); err != nil {
+			Fail("Failed to sync cluster cache: " + err.Error())
+		}
+
+		charts = NewCharts(context.TODO(), helmClient, &ChartsOptions{SyncPeriod: 60 * time.Second}, logf.Log)
+		applications = NewApplications(kubeClient, helmClient, charts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+
+		version201, _ := types.NewSpecificVersion("2.0.1")
+		_, err := applications.SyncVersion(context.Background(), application, version201)
+		Expect(err).NotTo(HaveOccurred())
+
+		version200, _ := types.NewSpecificVersion("2.0.0")
+		_, err = applications.SyncVersion(context.Background(), application, version200)
+		Expect(err).NotTo(HaveOccurred())
+
+		versions, _ := applications.GetAllPresentVersions(application)
+		Expect(len(versions.ToSlice())).To(Equal(2))
+
+		status := applications.GetAggregatedStatusVersion(application, version200)
+		Expect(status.HealthStatus.Status).To(Equal(health.HealthStatusMissing))
+		Expect(status.ChartVersion.ToString()).To(Equal("2.0.0"))
+
+		status = applications.GetAggregatedStatusVersion(application, version201)
+		Expect(status.HealthStatus.Status).To(Equal(health.HealthStatusMissing))
+		Expect(status.ChartVersion.ToString()).To(Equal("2.0.1"))
+
 	})
 
 	It("should cleanup all version", func() {
@@ -187,7 +220,7 @@ var _ = Describe("Applications", func() {
 
 		Expect(application.IsDeployed()).To(BeFalse())
 		Expect(application.IsPresent()).To(BeFalse())
-		Expect(application.IsNewVersionAvailable()).To(BeTrue())
+		Expect(application.IsVersionChanged()).To(BeTrue())
 	})
 
 	It("should sync helm release", func() {
@@ -248,3 +281,40 @@ var _ = Describe("Applications", func() {
 	})
 
 })
+
+func makePod(name string, version string) corev1.Pod {
+	pod := corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: "default",
+			Labels: map[string]string{
+				LABEL_INSTANCE_ID:   "default-test-app",
+				LABEL_CHART_VERSION: version,
+				LABEL_MANAGED_BY:    LABEL_VALUE_MANAGED_BY_DCP,
+			},
+			CreationTimestamp: metav1.NewTime(time.Now()),
+			UID:               "test-pod-uid",
+			ResourceVersion:   "1",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "test-node",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name:         "main",
+					RestartCount: 1,
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
+					},
+				},
+			},
+		},
+	}
+	return pod
+}

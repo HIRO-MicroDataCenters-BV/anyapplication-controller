@@ -305,6 +305,17 @@ func (m *applications) isManagedFunc(instanceId string) IsManagedResourceFunc {
 // 	return m.getAggregatedStatus(app)
 // }
 
+func (m *applications) GetAggregatedStatusVersion(
+	application *v1.AnyApplication,
+	version *types.SpecificVersion,
+) *types.AggregatedStatus {
+	app, err := m.getOrRenderAppVersion(application, version)
+	if err != nil {
+		m.log.Error(err, "Failed to get or render application")
+	}
+	return m.getAggregatedStatus(app)
+}
+
 func (m *applications) getAggregatedStatus(app *cachedApp) *types.AggregatedStatus {
 
 	managedResources := m.findAvailableApplicationResources(app.application)
@@ -319,17 +330,6 @@ func (m *applications) getAggregatedStatus(app *cachedApp) *types.AggregatedStat
 		HealthStatus: healthStatus,
 		ChartVersion: &app.chartKey.Version,
 	}
-}
-
-func (m *applications) GetAggregatedStatusVersion(
-	application *v1.AnyApplication,
-	version *types.SpecificVersion,
-) *types.AggregatedStatus {
-	app, err := m.getOrRenderAppVersion(application, version)
-	if err != nil {
-		m.log.Error(err, "Failed to get or render application")
-	}
-	return m.getAggregatedStatus(app)
 }
 
 func (m *applications) DeleteVersion(
