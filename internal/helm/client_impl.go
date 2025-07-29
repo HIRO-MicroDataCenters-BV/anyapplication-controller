@@ -2,6 +2,7 @@ package helm
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"net/url"
@@ -19,6 +20,11 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+const (
+	defaultCachePath            = "/tmp/.helmcache"
+	defaultRepositoryConfigPath = "/tmp/.helmrepo"
+)
+
 type HelmClientOptions struct {
 	RestConfig  *rest.Config
 	Debug       bool
@@ -32,17 +38,19 @@ type HelmClientImpl struct {
 }
 
 func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
+
 	opts := helmclient.RestConfClientOptions{
 		Options: &helmclient.Options{
-			Namespace: "default",
-			Debug:     options.Debug,
-			DebugLog:  func(format string, v ...interface{}) {},
-			Linting:   options.Linting,
+			Namespace:        "default",
+			Debug:            options.Debug,
+			DebugLog:         func(format string, v ...interface{}) {},
+			Linting:          options.Linting,
+			RepositoryConfig: fmt.Sprintf("%s-%s", defaultRepositoryConfigPath, RandString(5)),
+			RepositoryCache:  fmt.Sprintf("%s-%s", defaultCachePath, RandString(5)),
 		},
 		RestConfig: options.RestConfig,
 	}
 	client, err := helmclient.NewClientFromRestConf(&opts)
-
 	return &HelmClientImpl{client, options}, err
 }
 
@@ -105,6 +113,7 @@ func (h *HelmClientImpl) FetchVersions(repoURL string, chartName string) ([]*sem
 	if err != nil {
 		return nil, err
 	}
+	chartRepo.CachePath = h.client.GetSettings().RepositoryCache
 
 	indexFile, err := chartRepo.DownloadIndexFile()
 	if err != nil {
@@ -252,31 +261,12 @@ func AddLabelsToManifest(manifest string, newLabels map[string]string) (string, 
 	return strings.Join(output, "---\n"), nil
 }
 
-// func (c *helmclient.HelmClient) AddOrUpdateChartRepo(entry repo.Entry) error {
-// 	chartRepo, err := repo.NewChartRepository(&entry, c.Providers)
-// 	if err != nil {
-// 		return err
-// 	}
+const letterBytes = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-// 	chartRepo.CachePath = c.Settings.RepositoryCache
-
-// 	if c.storage.Has(entry.Name) {
-// 		c.DebugLog("WARNING: repository name %q already exists", entry.Name)
-// 		return nil
-// 	}
-
-// 	if !registry.IsOCI(entry.URL) {
-// 		_, err = chartRepo.DownloadIndexFile()
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-
-// 	c.storage.Update(&entry)
-// 	err = c.storage.WriteFile(c.Settings.RepositoryConfig, 0o644)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	return nil
-// }
+func RandString(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
