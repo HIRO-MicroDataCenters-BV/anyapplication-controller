@@ -61,15 +61,13 @@ type AggregatedStatus struct {
 }
 
 type Applications interface {
-	// GetAggregatedStatus(application *v1.AnyApplication) *AggregatedStatus
-	// Sync(ctx context.Context, application *v1.AnyApplication) (*SyncResult, error)
-	// Delete(ctx context.Context, application *v1.AnyApplication) (*DeleteResult, error)
-	GetInstanceId(application *v1.AnyApplication) string
-	LoadApplication(application *v1.AnyApplication) (GlobalApplication, error)
-
 	GetAllPresentVersions(application *v1.AnyApplication) (mapset.Set[*SpecificVersion], error)
 	GetTargetVersion(application *v1.AnyApplication) mo.Option[*SpecificVersion]
 	DetermineTargetVersion(application *v1.AnyApplication) (*SpecificVersion, error)
+
+	GetInstanceId(application *v1.AnyApplication) string
+	LoadApplication(application *v1.AnyApplication) (GlobalApplication, error)
+
 	GetAggregatedStatusVersion(application *v1.AnyApplication, version *SpecificVersion) *AggregatedStatus
 	SyncVersion(ctx context.Context, application *v1.AnyApplication, version *SpecificVersion) (*SyncResult, error)
 	DeleteVersion(ctx context.Context, application *v1.AnyApplication, version *SpecificVersion) (*DeleteResult, error)

@@ -2,7 +2,6 @@ package helm
 
 import (
 	"fmt"
-	"math/rand"
 	"time"
 
 	"net/url"
@@ -30,6 +29,7 @@ type HelmClientOptions struct {
 	Debug       bool
 	Linting     bool
 	KubeVersion *chartutil.KubeVersion
+	ClientId    string
 }
 
 type HelmClientImpl struct {
@@ -39,18 +39,23 @@ type HelmClientImpl struct {
 
 func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
 
+	if options.ClientId == "" {
+		options.ClientId = RandClient()
+	}
+
 	opts := helmclient.RestConfClientOptions{
 		Options: &helmclient.Options{
 			Namespace:        "default",
 			Debug:            options.Debug,
 			DebugLog:         func(format string, v ...interface{}) {},
 			Linting:          options.Linting,
-			RepositoryConfig: fmt.Sprintf("%s-%s", defaultRepositoryConfigPath, RandString(5)),
-			RepositoryCache:  fmt.Sprintf("%s-%s", defaultCachePath, RandString(5)),
+			RepositoryConfig: fmt.Sprintf("%s-%s", defaultRepositoryConfigPath, options.ClientId),
+			RepositoryCache:  fmt.Sprintf("%s-%s", defaultCachePath, options.ClientId),
 		},
 		RestConfig: options.RestConfig,
 	}
 	client, err := helmclient.NewClientFromRestConf(&opts)
+
 	return &HelmClientImpl{client, options}, err
 }
 
@@ -146,7 +151,6 @@ func (h *HelmClientImpl) FetchVersions(repoURL string, chartName string) ([]*sem
 func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 
 	repoName, err := h.AddOrUpdateChartRepo(args.RepoUrl)
-
 	if err != nil {
 		return "", err
 	}
@@ -259,14 +263,4 @@ func AddLabelsToManifest(manifest string, newLabels map[string]string) (string, 
 	}
 
 	return strings.Join(output, "---\n"), nil
-}
-
-const letterBytes = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-func RandString(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return string(b)
 }

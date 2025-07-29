@@ -106,6 +106,7 @@ var _ = BeforeEach(func() {
 		RestConfig: cfg,
 		Debug:      false,
 		Linting:    true,
+		ClientId:   "job-test-client",
 		KubeVersion: &chartutil.KubeVersion{
 			Version: "v1.23.10",
 			Major:   "1",

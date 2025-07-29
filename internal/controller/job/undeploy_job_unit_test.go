@@ -8,7 +8,6 @@ import (
 	"github.com/argoproj/gitops-engine/pkg/cache"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"helm.sh/helm/v3/pkg/chartutil"
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
@@ -25,7 +24,6 @@ import (
 	corev1types "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	k8sfake "k8s.io/client-go/dynamic/fake"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -162,19 +160,6 @@ var _ = Describe("UndeployJobUnitests", func() {
 	It("should undeploy multiple versions", func() {
 		pod200 := makePod("test-pod1", "2.0.0")
 		pod201 := makePod("test-pod2", "2.0.1")
-
-		config := &rest.Config{
-			Host: "https://test",
-		}
-		options := helm.HelmClientOptions{
-			RestConfig: config,
-			KubeVersion: &chartutil.KubeVersion{
-				Version: fmt.Sprintf("v%s.%s.0", "1", "23"),
-				Major:   "1",
-				Minor:   "23",
-			},
-		}
-		helmClient, _ = helm.NewHelmClient(&options)
 
 		clusterCache, clusterCacheClient = fixture.NewTestClusterCacheWithOptions(updateFuncs, &pod200, &pod201)
 		if err := clusterCache.EnsureSynced(); err != nil {

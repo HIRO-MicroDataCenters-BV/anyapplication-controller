@@ -98,8 +98,17 @@ var _ = Describe("Applications", func() {
 				Major:   "1",
 				Minor:   "23",
 			},
+			ClientId: "applications-test-client",
 		}
 		helmClient, _ = helm.NewHelmClient(&options)
+
+		updateFuncs = []cache.UpdateSettingsFunc{
+			cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
+				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()[LABEL_MANAGED_BY]}
+				cacheManifest = true
+				return
+			}),
+		}
 
 		clusterCache, clusterCacheClient = fixture.NewTestClusterCacheWithOptions(updateFuncs)
 		if err := clusterCache.EnsureSynced(); err != nil {
@@ -122,14 +131,6 @@ var _ = Describe("Applications", func() {
 				},
 			}).
 			Build()
-
-		updateFuncs = []cache.UpdateSettingsFunc{
-			cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
-				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()[LABEL_MANAGED_BY]}
-				cacheManifest = true
-				return
-			}),
-		}
 
 		gitOpsEngine = fixture.NewFakeGitopsEngine()
 		charts = NewCharts(context.TODO(), helmClient, &ChartsOptions{SyncPeriod: 60 * time.Second}, logf.Log)
