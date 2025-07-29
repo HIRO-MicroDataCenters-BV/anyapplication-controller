@@ -143,7 +143,6 @@ func (c *charts) updateAvailableVersions(chartId *types.ChartId, versions *Chart
 	semanticVersions, err := c.helmClient.FetchVersions(chartId.RepoUrl, chartId.ChartName)
 	if err != nil {
 		c.logger.Error(err, "Failed to fetch versions for chart", "chartId", chartId)
-		return
 	}
 	versions.UpdateVersions(semanticVersions)
 }
