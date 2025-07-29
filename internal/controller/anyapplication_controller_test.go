@@ -83,6 +83,7 @@ var _ = Describe("AnyApplication Controller", func() {
 				Debug:       false,
 				Linting:     true,
 				KubeVersion: &chartutil.DefaultCapabilities.KubeVersion,
+				ClientId:    "tests",
 			})
 			if err != nil {
 				panic("error " + err.Error())

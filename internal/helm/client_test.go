@@ -21,6 +21,7 @@ var _ = Describe("HelmClient", func() {
 				Major:   "1",
 				Minor:   "23",
 			},
+			ClientId: "tests",
 		}
 		client, err := NewHelmClient(options)
 

@@ -32,7 +32,7 @@ var _ = Describe("Charts", func() {
 				Major:   "1",
 				Minor:   "23",
 			},
-			ClientId: "charts-test-client",
+			ClientId: "tests",
 		}
 		helmClient, _ = helm.NewHelmClient(&options)
 
