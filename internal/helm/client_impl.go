@@ -36,6 +36,7 @@ func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
 		Options: &helmclient.Options{
 			Namespace: "default",
 			Debug:     options.Debug,
+			DebugLog:  func(format string, v ...interface{}) {},
 			Linting:   options.Linting,
 		},
 		RestConfig: options.RestConfig,
