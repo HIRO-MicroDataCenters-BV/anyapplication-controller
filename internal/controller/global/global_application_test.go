@@ -16,11 +16,13 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const CURRENT_ZONE = "zone"
+
 var _ = Describe("GlobalApplication", func() {
 	fakeClock := clock.NewFakeClock()
 
 	Context("on application resource change", func() {
-		currentZone := "zone"
+		currentZone := CURRENT_ZONE
 		runtimeConfig := &config.ApplicationRuntimeConfig{
 			ZoneId: currentZone,
 		}
@@ -1050,7 +1052,7 @@ func makeApplication() *v1.AnyApplication {
 			RecoverStrategy: v1.RecoverStrategySpec{},
 		},
 		Status: v1.AnyApplicationStatus{
-			Owner: "zone",
+			Owner: CURRENT_ZONE,
 		},
 	}
 
