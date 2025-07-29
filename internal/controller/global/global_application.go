@@ -1,6 +1,7 @@
 package global
 
 import (
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
@@ -60,7 +61,24 @@ func (g *globalApplication) IsDeployed() bool {
 }
 
 func (g *globalApplication) IsPresent() bool {
-	return len(g.localApplications) > 0
+	if version, present := g.activeVersion.Get(); present {
+		if _, present := g.localApplications[*version]; present {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *globalApplication) NonActiveVersionsPresent() bool {
+	set := mapset.NewSet[types.SpecificVersion]()
+	for version := range g.localApplications {
+		set.Add(version)
+	}
+
+	if activeVersion, present := g.activeVersion.Get(); present {
+		set.Remove(*activeVersion)
+	}
+	return set.Cardinality() > 0
 }
 
 func (g *globalApplication) IsVersionChanged() bool {
@@ -105,6 +123,7 @@ func (g *globalApplication) DeriveNewStatus(
 		jobFactory,
 		g.IsPresent(),
 		g.IsDeployed(),
+		g.NonActiveVersionsPresent(),
 		g.IsVersionChanged(),
 		g.deriveTargetVersion(),
 		g.newVersion,
@@ -148,6 +167,7 @@ func updateState(
 	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
 	applicationDeployed bool,
+	nonActiveVersionsPresent bool,
 	newVersionAvailable bool,
 	version *types.SpecificVersion,
 	newVersion mo.Option[*types.SpecificVersion],
@@ -164,6 +184,7 @@ func updateState(
 			jobFactory,
 			applicationPresent,
 			applicationDeployed,
+			nonActiveVersionsPresent,
 			newVersionAvailable,
 			version,
 			newVersion,
@@ -242,6 +263,7 @@ func localStateMachine(
 	jobFactory types.AsyncJobFactory,
 	applicationResourcesPresent bool,
 	applicationDeployed bool,
+	nonActiveVersionsPresent bool,
 	newVersionAvailable bool,
 	version *types.SpecificVersion,
 	newVersion mo.Option[*types.SpecificVersion],
@@ -256,6 +278,7 @@ func localStateMachine(
 		jobFactory,
 		applicationResourcesPresent,
 		applicationDeployed,
+		nonActiveVersionsPresent,
 		newVersionAvailable,
 		version,
 		newVersion,

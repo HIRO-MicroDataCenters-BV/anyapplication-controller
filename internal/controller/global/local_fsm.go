@@ -8,16 +8,17 @@ import (
 )
 
 type LocalFSM struct {
-	application         *v1.AnyApplication
-	recoverStrategy     *v1.RecoverStrategySpec
-	config              *config.ApplicationRuntimeConfig
-	jobFactory          types.AsyncJobFactory
-	applicationPresent  bool
-	applicationDeployed bool
-	newVersionAvailable bool
-	version             *types.SpecificVersion
-	newVersion          mo.Option[*types.SpecificVersion]
-	runningJobType      mo.Option[types.AsyncJobType]
+	application              *v1.AnyApplication
+	recoverStrategy          *v1.RecoverStrategySpec
+	config                   *config.ApplicationRuntimeConfig
+	jobFactory               types.AsyncJobFactory
+	applicationPresent       bool
+	applicationDeployed      bool
+	nonActiveVersionsPresent bool
+	newVersionAvailable      bool
+	version                  *types.SpecificVersion
+	newVersion               mo.Option[*types.SpecificVersion]
+	runningJobType           mo.Option[types.AsyncJobType]
 }
 
 func NewLocalFSM(
@@ -26,23 +27,25 @@ func NewLocalFSM(
 	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
 	applicationDeployed bool,
-	newVersionAvailable bool,
+	nonActiveVersionsPresent bool,
+	newVersionAvailable bool, // TODO remove this and derive from newVersion
 	version *types.SpecificVersion,
 	newVersion mo.Option[*types.SpecificVersion],
 	runningJobType mo.Option[types.AsyncJobType],
-) LocalFSM {
+) *LocalFSM {
 	recoverStrategy := &application.Spec.RecoverStrategy
-	return LocalFSM{
-		application,
-		recoverStrategy,
-		config,
-		jobFactory,
-		applicationPresent,
-		applicationDeployed,
-		newVersionAvailable,
-		version,
-		newVersion,
-		runningJobType,
+	return &LocalFSM{
+		application:              application,
+		recoverStrategy:          recoverStrategy,
+		config:                   config,
+		jobFactory:               jobFactory,
+		applicationPresent:       applicationPresent,
+		applicationDeployed:      applicationDeployed,
+		nonActiveVersionsPresent: nonActiveVersionsPresent,
+		newVersionAvailable:      newVersionAvailable,
+		version:                  version,
+		newVersion:               newVersion,
+		runningJobType:           runningJobType,
 	}
 }
 
@@ -53,7 +56,7 @@ func (g *LocalFSM) NextState() types.NextStateResult {
 
 	undeployOldVersion := g.applicationPresent && g.newVersionAvailable
 
-	if !placementsContainZone && g.applicationPresent || undeployOldVersion {
+	if !placementsContainZone && g.applicationPresent || g.nonActiveVersionsPresent || undeployOldVersion {
 		return g.handleUndeploy()
 	}
 

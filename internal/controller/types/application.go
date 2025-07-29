@@ -43,6 +43,7 @@ type GlobalApplication interface {
 	IsDeployed() bool
 	IsPresent() bool
 	IsVersionChanged() bool
+	NonActiveVersionsPresent() bool
 	HasZoneStatus() bool
 	DeriveNewStatus(jobConditions JobApplicationCondition, jobFactory AsyncJobFactory) StatusResult
 }
