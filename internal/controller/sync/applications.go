@@ -137,32 +137,6 @@ func (m *applications) getOrRenderAppVersion(
 	return cachedApp, nil
 }
 
-// func (m *applications) Sync(ctx context.Context, application *v1.AnyApplication) (*types.SyncResult, error) {
-// 	app, err := m.getOrRenderApp(application)
-// 	if err != nil {
-// 		return types.NewSyncResult(), err
-// 	}
-// 	return m.sync(ctx, app)
-// }
-
-// func (m *applications) getOrRenderApp(application *v1.AnyApplication) (*cachedApp, error) {
-// 	appKey := m.getApplicationKey(application)
-// 	instances := m.getOrCreateInstances(appKey)
-
-// 	var cached *cachedApp
-// 	if instances.IsEmpty() {
-// 		newApp, err := m.populateInstances(application, instances)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		cached = newApp
-// 	} else {
-// 		// cached = instances.GetCurrent()
-// 	}
-
-// 	return cached, nil
-// }
-
 func (m *applications) getOrCreateInstances(appKey string) *cachedInstances {
 	instances, exists := m.appCache.Load(appKey)
 	if !exists {
@@ -184,32 +158,6 @@ func (m *applications) buildInstanceKey(application *v1.AnyApplication, chartKey
 		},
 	}
 }
-
-// func (m *applications) populateInstances(application *v1.AnyApplication, instances *cachedInstances) (*cachedApp, error) {
-
-// 	helmSelector := application.Spec.Source.HelmSelector
-
-// 	chartVersion, err := types.NewChartVersion(helmSelector.Version)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	chartKey, err := m.charts.AddAndGetLatest(helmSelector.Chart, helmSelector.Repository, chartVersion)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	instanceKey := m.buildInstanceKey(application, chartKey)
-
-// 	cachedApp, err := m.render(application, &instanceKey)
-// 	if err != nil {
-// 		m.log.Error(err, "Failed to render application", "application", application.Name)
-// 		return nil, err
-// 	}
-
-// 	instances.Put(&instanceKey, cachedApp)
-// 	return cachedApp, nil
-// }
 
 func (m *applications) render(application *v1.AnyApplication, configuration *instanceKey) (*cachedApp, error) {
 
@@ -295,16 +243,6 @@ func (m *applications) isManagedFunc(instanceId string) IsManagedResourceFunc {
 		return r.Resource.GetLabels()[LABEL_INSTANCE_ID] == instanceId
 	}
 }
-
-// func (m *applications) GetAggregatedStatus(application *v1.AnyApplication) *types.AggregatedStatus {
-// 	currentVersion := m.GetTargetVersion(application)
-
-// 	app, err := m.getOrRenderAppVersion(application, currentVersion)
-// 	if err != nil {
-// 		m.log.Error(err, "Failed to get or render application")
-// 	}
-// 	return m.getAggregatedStatus(app)
-// }
 
 func (m *applications) GetAggregatedStatusVersion(
 	application *v1.AnyApplication,
@@ -462,23 +400,6 @@ func (m *applications) LoadApplication(application *v1.AnyApplication) (types.Gl
 	return globalApplication, nil
 }
 
-// func (m *applications) loadLocalApplication(
-// 	application *v1.AnyApplication, version *types.SpecificVersion) (mo.Option[local.LocalApplication], error) {
-// 	availableResources := m.findAvailableApplicationResourcesByVersion(application, version)
-
-// 	app, err := m.getOrRenderApp(application)
-// 	if err != nil {
-// 		return mo.None[local.LocalApplication](), err
-// 	}
-// 	expectedResources := app.renderedChart.Resources
-// 	localApplication, err := local.NewFromUnstructured(version,
-// 		availableResources, expectedResources, m.config, m.clock, m.log)
-// 	if err != nil {
-// 		return mo.None[local.LocalApplication](), errors.Wrap(err, "Fail to create local application")
-// 	}
-// 	return localApplication, nil
-// }
-
 func (m *applications) loadLocalApplicationVersions(
 	application *v1.AnyApplication,
 ) (map[types.SpecificVersion]*local.LocalApplication, error) {
@@ -517,28 +438,6 @@ func (m *applications) loadLocalApplicationVersions(
 	}
 	return localApplications, nil
 }
-
-// func (m *applications) findAvailableApplicationResourcesByVersion(
-// 	application *v1.AnyApplication,
-// 	version *types.SpecificVersion,
-// ) []*unstructured.Unstructured {
-// 	// TODO merge with findAvailableApplicationResources
-// 	instanceId := m.GetInstanceId(application)
-
-// 	cachedResources := m.clusterCache.FindResources("", func(r *cache.Resource) bool {
-// 		if r.Resource == nil {
-// 			return false
-// 		}
-// 		labels := r.Resource.GetLabels()
-// 		if labels == nil {
-// 			return false
-// 		}
-// 		return labels[LABEL_INSTANCE_ID] == instanceId && labels[LABEL_CHART_VERSION] == version.ToString()
-// 	})
-
-// 	resources := lo.Values(cachedResources)
-// 	return lo.Map(resources, func(r *cache.Resource, index int) *unstructured.Unstructured { return r.Resource })
-// }
 
 func (m *applications) findAvailableApplicationResources(application *v1.AnyApplication) []*unstructured.Unstructured {
 	instanceId := m.GetInstanceId(application)

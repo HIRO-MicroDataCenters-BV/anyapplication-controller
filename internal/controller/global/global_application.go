@@ -118,7 +118,8 @@ func (g *globalApplication) DeriveNewStatus(
 		status = mo.Some(*current)
 	}
 	return types.StatusResult{
-		Status: status, Jobs: nextJobs,
+		Status: status,
+		Jobs:   nextJobs,
 	}
 }
 

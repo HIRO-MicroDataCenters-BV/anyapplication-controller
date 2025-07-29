@@ -95,7 +95,12 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 			}
 
 			if !attemptsExhausted {
-				deployJob := g.jobFactory.CreateDeployJob(g.application, g.version)
+				version := g.version
+				newVersion, present := g.newVersion.Get()
+				if g.newVersionAvailable && present {
+					version = newVersion
+				}
+				deployJob := g.jobFactory.CreateDeployJob(g.application, version)
 				deployJobOpt := mo.Some(deployJob)
 				deployCondition := deployJob.GetStatus()
 				deployConditionOpt := mo.EmptyableToOption(&deployCondition)
@@ -104,6 +109,7 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 					ConditionsToAdd:    deployConditionOpt,
 					ConditionsToRemove: conditionsToRemove,
 					Jobs:               types.NextJobs{JobsToAdd: deployJobOpt},
+					NewVersion:         g.newVersion,
 				}
 			}
 		}
