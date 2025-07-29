@@ -78,6 +78,10 @@ func (v *SpecificVersion) IsNewerThan(other *SpecificVersion) bool {
 	return v.version.GreaterThan(&other.version)
 }
 
+func (v *SpecificVersion) Equal(other *SpecificVersion) bool {
+	return v.version.Equal(&other.version)
+}
+
 func (v *SpecificVersion) UnmarshalJSON(data []byte) error {
 	var versionString string
 	if err := json.Unmarshal(data, &versionString); err != nil {

@@ -384,7 +384,7 @@ func (m *applications) LoadApplication(application *v1.AnyApplication) (types.Gl
 		return nil, errors.Wrap(err, "Failed to determine target version")
 	}
 	activeVersion, exists := activeVersionOpt.Get()
-	if !exists || targetVersion.IsNewerThan(activeVersion) {
+	if !exists || !targetVersion.Equal(activeVersion) {
 		newVersion = mo.Some(targetVersion)
 	}
 
