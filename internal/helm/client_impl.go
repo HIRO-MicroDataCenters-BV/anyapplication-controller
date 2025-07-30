@@ -40,7 +40,11 @@ type HelmClientImpl struct {
 func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
 
 	if options.ClientId == "" {
-		options.ClientId = RandClient()
+		clientId, err := RandClient()
+		if err != nil {
+			return nil, err
+		}
+		options.ClientId = clientId
 	}
 
 	opts := helmclient.RestConfClientOptions{

@@ -1,6 +1,8 @@
 package global
 
 import (
+	"fmt"
+
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
@@ -117,6 +119,14 @@ func (g *globalApplication) DeriveNewStatus(
 	stateUpdated = updateJobConditions(current, jobConditions, g.config.ZoneId) || stateUpdated
 
 	// Update state
+	newVersion, err := g.deriveTargetVersion()
+	if err != nil {
+		g.log.Error(err, "Failed to derive target version for global application", "application", g.application.Name)
+		return types.StatusResult{
+			Status: mo.None[v1.AnyApplicationStatus](),
+			Jobs:   types.NextJobs{},
+		}
+	}
 	globalStateUpdated, nextJobs := updateState(
 		g.application,
 		g.config,
@@ -124,7 +134,7 @@ func (g *globalApplication) DeriveNewStatus(
 		g.IsPresent(),
 		g.IsDeployed(),
 		g.NonActiveVersionsPresent(),
-		g.deriveTargetVersion(),
+		newVersion,
 		g.newVersion,
 		runningJobType,
 	)
@@ -150,14 +160,14 @@ func (g *globalApplication) getActiveApplication() mo.Option[*local.LocalApplica
 	return mo.None[*local.LocalApplication]()
 }
 
-func (g *globalApplication) deriveTargetVersion() *types.SpecificVersion {
+func (g *globalApplication) deriveTargetVersion() (*types.SpecificVersion, error) {
 	if version, found := g.newVersion.Get(); found {
-		return version
+		return version, nil
 	}
 	if version, found := g.activeVersion.Get(); found {
-		return version
+		return version, nil
 	}
-	panic("No active or new version found for global application: " + g.application.Name)
+	return nil, fmt.Errorf("no active or new version found for global application: %s", g.application.Name)
 }
 
 func updateState(

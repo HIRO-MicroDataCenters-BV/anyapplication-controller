@@ -1,7 +1,7 @@
 package helm
 
 import (
-	"math/rand"
+	"crypto/rand"
 
 	semver "github.com/Masterminds/semver/v3"
 )
@@ -13,12 +13,19 @@ type HelmClient interface {
 	Template(args *TemplateArgs) (string, error)
 }
 
-const letterBytes = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-func RandClient() string {
+func RandClient() (string, error) {
 	b := make([]byte, 8)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+
+	randomBytes := make([]byte, len(b))
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		return "", err
 	}
-	return string(b)
+
+	for i := range b {
+		b[i] = charset[int(randomBytes[i])%len(charset)]
+	}
+	return string(b), nil
 }

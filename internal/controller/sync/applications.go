@@ -405,7 +405,7 @@ func (m *applications) loadLocalApplicationVersions(
 ) (map[types.SpecificVersion]*local.LocalApplication, error) {
 
 	availableResources := m.findAvailableApplicationResources(application)
-	availableResourcesByVersion, err := splitResourcesByVersion(availableResources)
+	availableResourcesByVersion, err := splitResourcesByVersion(availableResources, m.log)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to split resources by version")
 	}
@@ -459,7 +459,7 @@ func (m *applications) GetAllPresentVersions(
 ) (mapset.Set[*types.SpecificVersion], error) {
 
 	availableResources := m.findAvailableApplicationResources(application)
-	availableResourcesByVersion, err := splitResourcesByVersion(availableResources)
+	availableResourcesByVersion, err := splitResourcesByVersion(availableResources, m.log)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to split resources by version")
 	}
@@ -552,7 +552,7 @@ func (c *instanceKey) Revision() (string, error) {
 	return hex.EncodeToString(hash[:]), nil
 }
 
-func splitResourcesByVersion(resources []*unstructured.Unstructured) (map[string][]*unstructured.Unstructured, error) {
+func splitResourcesByVersion(resources []*unstructured.Unstructured, log logr.Logger) (map[string][]*unstructured.Unstructured, error) {
 	resourcesByVersion := make(map[string][]*unstructured.Unstructured)
 
 	for _, res := range resources {
@@ -561,7 +561,8 @@ func splitResourcesByVersion(resources []*unstructured.Unstructured) (map[string
 			return nil, errors.Wrapf(err, "Failed to get version for resource %s", res.GetName())
 		}
 		if !found {
-			return nil, fmt.Errorf("resource %s does not have version label", res.GetName())
+			log.Info(fmt.Sprintf("WARN: resource %s does not have version label; skipping", res.GetName()))
+			continue
 		}
 		resourcesByVersion[version] = append(resourcesByVersion[version], res)
 	}
