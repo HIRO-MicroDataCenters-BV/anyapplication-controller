@@ -15,7 +15,6 @@ type LocalFSM struct {
 	applicationPresent       bool
 	applicationDeployed      bool
 	nonActiveVersionsPresent bool
-	newVersionAvailable      bool
 	version                  *types.SpecificVersion
 	newVersion               mo.Option[*types.SpecificVersion]
 	runningJobType           mo.Option[types.AsyncJobType]
@@ -28,7 +27,6 @@ func NewLocalFSM(
 	applicationPresent bool,
 	applicationDeployed bool,
 	nonActiveVersionsPresent bool,
-	newVersionAvailable bool, // TODO remove this and derive from newVersion
 	version *types.SpecificVersion,
 	newVersion mo.Option[*types.SpecificVersion],
 	runningJobType mo.Option[types.AsyncJobType],
@@ -42,7 +40,6 @@ func NewLocalFSM(
 		applicationPresent:       applicationPresent,
 		applicationDeployed:      applicationDeployed,
 		nonActiveVersionsPresent: nonActiveVersionsPresent,
-		newVersionAvailable:      newVersionAvailable,
 		version:                  version,
 		newVersion:               newVersion,
 		runningJobType:           runningJobType,
@@ -54,7 +51,7 @@ func (g *LocalFSM) NextState() types.NextStateResult {
 
 	placementsContainZone := placementsContainZone(status, g.config.ZoneId)
 
-	undeployOldVersion := g.applicationPresent && g.newVersionAvailable
+	undeployOldVersion := g.applicationPresent && g.newVersion.IsPresent()
 
 	if !placementsContainZone && g.applicationPresent || g.nonActiveVersionsPresent || undeployOldVersion {
 		return g.handleUndeploy()
@@ -88,7 +85,7 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.LocalConditionType, g.config.ZoneId)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymentConditionType, g.config.ZoneId)
 
-	if !g.applicationDeployed || g.newVersionAvailable {
+	if !g.applicationDeployed || g.newVersion.IsPresent() {
 		if !g.isRunning(types.AsyncJobTypeDeploy) {
 			deploymentCondition, found := status.FindCondition(v1.DeploymentConditionType)
 			attemptsExhausted := false
@@ -100,7 +97,7 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 			if !attemptsExhausted {
 				version := g.version
 				newVersion, present := g.newVersion.Get()
-				if g.newVersionAvailable && present {
+				if g.newVersion.IsPresent() && present {
 					version = newVersion
 				}
 				deployJob := g.jobFactory.CreateDeployJob(g.application, version)
@@ -144,7 +141,7 @@ func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 
 		if g.applicationPresent && !attemptsExhausted {
 			newVersion := mo.None[*types.SpecificVersion]()
-			if g.newVersionAvailable {
+			if g.newVersion.IsPresent() {
 				newVersion = mo.Some(g.version)
 			}
 			undeployJob := g.jobFactory.CreateUndeployJob(g.application)
