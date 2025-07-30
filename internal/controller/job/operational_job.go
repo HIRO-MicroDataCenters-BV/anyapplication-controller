@@ -84,10 +84,10 @@ func (job *LocalOperationJob) runInner(context types.AsyncJobContext) bool {
 
 	currentVersion, exists := applications.GetTargetVersion(job.application).Get()
 
-	if !exists || newTargetVersion.IsNewerThan(currentVersion) {
+	if !exists || !newTargetVersion.Equal(currentVersion) {
 		job.Fail(context,
 			health.HealthStatusProgressing,
-			fmt.Sprintf("Newer version '%s' is available", newTargetVersion.ToString()),
+			fmt.Sprintf("New version '%s' is available", newTargetVersion.ToString()),
 			"SyncRequired",
 		)
 		return true

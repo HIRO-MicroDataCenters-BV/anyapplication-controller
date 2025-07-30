@@ -172,11 +172,11 @@ var _ = Describe("LocalOperationJobUnitTests", func() {
 
 		fakeClock.Advance(1 * time.Second)
 
-		waitForJobStatus(localJob, string(health.HealthStatusProgressing))
+		waitForJobMsg(localJob, "Operation Failure: New version '2.0.1' is available")
 
 		status := localJob.GetStatus()
 		Expect(status.Status).To(Equal(string(health.HealthStatusProgressing)))
-		Expect(status.Msg).To(Equal("Operation Failure: Newer version '2.0.1' is available"))
+		Expect(status.Msg).To(Equal("Operation Failure: New version '2.0.1' is available"))
 
 	})
 
