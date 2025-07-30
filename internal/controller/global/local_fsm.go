@@ -8,13 +8,16 @@ import (
 )
 
 type LocalFSM struct {
-	application         *v1.AnyApplication
-	recoverStrategy     *v1.RecoverStrategySpec
-	config              *config.ApplicationRuntimeConfig
-	jobFactory          types.AsyncJobFactory
-	applicationPresent  bool
-	applicationDeployed bool
-	runningJobType      mo.Option[types.AsyncJobType]
+	application              *v1.AnyApplication
+	recoverStrategy          *v1.RecoverStrategySpec
+	config                   *config.ApplicationRuntimeConfig
+	jobFactory               types.AsyncJobFactory
+	applicationPresent       bool
+	applicationDeployed      bool
+	nonActiveVersionsPresent bool
+	version                  *types.SpecificVersion
+	newVersion               mo.Option[*types.SpecificVersion]
+	runningJobType           mo.Option[types.AsyncJobType]
 }
 
 func NewLocalFSM(
@@ -23,17 +26,23 @@ func NewLocalFSM(
 	jobFactory types.AsyncJobFactory,
 	applicationPresent bool,
 	applicationDeployed bool,
+	nonActiveVersionsPresent bool,
+	version *types.SpecificVersion,
+	newVersion mo.Option[*types.SpecificVersion],
 	runningJobType mo.Option[types.AsyncJobType],
-) LocalFSM {
+) *LocalFSM {
 	recoverStrategy := &application.Spec.RecoverStrategy
-	return LocalFSM{
-		application,
-		recoverStrategy,
-		config,
-		jobFactory,
-		applicationPresent,
-		applicationDeployed,
-		runningJobType,
+	return &LocalFSM{
+		application:              application,
+		recoverStrategy:          recoverStrategy,
+		config:                   config,
+		jobFactory:               jobFactory,
+		applicationPresent:       applicationPresent,
+		applicationDeployed:      applicationDeployed,
+		nonActiveVersionsPresent: nonActiveVersionsPresent,
+		version:                  version,
+		newVersion:               newVersion,
+		runningJobType:           runningJobType,
 	}
 }
 
@@ -42,7 +51,9 @@ func (g *LocalFSM) NextState() types.NextStateResult {
 
 	placementsContainZone := placementsContainZone(status, g.config.ZoneId)
 
-	if !placementsContainZone && g.applicationPresent {
+	undeployOldVersion := g.applicationPresent && g.newVersion.IsPresent()
+
+	if !placementsContainZone && g.applicationPresent || g.nonActiveVersionsPresent || undeployOldVersion {
 		return g.handleUndeploy()
 	}
 
@@ -74,7 +85,7 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.LocalConditionType, g.config.ZoneId)
 	conditionsToRemove = addConditionToRemoveList(conditionsToRemove, status.Conditions, v1.UndeploymentConditionType, g.config.ZoneId)
 
-	if !g.applicationDeployed {
+	if !g.applicationDeployed || g.newVersion.IsPresent() {
 		if !g.isRunning(types.AsyncJobTypeDeploy) {
 			deploymentCondition, found := status.FindCondition(v1.DeploymentConditionType)
 			attemptsExhausted := false
@@ -84,8 +95,12 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 			}
 
 			if !attemptsExhausted {
-
-				deployJob := g.jobFactory.CreateDeployJob(g.application)
+				version := g.version
+				newVersion, present := g.newVersion.Get()
+				if g.newVersion.IsPresent() && present {
+					version = newVersion
+				}
+				deployJob := g.jobFactory.CreateDeployJob(g.application, version)
 				deployJobOpt := mo.Some(deployJob)
 				deployCondition := deployJob.GetStatus()
 				deployConditionOpt := mo.EmptyableToOption(&deployCondition)
@@ -94,6 +109,7 @@ func (g *LocalFSM) handleDeploy() types.NextStateResult {
 					ConditionsToAdd:    deployConditionOpt,
 					ConditionsToRemove: conditionsToRemove,
 					Jobs:               types.NextJobs{JobsToAdd: deployJobOpt},
+					NewVersion:         g.newVersion,
 				}
 			}
 		}
@@ -124,6 +140,10 @@ func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 	if !g.isRunning(types.AsyncJobTypeUndeploy) {
 
 		if g.applicationPresent && !attemptsExhausted {
+			newVersion := mo.None[*types.SpecificVersion]()
+			if g.newVersion.IsPresent() {
+				newVersion = mo.Some(g.version)
+			}
 			undeployJob := g.jobFactory.CreateUndeployJob(g.application)
 			undeployJobOpt := mo.Some(undeployJob)
 			undeployCondition := undeployJob.GetStatus()
@@ -133,6 +153,7 @@ func (g *LocalFSM) handleUndeploy() types.NextStateResult {
 				ConditionsToAdd:    undeployConditionOpt,
 				ConditionsToRemove: conditionsToRemove,
 				Jobs:               types.NextJobs{JobsToAdd: undeployJobOpt},
+				NewVersion:         newVersion,
 			}
 		}
 	}

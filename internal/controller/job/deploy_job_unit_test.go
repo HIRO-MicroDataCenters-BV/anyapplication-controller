@@ -30,11 +30,13 @@ var _ = Describe("DeployJobUnitests", func() {
 		fakeClock     *clock.FakeClock
 		jobContext    types.AsyncJobContext
 		runtimeConfig config.ApplicationRuntimeConfig
+		version       *types.SpecificVersion
 	)
 
 	BeforeEach(func() {
 		scheme = runtime.NewScheme()
 		_ = v1.AddToScheme(scheme)
+		version, _ = types.NewSpecificVersion("2.0.1")
 
 		fakeClock = clock.NewFakeClock()
 		application = &v1.AnyApplication{
@@ -79,11 +81,12 @@ var _ = Describe("DeployJobUnitests", func() {
 
 		clusterCache, _ := fixture.NewTestClusterCacheWithOptions([]cache.UpdateSettingsFunc{})
 		fakeCharts := ctrl_sync.NewFakeCharts()
-		applications := ctrl_sync.NewApplications(kubeClient, helmClient, fakeCharts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+		applications := ctrl_sync.NewApplications(kubeClient, helmClient,
+			fakeCharts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
 		jobContext = NewAsyncJobContext(helmClient, kubeClient, ctx, applications)
 
-		deployJob = NewDeployJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
+		deployJob = NewDeployJob(application, version, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
 	})
 
 	It("Deployment should retry and fail after several attempts", func() {

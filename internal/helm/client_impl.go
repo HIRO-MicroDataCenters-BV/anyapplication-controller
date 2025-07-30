@@ -19,11 +19,17 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+const (
+	defaultCachePath            = "/tmp/.helmcache"
+	defaultRepositoryConfigPath = "/tmp/.helmrepo"
+)
+
 type HelmClientOptions struct {
 	RestConfig  *rest.Config
 	Debug       bool
 	Linting     bool
 	KubeVersion *chartutil.KubeVersion
+	ClientId    string
 }
 
 type HelmClientImpl struct {
@@ -32,11 +38,23 @@ type HelmClientImpl struct {
 }
 
 func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
+
+	if options.ClientId == "" {
+		clientId, err := RandClient()
+		if err != nil {
+			return nil, err
+		}
+		options.ClientId = clientId
+	}
+
 	opts := helmclient.RestConfClientOptions{
 		Options: &helmclient.Options{
-			Namespace: "default",
-			Debug:     options.Debug,
-			Linting:   options.Linting,
+			Namespace:        "default",
+			Debug:            options.Debug,
+			DebugLog:         func(format string, v ...interface{}) {},
+			Linting:          options.Linting,
+			RepositoryConfig: fmt.Sprintf("%s-%s", defaultRepositoryConfigPath, options.ClientId),
+			RepositoryCache:  fmt.Sprintf("%s-%s", defaultCachePath, options.ClientId),
 		},
 		RestConfig: options.RestConfig,
 	}
@@ -104,6 +122,7 @@ func (h *HelmClientImpl) FetchVersions(repoURL string, chartName string) ([]*sem
 	if err != nil {
 		return nil, err
 	}
+	chartRepo.CachePath = h.client.GetSettings().RepositoryCache
 
 	indexFile, err := chartRepo.DownloadIndexFile()
 	if err != nil {
@@ -136,7 +155,6 @@ func (h *HelmClientImpl) FetchVersions(repoURL string, chartName string) ([]*sem
 func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 
 	repoName, err := h.AddOrUpdateChartRepo(args.RepoUrl)
-
 	if err != nil {
 		return "", err
 	}
@@ -250,32 +268,3 @@ func AddLabelsToManifest(manifest string, newLabels map[string]string) (string, 
 
 	return strings.Join(output, "---\n"), nil
 }
-
-// func (c *helmclient.HelmClient) AddOrUpdateChartRepo(entry repo.Entry) error {
-// 	chartRepo, err := repo.NewChartRepository(&entry, c.Providers)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	chartRepo.CachePath = c.Settings.RepositoryCache
-
-// 	if c.storage.Has(entry.Name) {
-// 		c.DebugLog("WARNING: repository name %q already exists", entry.Name)
-// 		return nil
-// 	}
-
-// 	if !registry.IsOCI(entry.URL) {
-// 		_, err = chartRepo.DownloadIndexFile()
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-
-// 	c.storage.Update(&entry)
-// 	err = c.storage.WriteFile(c.Settings.RepositoryConfig, 0o644)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	return nil
-// }

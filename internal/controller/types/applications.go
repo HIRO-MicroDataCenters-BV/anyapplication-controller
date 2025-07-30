@@ -5,11 +5,13 @@ import (
 
 	"github.com/argoproj/gitops-engine/pkg/health"
 	"github.com/argoproj/gitops-engine/pkg/sync/common"
+	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/samber/mo"
 	v1 "hiro.io/anyapplication/api/v1"
 )
 
 type SyncResult struct {
-	Status                       *health.HealthStatus
+	AggregatedStatus             *AggregatedStatus
 	ApplicationResourcesDeployed bool
 	ApplicationResourcesPresent  bool
 	OperationPhaseStats          map[common.OperationPhase]int
@@ -18,16 +20,9 @@ type SyncResult struct {
 	Total                        int
 }
 
-type DeleteResult struct {
-	Total                       int
-	Deleted                     int
-	DeleteFailed                int
-	ApplicationResourcesPresent bool
-}
-
 func NewSyncResult() *SyncResult {
 	return &SyncResult{
-		Status:                       &health.HealthStatus{},
+		AggregatedStatus:             &AggregatedStatus{},
 		OperationPhaseStats:          make(map[common.OperationPhase]int),
 		SyncPhaseStats:               make(map[common.SyncPhase]int),
 		ResultCodeStats:              make(map[common.ResultCode]int),
@@ -43,12 +38,40 @@ func (s *SyncResult) AddResult(r *common.ResourceSyncResult) {
 	s.ResultCodeStats[r.Status] += 1
 }
 
+type DeleteResult struct {
+	Version                     *SpecificVersion
+	Total                       int
+	Deleted                     int
+	DeleteFailed                int
+	ApplicationResourcesPresent bool
+}
+
+func IsApplicationResourcesPresent(results []*DeleteResult) bool {
+	for _, result := range results {
+		if result.ApplicationResourcesPresent {
+			return true
+		}
+	}
+	return false
+}
+
+type AggregatedStatus struct {
+	HealthStatus *health.HealthStatus
+	ChartVersion *SpecificVersion
+}
+
 type Applications interface {
-	GetAggregatedStatus(application *v1.AnyApplication) *health.HealthStatus
-	Sync(ctx context.Context, application *v1.AnyApplication) (*SyncResult, error)
-	Delete(ctx context.Context, application *v1.AnyApplication) (*DeleteResult, error)
+	GetAllPresentVersions(application *v1.AnyApplication) (mapset.Set[*SpecificVersion], error)
+	GetTargetVersion(application *v1.AnyApplication) mo.Option[*SpecificVersion]
+	DetermineTargetVersion(application *v1.AnyApplication) (*SpecificVersion, error)
+
 	GetInstanceId(application *v1.AnyApplication) string
 	LoadApplication(application *v1.AnyApplication) (GlobalApplication, error)
+
+	GetAggregatedStatusVersion(application *v1.AnyApplication, version *SpecificVersion) *AggregatedStatus
+	SyncVersion(ctx context.Context, application *v1.AnyApplication, version *SpecificVersion) (*SyncResult, error)
+	DeleteVersion(ctx context.Context, application *v1.AnyApplication, version *SpecificVersion) (*DeleteResult, error)
+	Cleanup(ctx context.Context, application *v1.AnyApplication) ([]*DeleteResult, error)
 }
 
 type ResourceInfo struct {

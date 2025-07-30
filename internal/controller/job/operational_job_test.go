@@ -16,11 +16,13 @@ var _ = Describe("LocalOperationJob", func() {
 		operationJob *LocalOperationJob
 		application  *v1.AnyApplication
 		scheme       *runtime.Scheme
+		version      *types.SpecificVersion
 	)
 
 	BeforeEach(func() {
 		scheme = runtime.NewScheme()
 		_ = v1.AddToScheme(scheme)
+		version, _ = types.NewSpecificVersion("2.0.1")
 
 		application = &v1.AnyApplication{
 			ObjectMeta: metav1.ObjectMeta{
@@ -74,7 +76,8 @@ var _ = Describe("LocalOperationJob", func() {
 	})
 
 	It("should sync periodically and report status", func() {
-		deployJob := NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
+
+		deployJob := NewDeployJob(application, version, &runtimeConfig, theClock, logf.Log, &fakeEvents)
 		deployJobContext, cancelDeploy := jobContext.WithCancel()
 
 		go deployJob.Run(deployJobContext)

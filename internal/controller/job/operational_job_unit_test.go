@@ -1,6 +1,7 @@
 package job
 
 import (
+	"context"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/cache"
@@ -11,7 +12,7 @@ import (
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
 	"hiro.io/anyapplication/internal/controller/fixture"
-	ctrl_sync "hiro.io/anyapplication/internal/controller/sync"
+	"hiro.io/anyapplication/internal/controller/sync"
 	"hiro.io/anyapplication/internal/controller/types"
 	"hiro.io/anyapplication/internal/helm"
 	corev1 "k8s.io/api/core/v1"
@@ -78,8 +79,9 @@ var _ = Describe("LocalOperationJobUnitTests", func() {
 				Name:      "test-pod",
 				Namespace: "default",
 				Labels: map[string]string{
-					"dcp.hiro.io/instance-id": "nginx-ingress-2.0.1-test-app",
-					"dcp.hiro.io/managed-by":  "dcp",
+					sync.LABEL_INSTANCE_ID:   "default-test-app",
+					sync.LABEL_CHART_VERSION: "2.0.0",
+					sync.LABEL_MANAGED_BY:    "dcp",
 				},
 				CreationTimestamp: metav1.NewTime(time.Now()),
 				UID:               "test-pod-uid",
@@ -127,22 +129,24 @@ var _ = Describe("LocalOperationJobUnitTests", func() {
 
 		updateFuncs = []cache.UpdateSettingsFunc{
 			cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
-				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()["dcp.hiro.io/managed-by"]}
+				info = &types.ResourceInfo{ManagedByMark: un.GetLabels()[sync.LABEL_MANAGED_BY]}
 				cacheManifest = true
 				return
 			}),
 		}
 
 		clusterCache, _ := fixture.NewTestClusterCacheWithOptions(updateFuncs)
-		fakeCharts := ctrl_sync.NewFakeCharts()
-		applications := ctrl_sync.NewApplications(kubeClient, fakeHelmClient, fakeCharts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
+		charts := sync.NewCharts(context.TODO(), helmClient, &sync.ChartsOptions{SyncPeriod: 60 * time.Second}, logf.Log)
+		applications := sync.NewApplications(kubeClient, helmClient, charts, clusterCache, fakeClock, &runtimeConfig, gitOpsEngine, logf.Log)
 
-		jobContext = NewAsyncJobContext(fakeHelmClient, kubeClient, ctx, applications)
+		jobContext = NewAsyncJobContext(helmClient, kubeClient, ctx, applications)
 
 		localJob = NewLocalOperationJob(application, &runtimeConfig, fakeClock, logf.Log, &fakeEvents)
 	})
 
 	It("LocalOperationJob should exit with failure if resources are missing", func() {
+		zoneStatus := application.Status.GetOrCreateStatusFor("zone")
+		zoneStatus.ChartVersion = "2.0.1"
 
 		jobContext, cancel := jobContext.WithCancel()
 		defer cancel()
@@ -156,6 +160,23 @@ var _ = Describe("LocalOperationJobUnitTests", func() {
 		status := localJob.GetStatus()
 		Expect(status.Status).To(Equal(string(health.HealthStatusMissing)))
 		Expect(status.Msg).To(Equal("Operation Failure: Application resources are missing"))
+
+	})
+
+	It("LocalOperationJob should exit with failure if new version is available", func() {
+
+		jobContext, cancel := jobContext.WithCancel()
+		defer cancel()
+
+		go localJob.Run(jobContext)
+
+		fakeClock.Advance(1 * time.Second)
+
+		waitForJobMsg(localJob, "Operation Failure: New version '2.0.1' is available")
+
+		status := localJob.GetStatus()
+		Expect(status.Status).To(Equal(string(health.HealthStatusProgressing)))
+		Expect(status.Msg).To(Equal("Operation Failure: New version '2.0.1' is available"))
 
 	})
 

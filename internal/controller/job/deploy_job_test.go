@@ -15,11 +15,13 @@ var _ = Describe("DeployJob", func() {
 		deployJob   *DeployJob
 		application *v1.AnyApplication
 		scheme      *runtime.Scheme
+		version     *types.SpecificVersion
 	)
 
 	BeforeEach(func() {
 		scheme = runtime.NewScheme()
 		_ = v1.AddToScheme(scheme)
+		version, _ = types.NewSpecificVersion("2.0.1")
 
 		application = &v1.AnyApplication{
 			ObjectMeta: metav1.ObjectMeta{
@@ -47,7 +49,7 @@ var _ = Describe("DeployJob", func() {
 			},
 		}
 
-		deployJob = NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
+		deployJob = NewDeployJob(application, version, &runtimeConfig, theClock, logf.Log, &fakeEvents)
 	})
 
 	It("should return initial status", func() {
@@ -99,11 +101,12 @@ var _ = Describe("DeployJob", func() {
 			Chart:      "test-chart",
 			Version:    "1.0.0",
 		}
+		version, _ := types.NewSpecificVersion("1.0.0")
 		jobContext = NewAsyncJobContext(helmClient, k8sClient, ctx, applications)
 		jobContext, cancel := jobContext.WithCancel()
 		defer cancel()
 
-		deployJob = NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
+		deployJob = NewDeployJob(application, version, &runtimeConfig, theClock, logf.Log, &fakeEvents)
 
 		go deployJob.Run(jobContext)
 
@@ -118,7 +121,7 @@ var _ = Describe("DeployJob", func() {
 				ZoneId:             "zone",
 				Status:             string(v1.DeploymentStatusFailure),
 				LastTransitionTime: metav1.Time{},
-				Msg:                "Deployment failure: Fail to render application: Helm template failure: Failed to add or update chart repo: could not find protocol handler for: ",
+				Msg:                "Deployment failure: Fail to render chart: Helm template failure: Failed to add or update chart repo: could not find protocol handler for: ",
 				Reason:             "SyncError",
 			},
 		))

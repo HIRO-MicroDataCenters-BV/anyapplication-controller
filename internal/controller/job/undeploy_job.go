@@ -86,20 +86,45 @@ func (job *UndeployJob) Run(jobContext types.AsyncJobContext) {
 func (job *UndeployJob) runInner(jobContext types.AsyncJobContext) bool {
 
 	applications := jobContext.GetApplications()
-	result, err := applications.Delete(jobContext.GetGoContext(), job.application)
-
+	versions, err := applications.GetAllPresentVersions(job.application)
+	if err != nil {
+		return job.maybeRetry(jobContext, "SyncError", fmt.Sprintf("Undeployment failed: %s", err.Error()))
+	}
+	if versions.IsEmpty() {
+		job.Success(jobContext, "No versions found, undeployment is complete")
+		return true
+	}
+	results, err := applications.Cleanup(jobContext.GetGoContext(), job.application)
+	details := formatDeleteResultsMessage(results)
 	if err != nil {
 		return job.maybeRetry(jobContext, "SyncError", fmt.Sprintf("Undeployment failed: %s", err.Error()))
 	} else {
-		if !result.ApplicationResourcesPresent {
-			job.Success(jobContext)
+		applicationResourcesPresent := types.IsApplicationResourcesPresent(results)
+
+		if !applicationResourcesPresent {
+			job.Success(jobContext, details)
 			return true
 		}
 		if job.startTime.Add(job.runtimeConfig.DefaultUndeployTimeout).Before(job.clock.NowTime().Time) {
 			return job.maybeRetry(jobContext, "Timeout", "Undeployment timed out")
 		}
 	}
+	job.Progress(jobContext, details)
 	return false
+}
+
+func formatDeleteResultsMessage(results []*types.DeleteResult) string {
+	details := ""
+	for _, result := range results {
+		details += fmt.Sprintf(
+			"Version %s (Total=%d, Deleted=%d, DeleteFailed=%d). ",
+			result.Version.ToString(),
+			result.Total,
+			result.Deleted,
+			result.DeleteFailed,
+		)
+	}
+	return details
 }
 
 func (job *UndeployJob) maybeRetry(jobContext types.AsyncJobContext, reason string, failureMsg string) bool {
@@ -140,10 +165,17 @@ func (job *UndeployJob) Fail(jobContext types.AsyncJobContext, msg string, reaso
 	job.updateStatus(jobContext)
 }
 
-func (job *UndeployJob) Success(context types.AsyncJobContext) {
+func (job *UndeployJob) Success(context types.AsyncJobContext, details string) {
 
 	job.status = v1.UndeploymentStatusDone
-	job.msg = "Undeploy state changed to '" + string(job.status) + "'. "
+	job.msg = fmt.Sprintf("Undeploy state changed to '%s'.%s", job.status, details)
+	job.reason = ""
+
+	job.updateStatus(context)
+}
+
+func (job *UndeployJob) Progress(context types.AsyncJobContext, details string) {
+	job.msg = details
 	job.reason = ""
 
 	job.updateStatus(context)

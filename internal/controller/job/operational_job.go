@@ -1,6 +1,7 @@
 package job
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/health"
@@ -75,7 +76,25 @@ func (job *LocalOperationJob) Run(context types.AsyncJobContext) {
 func (job *LocalOperationJob) runInner(context types.AsyncJobContext) bool {
 	applications := context.GetApplications()
 
-	healthStatus := applications.GetAggregatedStatus(job.application)
+	newTargetVersion, err := applications.DetermineTargetVersion(job.application)
+	if err != nil {
+		job.Fail(context, health.HealthStatusDegraded, "Failed to determine target version: "+err.Error(), "TargetVersionUnavailable")
+		return true
+	}
+
+	currentVersion, exists := applications.GetTargetVersion(job.application).Get()
+
+	if !exists || !newTargetVersion.Equal(currentVersion) {
+		job.Fail(context,
+			health.HealthStatusProgressing,
+			fmt.Sprintf("New version '%s' is available", newTargetVersion.ToString()),
+			"SyncRequired",
+		)
+		return true
+	}
+
+	aggregatedStatus := applications.GetAggregatedStatusVersion(job.application, currentVersion)
+	healthStatus := aggregatedStatus.HealthStatus
 
 	job.status = healthStatus.Status
 	job.msg = healthStatus.Message

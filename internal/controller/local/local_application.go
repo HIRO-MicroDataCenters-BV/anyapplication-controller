@@ -7,6 +7,7 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/clock"
 	"hiro.io/anyapplication/internal/config"
+	"hiro.io/anyapplication/internal/controller/types"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -16,12 +17,12 @@ type LocalApplication struct {
 	config   *config.ApplicationRuntimeConfig
 	status   health.HealthStatusCode
 	messages []string
-	version  string
 	clock    clock.Clock
+	version  *types.SpecificVersion
 }
 
 func NewFromUnstructured(
-	version string,
+	version *types.SpecificVersion,
 	availableResources []*unstructured.Unstructured,
 	expectedResources []*unstructured.Unstructured,
 	config *config.ApplicationRuntimeConfig,
@@ -75,6 +76,7 @@ func (l *LocalApplication) GetCondition() v1.ConditionStatus {
 
 func FakeLocalApplication(
 	config *config.ApplicationRuntimeConfig,
+	version *types.SpecificVersion,
 	clock clock.Clock,
 	isDeployed bool,
 ) LocalApplication {
@@ -108,7 +110,7 @@ func FakeLocalApplication(
 		status:   health.HealthStatusProgressing,
 		messages: []string{},
 		config:   config,
-		version:  "1",
 		clock:    clock,
+		version:  version,
 	}
 }

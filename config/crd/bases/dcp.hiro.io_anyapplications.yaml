@@ -183,6 +183,8 @@ spec:
               zones:
                 items:
                   properties:
+                    chartVersion:
+                      type: string
                     conditions:
                       items:
                         properties:

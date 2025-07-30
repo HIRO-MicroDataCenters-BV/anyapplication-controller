@@ -158,6 +158,11 @@ func removeCondition(status *v1.AnyApplicationStatus, toRemove *v1.ConditionStat
 	})
 }
 
+func setNewVersion(status *v1.AnyApplicationStatus, newVersion *types.SpecificVersion, zoneId string) {
+	zoneStatus := status.GetOrCreateStatusFor(zoneId)
+	zoneStatus.ChartVersion = newVersion.ToString()
+}
+
 func isFailureCondition(application *v1.AnyApplication) bool {
 	status := &application.Status
 	spec := &application.Spec

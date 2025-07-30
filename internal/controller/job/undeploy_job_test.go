@@ -75,8 +75,8 @@ var _ = Describe("UndeployJob", func() {
 
 	It("should run and apply done status", func() {
 		jobContextDeploy, cancelDeploy := jobContext.WithCancel()
-
-		deployJob := NewDeployJob(application, &runtimeConfig, theClock, logf.Log, &fakeEvents)
+		version, _ := types.NewSpecificVersion("2.0.1")
+		deployJob := NewDeployJob(application, version, &runtimeConfig, theClock, logf.Log, &fakeEvents)
 		go deployJob.Run(jobContextDeploy)
 
 		waitForJobStatus(deployJob, string(v1.DeploymentStatusDone))
@@ -97,7 +97,7 @@ var _ = Describe("UndeployJob", func() {
 				Type:               v1.UndeploymentConditionType,
 				ZoneId:             "zone",
 				Status:             string(v1.UndeploymentStatusDone),
-				Msg:                "Undeploy state changed to 'Done'. ",
+				Msg:                "Undeploy state changed to 'Done'.Version 2.0.1 (Total=23, Deleted=23, DeleteFailed=0). ",
 				LastTransitionTime: metav1.Time{},
 			},
 		))

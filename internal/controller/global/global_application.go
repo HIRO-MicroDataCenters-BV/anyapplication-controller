@@ -1,6 +1,9 @@
 package global
 
 import (
+	"fmt"
+
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
@@ -12,28 +15,33 @@ import (
 )
 
 type globalApplication struct {
-	locaApplication mo.Option[local.LocalApplication]
-	application     *v1.AnyApplication
-	config          *config.ApplicationRuntimeConfig
-	clock           clock.Clock
-	log             logr.Logger
+	localApplications map[types.SpecificVersion]*local.LocalApplication
+	activeVersion     mo.Option[*types.SpecificVersion]
+	newVersion        mo.Option[*types.SpecificVersion]
+	application       *v1.AnyApplication
+	config            *config.ApplicationRuntimeConfig
+	clock             clock.Clock
+	log               logr.Logger
 }
 
 func NewFromLocalApplication(
-	localApplication mo.Option[local.LocalApplication],
+	localApplications map[types.SpecificVersion]*local.LocalApplication,
+	activeVersion mo.Option[*types.SpecificVersion],
+	newVersion mo.Option[*types.SpecificVersion],
 	clock clock.Clock,
 	application *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
 	log logr.Logger,
-
 ) types.GlobalApplication {
 	log = log.WithName("GlobalApplication")
 	return &globalApplication{
-		locaApplication: localApplication,
-		application:     application,
-		config:          config,
-		clock:           clock,
-		log:             log,
+		localApplications: localApplications,
+		application:       application,
+		activeVersion:     activeVersion,
+		newVersion:        newVersion,
+		config:            config,
+		clock:             clock,
+		log:               log,
 	}
 }
 
@@ -46,16 +54,37 @@ func (g *globalApplication) GetNamespace() string {
 }
 
 func (g *globalApplication) IsDeployed() bool {
-	localApplication, present := g.locaApplication.Get()
-	if present {
-		return localApplication.IsDeployed()
+	if version, present := g.activeVersion.Get(); present {
+		if localApplication, present := g.localApplications[*version]; present {
+			return localApplication.IsDeployed()
+		}
 	}
 	return false
 }
 
 func (g *globalApplication) IsPresent() bool {
-	_, present := g.locaApplication.Get()
-	return present
+	if version, present := g.activeVersion.Get(); present {
+		if _, present := g.localApplications[*version]; present {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *globalApplication) NonActiveVersionsPresent() bool {
+	set := mapset.NewSet[types.SpecificVersion]()
+	for version := range g.localApplications {
+		set.Add(version)
+	}
+
+	if activeVersion, present := g.activeVersion.Get(); present {
+		set.Remove(*activeVersion)
+	}
+	return set.Cardinality() > 0
+}
+
+func (g *globalApplication) IsVersionChanged() bool {
+	return g.newVersion.IsPresent()
 }
 
 func (g *globalApplication) HasZoneStatus() bool {
@@ -78,7 +107,7 @@ func (g *globalApplication) DeriveNewStatus(
 	stateUpdated := false
 
 	// Update local application status if exists
-	if localApp, exists := g.locaApplication.Get(); exists {
+	if localApp, exists := g.getActiveApplication().Get(); exists {
 		if localApp.IsDeployed() {
 			localAppCondition := localApp.GetCondition()
 			updateLocalCondition(current, &localAppCondition, g.config)
@@ -90,7 +119,25 @@ func (g *globalApplication) DeriveNewStatus(
 	stateUpdated = updateJobConditions(current, jobConditions, g.config.ZoneId) || stateUpdated
 
 	// Update state
-	globalStateUpdated, nextJobs := updateState(g.application, g.config, jobFactory, g.IsDeployed(), g.IsPresent(), runningJobType)
+	newVersion, err := g.deriveTargetVersion()
+	if err != nil {
+		g.log.Error(err, "Failed to derive target version for global application", "application", g.application.Name)
+		return types.StatusResult{
+			Status: mo.None[v1.AnyApplicationStatus](),
+			Jobs:   types.NextJobs{},
+		}
+	}
+	globalStateUpdated, nextJobs := updateState(
+		g.application,
+		g.config,
+		jobFactory,
+		g.IsPresent(),
+		g.IsDeployed(),
+		g.NonActiveVersionsPresent(),
+		newVersion,
+		g.newVersion,
+		runningJobType,
+	)
 
 	stateUpdated = globalStateUpdated || stateUpdated
 
@@ -99,16 +146,39 @@ func (g *globalApplication) DeriveNewStatus(
 		status = mo.Some(*current)
 	}
 	return types.StatusResult{
-		Status: status, Jobs: nextJobs,
+		Status: status,
+		Jobs:   nextJobs,
 	}
+}
+
+func (g *globalApplication) getActiveApplication() mo.Option[*local.LocalApplication] {
+	if version, found := g.activeVersion.Get(); found {
+		if localApp, exists := g.localApplications[*version]; exists {
+			return mo.Some(localApp)
+		}
+	}
+	return mo.None[*local.LocalApplication]()
+}
+
+func (g *globalApplication) deriveTargetVersion() (*types.SpecificVersion, error) {
+	if version, found := g.newVersion.Get(); found {
+		return version, nil
+	}
+	if version, found := g.activeVersion.Get(); found {
+		return version, nil
+	}
+	return nil, fmt.Errorf("no active or new version found for global application: %s", g.application.Name)
 }
 
 func updateState(
 	applicationMut *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
 	jobFactory types.AsyncJobFactory,
-	applicationDeployed bool,
 	applicationPresent bool,
+	applicationDeployed bool,
+	nonActiveVersionsPresent bool,
+	version *types.SpecificVersion,
+	newVersion mo.Option[*types.SpecificVersion],
 	runningJobType mo.Option[types.AsyncJobType],
 ) (bool, types.NextJobs) {
 	status := &applicationMut.Status
@@ -120,8 +190,11 @@ func updateState(
 			applicationMut,
 			config,
 			jobFactory,
-			applicationDeployed,
 			applicationPresent,
+			applicationDeployed,
+			nonActiveVersionsPresent,
+			version,
+			newVersion,
 			runningJobType,
 		)
 	}
@@ -195,30 +268,47 @@ func localStateMachine(
 	applicationMut *v1.AnyApplication,
 	config *config.ApplicationRuntimeConfig,
 	jobFactory types.AsyncJobFactory,
-	applicationDeployed bool,
 	applicationResourcesPresent bool,
+	applicationDeployed bool,
+	nonActiveVersionsPresent bool,
+	version *types.SpecificVersion,
+	newVersion mo.Option[*types.SpecificVersion],
 	runningJobType mo.Option[types.AsyncJobType],
 ) (bool, types.NextJobs) {
 
 	stateUpdated := false
 
-	fsm := NewLocalFSM(applicationMut, config, jobFactory, applicationResourcesPresent, applicationDeployed, runningJobType)
+	fsm := NewLocalFSM(
+		applicationMut,
+		config,
+		jobFactory,
+		applicationResourcesPresent,
+		applicationDeployed,
+		nonActiveVersionsPresent,
+		version,
+		newVersion,
+		runningJobType,
+	)
 	nextStateResult := fsm.NextState()
 
 	conditionsToAdd, conditionsToRemove := nextStateResult.ConditionsToAdd, nextStateResult.ConditionsToRemove
 	jobs := nextStateResult.Jobs
 
-	// TODO pick condition from jobs
 	for _, condition := range conditionsToRemove {
 		removeCondition(&applicationMut.Status, condition, config.ZoneId)
 		stateUpdated = true
 	}
 
-	// TODO pick condition from jobs
 	conditionsToAdd.ForEach(func(condition *v1.ConditionStatus) {
 		addOrUpdateCondition(&applicationMut.Status, condition, config.ZoneId)
 		stateUpdated = true
 	})
+
+	version, present := nextStateResult.NewVersion.Get()
+	if present {
+		setNewVersion(&applicationMut.Status, version, config.ZoneId)
+		stateUpdated = true
+	}
 
 	if jobs.JobsToAdd.IsPresent() || jobs.JobsToRemove.IsPresent() {
 		stateUpdated = true
