@@ -561,7 +561,7 @@ func splitResourcesByVersion(resources []*unstructured.Unstructured, log logr.Lo
 			return nil, errors.Wrapf(err, "Failed to get version for resource %s", res.GetName())
 		}
 		if !found {
-			log.Info("WARN: resource %s does not have version label; skipping", "resource", res.GetName())
+			log.V(1).Info("WARN: resource %s does not have version label; skipping", "resource", res.GetName())
 			continue
 		}
 		resourcesByVersion[version] = append(resourcesByVersion[version], res)

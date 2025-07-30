@@ -168,7 +168,7 @@ func (job *UndeployJob) Fail(jobContext types.AsyncJobContext, msg string, reaso
 func (job *UndeployJob) Success(context types.AsyncJobContext, details string) {
 
 	job.status = v1.UndeploymentStatusDone
-	job.msg = "Undeploy state changed to '" + string(job.status) + "'." + details
+	job.msg = fmt.Sprintf("Undeploy state changed to '%s'.%s", job.status, details)
 	job.reason = ""
 
 	job.updateStatus(context)
