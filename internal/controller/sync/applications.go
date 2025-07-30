@@ -322,12 +322,12 @@ func (m *applications) deleteApp(ctx context.Context, app *cachedApp) (*types.De
 		fullName := getFullName(obj)
 		resourceKey := kube.GetResourceKey(obj)
 		m.log.V(1).Info("Deleting resource", "Resource", fullName)
-		live := managedResourcesByKey[resourceKey]
+		existingResource := managedResourcesByKey[resourceKey]
 
-		if live == nil {
+		if existingResource == nil {
 			deleteResult.Deleted += 1
 		} else {
-			err := m.kubeClient.Delete(ctx, live)
+			err := m.kubeClient.Delete(ctx, existingResource)
 			if err != nil {
 				deleteResult.DeleteFailed += 1
 			} else {
@@ -561,7 +561,7 @@ func splitResourcesByVersion(resources []*unstructured.Unstructured, log logr.Lo
 			return nil, errors.Wrapf(err, "Failed to get version for resource %s", res.GetName())
 		}
 		if !found {
-			log.Info(fmt.Sprintf("WARN: resource %s does not have version label; skipping", res.GetName()))
+			log.Info("WARN: resource %s does not have version label; skipping", "resource", res.GetName())
 			continue
 		}
 		resourcesByVersion[version] = append(resourcesByVersion[version], res)

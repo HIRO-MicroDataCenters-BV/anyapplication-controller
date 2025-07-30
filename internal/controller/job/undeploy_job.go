@@ -95,7 +95,7 @@ func (job *UndeployJob) runInner(jobContext types.AsyncJobContext) bool {
 		return true
 	}
 	results, err := applications.Cleanup(jobContext.GetGoContext(), job.application)
-	details := resultsToDetails(results)
+	details := formatDeleteResultsMessage(results)
 	if err != nil {
 		return job.maybeRetry(jobContext, "SyncError", fmt.Sprintf("Undeployment failed: %s", err.Error()))
 	} else {
@@ -113,7 +113,7 @@ func (job *UndeployJob) runInner(jobContext types.AsyncJobContext) bool {
 	return false
 }
 
-func resultsToDetails(results []*types.DeleteResult) string {
+func formatDeleteResultsMessage(results []*types.DeleteResult) string {
 	details := ""
 	for _, result := range results {
 		details += fmt.Sprintf(
