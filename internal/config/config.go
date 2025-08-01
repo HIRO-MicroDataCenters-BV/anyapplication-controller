@@ -13,7 +13,6 @@ import (
 
 type ApplicationRuntimeConfig struct {
 	ZoneId                        string        `yaml:"zone"`
-	ZonePriority                  int           `yaml:"zonePriority"`
 	PollOperationalStatusInterval time.Duration `yaml:"operationalPollDuration"`
 	PollSyncStatusInterval        time.Duration `yaml:"syncPollDuration"`
 	ChartVersionPollInterval      time.Duration `yaml:"chartVersionPollDuration"`

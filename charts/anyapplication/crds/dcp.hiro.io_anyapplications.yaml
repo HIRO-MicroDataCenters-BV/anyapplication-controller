@@ -183,15 +183,11 @@ spec:
                       - zone
                       type: object
                     type: array
-                  priority:
-                    format: int64
-                    type: integer
                   state:
                     type: string
                 required:
                 - epoch
                 - owner
-                - priority
                 - state
                 type: object
               zones:

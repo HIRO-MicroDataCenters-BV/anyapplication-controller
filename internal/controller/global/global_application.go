@@ -98,9 +98,10 @@ func (g *globalApplication) DeriveNewStatus(
 
 	current := &g.application.Status
 
-	if current.State == "" {
-		current.Owner = g.config.ZoneId
-		current.State = v1.NewGlobalState
+	if current.Ownership.State == "" {
+		current.Ownership.Owner = g.config.ZoneId
+		current.Ownership.Epoch = 1
+		current.Ownership.State = v1.NewGlobalState
 	}
 	runningJobType := jobConditions.GetJobType()
 
@@ -199,7 +200,7 @@ func updateState(
 		)
 	}
 
-	if status.Owner == config.ZoneId {
+	if status.Ownership.Owner == config.ZoneId {
 		globalStateUpdated, globalJobs := globalStateMachine(
 			applicationMut,
 			config,
@@ -255,9 +256,9 @@ func globalStateMachine(
 		stateUpdated = true
 	})
 
-	nextState := maybeNextState.OrElse(status.State)
-	if status.State != nextState {
-		status.State = nextState
+	nextState := maybeNextState.OrElse(status.Ownership.State)
+	if status.Ownership.State != nextState {
+		status.Ownership.State = nextState
 		stateUpdated = true
 	}
 

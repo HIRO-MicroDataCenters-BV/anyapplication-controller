@@ -2,7 +2,6 @@ peers:
   - url: localhost:8080
 runtime:
   zone: kind-kind-cluster1
-  zonePriority: 1
   operationalPollDuration: 5s
   syncPollDuration: 10s
   chartVersionPollDuration: 60s

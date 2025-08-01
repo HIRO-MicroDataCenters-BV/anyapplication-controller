@@ -59,8 +59,11 @@ var _ = Describe("Local Application FSM", func() {
 				RecoverStrategy: v1.RecoverStrategySpec{},
 			},
 			Status: v1.AnyApplicationStatus{
-				Owner: "otherzone",
-				State: v1.UnknownGlobalState,
+				Ownership: v1.OwnershipStatus{
+					Epoch: 1,
+					Owner: "otherzone",
+					State: v1.UnknownGlobalState,
+				},
 			},
 		}
 		version100, _ = types.NewSpecificVersion("1.0.0")
@@ -82,7 +85,7 @@ var _ = Describe("Local Application FSM", func() {
 	})
 
 	It("should start deployment once placement is done", func() {
-		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
+		application.Status.Ownership.Placements = []v1.Placement{{Zone: "zone"}}
 
 		Expect(globalApplication.IsDeployed()).To(BeFalse())
 		Expect(globalApplication.IsPresent()).To(BeFalse())
@@ -93,9 +96,12 @@ var _ = Describe("Local Application FSM", func() {
 		jobs := statusResult.Jobs
 		Expect(status).To(Equal(
 			v1.AnyApplicationStatus{
-				State:      v1.UnknownGlobalState,
-				Placements: []v1.Placement{{Zone: "zone"}},
-				Owner:      "otherzone",
+				Ownership: v1.OwnershipStatus{
+					Epoch:      1,
+					Owner:      "otherzone",
+					State:      v1.UnknownGlobalState,
+					Placements: []v1.Placement{{Zone: "zone"}},
+				},
 				Zones: []v1.ZoneStatus{
 					{
 						ZoneId:      "zone",
@@ -132,7 +138,7 @@ var _ = Describe("Local Application FSM", func() {
 			LastTransitionTime: fakeClock.NowTime(),
 		}
 
-		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
+		application.Status.Ownership.Placements = []v1.Placement{{Zone: "zone"}}
 		application.Status.Zones = []v1.ZoneStatus{
 			{
 				ZoneId:      "zone",
@@ -151,9 +157,12 @@ var _ = Describe("Local Application FSM", func() {
 		jobs := statusResult.Jobs
 		Expect(status).To(Equal(
 			v1.AnyApplicationStatus{
-				State:      v1.UnknownGlobalState,
-				Placements: []v1.Placement{{Zone: "zone"}},
-				Owner:      "otherzone",
+				Ownership: v1.OwnershipStatus{
+					Epoch:      1,
+					Owner:      "otherzone",
+					State:      v1.UnknownGlobalState,
+					Placements: []v1.Placement{{Zone: "zone"}},
+				},
 				Zones: []v1.ZoneStatus{
 					{
 						ZoneId:      "zone",
@@ -176,7 +185,7 @@ var _ = Describe("Local Application FSM", func() {
 	})
 
 	It("should create operational job once deployement is done", func() {
-		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
+		application.Status.Ownership.Placements = []v1.Placement{{Zone: "zone"}}
 
 		application.Status.Zones = []v1.ZoneStatus{
 			{
@@ -209,9 +218,12 @@ var _ = Describe("Local Application FSM", func() {
 		jobs := statusResult.Jobs
 		Expect(status).To(Equal(
 			v1.AnyApplicationStatus{
-				State:      v1.UnknownGlobalState,
-				Placements: []v1.Placement{{Zone: "zone"}},
-				Owner:      "otherzone",
+				Ownership: v1.OwnershipStatus{
+					Epoch:      1,
+					Owner:      "otherzone",
+					State:      v1.UnknownGlobalState,
+					Placements: []v1.Placement{{Zone: "zone"}},
+				},
 				Zones: []v1.ZoneStatus{
 					{
 						ZoneId:      "zone",
@@ -254,7 +266,7 @@ var _ = Describe("Local Application FSM", func() {
 			LastTransitionTime: fakeClock.NowTime(),
 		}
 
-		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
+		application.Status.Ownership.Placements = []v1.Placement{{Zone: "zone"}}
 
 		application.Status.Zones = []v1.ZoneStatus{
 			{
@@ -288,9 +300,12 @@ var _ = Describe("Local Application FSM", func() {
 		jobs := statusResult.Jobs
 		Expect(status).To(Equal(
 			v1.AnyApplicationStatus{
-				State:      v1.UnknownGlobalState,
-				Placements: []v1.Placement{{Zone: "zone"}},
-				Owner:      "otherzone",
+				Ownership: v1.OwnershipStatus{
+					Epoch:      1,
+					Owner:      "otherzone",
+					State:      v1.UnknownGlobalState,
+					Placements: []v1.Placement{{Zone: "zone"}},
+				},
 				Zones: []v1.ZoneStatus{
 					{
 						ZoneId:      "zone",
@@ -313,7 +328,7 @@ var _ = Describe("Local Application FSM", func() {
 	})
 
 	It("should undeploy the application when placement has changed", func() {
-		application.Status.Placements = []v1.Placement{{Zone: "otherzone"}}
+		application.Status.Ownership.Placements = []v1.Placement{{Zone: "otherzone"}}
 
 		application.Status.Zones = []v1.ZoneStatus{
 			{
@@ -344,9 +359,12 @@ var _ = Describe("Local Application FSM", func() {
 		jobs := statusResult.Jobs
 		Expect(status).To(Equal(
 			v1.AnyApplicationStatus{
-				State:      v1.UnknownGlobalState,
-				Placements: []v1.Placement{{Zone: "otherzone"}},
-				Owner:      "otherzone",
+				Ownership: v1.OwnershipStatus{
+					Epoch:      1,
+					Owner:      "otherzone",
+					State:      v1.UnknownGlobalState,
+					Placements: []v1.Placement{{Zone: "otherzone"}},
+				},
 				Zones: []v1.ZoneStatus{
 					{
 						ZoneId:      "zone",
@@ -384,7 +402,7 @@ var _ = Describe("Local Application FSM", func() {
 			LastTransitionTime: fakeClock.NowTime(),
 		}
 
-		application.Status.Placements = []v1.Placement{{Zone: "otherzone"}}
+		application.Status.Ownership.Placements = []v1.Placement{{Zone: "otherzone"}}
 
 		application.Status.Zones = []v1.ZoneStatus{
 			{
@@ -415,9 +433,12 @@ var _ = Describe("Local Application FSM", func() {
 		jobs := statusResult.Jobs
 		Expect(status).To(Equal(
 			v1.AnyApplicationStatus{
-				State:      v1.UnknownGlobalState,
-				Placements: []v1.Placement{{Zone: "otherzone"}},
-				Owner:      "otherzone",
+				Ownership: v1.OwnershipStatus{
+					Epoch:      1,
+					Owner:      "otherzone",
+					State:      v1.UnknownGlobalState,
+					Placements: []v1.Placement{{Zone: "otherzone"}},
+				},
 				Zones: []v1.ZoneStatus{
 					{
 						ZoneId:      "zone",
@@ -448,8 +469,8 @@ var _ = Describe("Local Application FSM", func() {
 			Status:             string(health.HealthStatusProgressing),
 			LastTransitionTime: fakeClock.NowTime(),
 		}
-		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
-		application.Status.Owner = "zone"
+		application.Status.Ownership.Placements = []v1.Placement{{Zone: "zone"}}
+		application.Status.Ownership.Owner = "zone"
 		application.Status.Zones = []v1.ZoneStatus{
 			{
 				ZoneId:       "zone",
@@ -474,9 +495,12 @@ var _ = Describe("Local Application FSM", func() {
 		status := statusResult.Status.OrEmpty()
 		Expect(status).To(Equal(
 			v1.AnyApplicationStatus{
-				State:      v1.RelocationGlobalState,
-				Placements: []v1.Placement{{Zone: "zone"}},
-				Owner:      "zone",
+				Ownership: v1.OwnershipStatus{
+					Epoch:      1,
+					Owner:      "zone",
+					State:      v1.RelocationGlobalState,
+					Placements: []v1.Placement{{Zone: "zone"}},
+				},
 				Zones: []v1.ZoneStatus{
 					{
 						ZoneId:       "zone",
@@ -521,8 +545,8 @@ var _ = Describe("Local Application FSM", func() {
 			LastTransitionTime: fakeClock.NowTime(),
 		}
 
-		application.Status.Placements = []v1.Placement{{Zone: "zone"}}
-		application.Status.Owner = "zone"
+		application.Status.Ownership.Placements = []v1.Placement{{Zone: "zone"}}
+		application.Status.Ownership.Owner = "zone"
 		application.Status.Zones = []v1.ZoneStatus{
 
 			{
@@ -548,9 +572,12 @@ var _ = Describe("Local Application FSM", func() {
 		status := statusResult.Status.OrEmpty()
 		Expect(status).To(Equal(
 			v1.AnyApplicationStatus{
-				State:      v1.RelocationGlobalState,
-				Placements: []v1.Placement{{Zone: "zone"}},
-				Owner:      "zone",
+				Ownership: v1.OwnershipStatus{
+					Epoch:      1,
+					Owner:      "zone",
+					State:      v1.RelocationGlobalState,
+					Placements: []v1.Placement{{Zone: "zone"}},
+				},
 				Zones: []v1.ZoneStatus{
 					{
 						ZoneId:       "zone",

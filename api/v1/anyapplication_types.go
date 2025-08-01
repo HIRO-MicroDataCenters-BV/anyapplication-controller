@@ -121,7 +121,6 @@ type AnyApplicationStatus struct {
 
 type OwnershipStatus struct {
 	Epoch      int64       `json:"epoch"`
-	Priority   int64       `json:"priority"`
 	State      GlobalState `json:"state"`
 	Owner      string      `json:"owner"`
 	Placements []Placement `json:"placements,omitempty"`

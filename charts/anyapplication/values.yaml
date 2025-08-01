@@ -61,7 +61,6 @@ configuration:
   peers: []
   runtime:
     zone: zone
-    zonePriority: 1
     operationalPollDuration: 5s
     syncPollDuration: 60s
     chartVersionPollDuration: 60s    
