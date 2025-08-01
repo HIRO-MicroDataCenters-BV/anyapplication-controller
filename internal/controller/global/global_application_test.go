@@ -54,7 +54,6 @@ var _ = Describe("GlobalApplication", func() {
 						Owner:      currentZone,
 						Placements: nil,
 					},
-
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -176,7 +175,6 @@ var _ = Describe("GlobalApplication", func() {
 						},
 						Owner: currentZone,
 					},
-
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -348,7 +346,6 @@ var _ = Describe("GlobalApplication", func() {
 						},
 						Owner: currentZone,
 					},
-
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      "otherzone",
@@ -445,7 +442,6 @@ var _ = Describe("GlobalApplication", func() {
 						},
 						Owner: currentZone,
 					},
-
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -599,7 +595,6 @@ var _ = Describe("GlobalApplication", func() {
 						},
 						Owner: currentZone,
 					},
-
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -677,7 +672,6 @@ var _ = Describe("GlobalApplication", func() {
 						},
 						Owner: currentZone,
 					},
-
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -891,7 +885,6 @@ var _ = Describe("GlobalApplication", func() {
 						},
 						Owner: currentZone,
 					},
-
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -967,7 +960,6 @@ var _ = Describe("GlobalApplication", func() {
 						},
 						Owner: currentZone,
 					},
-
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:       currentZone,
@@ -1049,7 +1041,6 @@ var _ = Describe("GlobalApplication", func() {
 						},
 						Owner: currentZone,
 					},
-
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:       currentZone,
