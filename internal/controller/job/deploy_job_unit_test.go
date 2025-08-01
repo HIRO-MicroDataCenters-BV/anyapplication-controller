@@ -60,8 +60,11 @@ var _ = Describe("DeployJobUnitests", func() {
 				RecoverStrategy: v1.RecoverStrategySpec{},
 			},
 			Status: v1.AnyApplicationStatus{
-				Owner: "zone",
-				State: v1.PlacementGlobalState,
+				Ownership: v1.OwnershipStatus{
+					Epoch: 1,
+					Owner: "zone",
+					State: v1.PlacementGlobalState,
+				},
 			},
 		}
 		gitOpsEngine = fixture.NewFakeGitopsEngine()

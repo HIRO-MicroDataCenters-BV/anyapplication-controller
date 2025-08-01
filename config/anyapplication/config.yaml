@@ -7,7 +7,6 @@ runtime:
   chartVersionPollDuration: 60s
   defaultSyncTimeout: 180s
   defaultUndeployTimeout: 180s
-
 cache:
   excludes:
     - projectcalico.org/FelixConfiguration

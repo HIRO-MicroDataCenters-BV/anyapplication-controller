@@ -163,23 +163,33 @@ spec:
           status:
             description: AnyApplicationStatus defines the observed state of AnyApplication.
             properties:
-              owner:
-                type: string
-              placements:
-                items:
-                  properties:
-                    nodeAffinity:
-                      items:
-                        type: string
-                      type: array
-                    zone:
-                      type: string
-                  required:
-                  - zone
-                  type: object
-                type: array
-              state:
-                type: string
+              ownership:
+                properties:
+                  epoch:
+                    format: int64
+                    type: integer
+                  owner:
+                    type: string
+                  placements:
+                    items:
+                      properties:
+                        nodeAffinity:
+                          items:
+                            type: string
+                          type: array
+                        zone:
+                          type: string
+                      required:
+                      - zone
+                      type: object
+                    type: array
+                  state:
+                    type: string
+                required:
+                - epoch
+                - owner
+                - state
+                type: object
               zones:
                 items:
                   properties:
@@ -221,8 +231,7 @@ spec:
                   type: object
                 type: array
             required:
-            - owner
-            - state
+            - ownership
             type: object
         required:
         - spec

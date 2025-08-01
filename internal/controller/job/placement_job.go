@@ -74,7 +74,7 @@ func (job *LocalPlacementJob) Run(context types.AsyncJobContext) {
 	}
 	err := statusUpdater.UpdateStatus(
 		func(applicationStatus *v1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
-			applicationStatus.Placements = []v1.Placement{
+			applicationStatus.Ownership.Placements = []v1.Placement{
 				{
 					Zone: job.runtimeConfig.ZoneId,
 				},

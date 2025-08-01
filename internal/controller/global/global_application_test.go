@@ -33,7 +33,7 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("transit to placement state", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.Owner = ""
+			applicationResource.Status.Ownership.Owner = ""
 			localApplication := make(map[types.SpecificVersion]*local.LocalApplication)
 			globalApplication := NewFromLocalApplication(localApplication,
 				mo.Some(version), mo.None[*types.SpecificVersion](), fakeClock, applicationResource, runtimeConfig, logf.Log,
@@ -48,9 +48,12 @@ var _ = Describe("GlobalApplication", func() {
 			jobs := statusResult.Jobs
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State:      v1.PlacementGlobalState,
-					Placements: nil,
-					Owner:      currentZone,
+					Ownership: v1.OwnershipStatus{
+						Epoch:      1,
+						State:      v1.PlacementGlobalState,
+						Owner:      currentZone,
+						Placements: nil,
+					},
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -81,7 +84,7 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("create local placement job", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.State = v1.PlacementGlobalState
+			applicationResource.Status.Ownership.State = v1.PlacementGlobalState
 
 			localApplications := make(map[types.SpecificVersion]*local.LocalApplication)
 			globalApplication := NewFromLocalApplication(localApplications, mo.Some(version), mo.None[*types.SpecificVersion](),
@@ -98,8 +101,11 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.PlacementGlobalState,
-					Owner: currentZone,
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.PlacementGlobalState,
+						Owner: currentZone,
+					},
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -136,8 +142,8 @@ var _ = Describe("GlobalApplication", func() {
 				Status:             string(v1.PlacementStatusDone),
 				LastTransitionTime: fakeClock.NowTime(),
 			}
-			applicationResource.Status.State = v1.PlacementGlobalState
-			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+			applicationResource.Status.Ownership.State = v1.PlacementGlobalState
+			applicationResource.Status.Ownership.Placements = []v1.Placement{{Zone: currentZone}}
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
 					ZoneId:      currentZone,
@@ -161,11 +167,14 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.RelocationGlobalState,
-					Placements: []v1.Placement{
-						{Zone: currentZone},
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.RelocationGlobalState,
+						Placements: []v1.Placement{
+							{Zone: currentZone},
+						},
+						Owner: currentZone,
 					},
-					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -201,8 +210,8 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("switch to operational once deployment is completed ", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.State = v1.RelocationGlobalState
-			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+			applicationResource.Status.Ownership.State = v1.RelocationGlobalState
+			applicationResource.Status.Ownership.Placements = []v1.Placement{{Zone: currentZone}}
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
 					ZoneId:      currentZone,
@@ -246,11 +255,14 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.OperationalGlobalState,
-					Placements: []v1.Placement{
-						{Zone: currentZone},
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.OperationalGlobalState,
+						Placements: []v1.Placement{
+							{Zone: currentZone},
+						},
+						Owner: currentZone,
 					},
-					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -292,8 +304,8 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("should relocate if placements has changed", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.State = v1.OperationalGlobalState
-			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+			applicationResource.Status.Ownership.State = v1.OperationalGlobalState
+			applicationResource.Status.Ownership.Placements = []v1.Placement{{Zone: currentZone}}
 
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
@@ -326,11 +338,14 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.RelocationGlobalState,
-					Placements: []v1.Placement{
-						{Zone: currentZone},
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.RelocationGlobalState,
+						Placements: []v1.Placement{
+							{Zone: currentZone},
+						},
+						Owner: currentZone,
 					},
-					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      "otherzone",
@@ -378,8 +393,8 @@ var _ = Describe("GlobalApplication", func() {
 				Status:             string(health.HealthStatusProgressing),
 				LastTransitionTime: fakeClock.NowTime(),
 			}
-			applicationResource.Status.State = v1.OperationalGlobalState
-			applicationResource.Status.Placements = []v1.Placement{{Zone: "otherzone"}}
+			applicationResource.Status.Ownership.State = v1.OperationalGlobalState
+			applicationResource.Status.Ownership.Placements = []v1.Placement{{Zone: "otherzone"}}
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
 					ZoneId:      currentZone,
@@ -419,11 +434,14 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.OperationalGlobalState,
-					Placements: []v1.Placement{
-						{Zone: "otherzone"},
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.OperationalGlobalState,
+						Placements: []v1.Placement{
+							{Zone: "otherzone"},
+						},
+						Owner: currentZone,
 					},
-					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -465,8 +483,8 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("switch to global failure if deployment job fails", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.State = v1.OperationalGlobalState
-			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+			applicationResource.Status.Ownership.State = v1.OperationalGlobalState
+			applicationResource.Status.Ownership.Placements = []v1.Placement{{Zone: currentZone}}
 
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
@@ -500,11 +518,14 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.FailureGlobalState,
-					Placements: []v1.Placement{
-						{Zone: currentZone},
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.FailureGlobalState,
+						Placements: []v1.Placement{
+							{Zone: currentZone},
+						},
+						Owner: currentZone,
 					},
-					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -529,9 +550,9 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("switch to operational state if undeployment job fails and application is deployed", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.State = v1.OperationalGlobalState
-			applicationResource.Status.Owner = currentZone
-			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+			applicationResource.Status.Ownership.State = v1.OperationalGlobalState
+			applicationResource.Status.Ownership.Owner = currentZone
+			applicationResource.Status.Ownership.Placements = []v1.Placement{{Zone: currentZone}}
 
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
@@ -566,11 +587,14 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.OperationalGlobalState,
-					Placements: []v1.Placement{
-						{Zone: currentZone},
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.OperationalGlobalState,
+						Placements: []v1.Placement{
+							{Zone: currentZone},
+						},
+						Owner: currentZone,
 					},
-					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -602,9 +626,9 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("switch to operational state if undeployment job fails and application is not deployed", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.State = v1.OperationalGlobalState
-			applicationResource.Status.Owner = currentZone
-			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+			applicationResource.Status.Ownership.State = v1.OperationalGlobalState
+			applicationResource.Status.Ownership.Owner = currentZone
+			applicationResource.Status.Ownership.Placements = []v1.Placement{{Zone: currentZone}}
 
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
@@ -640,11 +664,14 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.RelocationGlobalState,
-					Placements: []v1.Placement{
-						{Zone: currentZone},
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.RelocationGlobalState,
+						Placements: []v1.Placement{
+							{Zone: currentZone},
+						},
+						Owner: currentZone,
 					},
-					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -676,9 +703,9 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("switch to failure state if undeployment job fails and there are no placements", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.State = v1.OperationalGlobalState
-			applicationResource.Status.Owner = currentZone
-			applicationResource.Status.Placements = []v1.Placement{}
+			applicationResource.Status.Ownership.State = v1.OperationalGlobalState
+			applicationResource.Status.Ownership.Owner = currentZone
+			applicationResource.Status.Ownership.Placements = []v1.Placement{}
 
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
@@ -713,9 +740,12 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State:      v1.FailureGlobalState,
-					Placements: []v1.Placement{},
-					Owner:      currentZone,
+					Ownership: v1.OwnershipStatus{
+						Epoch:      1,
+						State:      v1.FailureGlobalState,
+						Placements: []v1.Placement{},
+						Owner:      currentZone,
+					},
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -742,9 +772,9 @@ var _ = Describe("GlobalApplication", func() {
 		It("undeployment in different zone fails", func() {
 
 			applicationResource := makeApplication()
-			applicationResource.Status.State = v1.OperationalGlobalState
-			applicationResource.Status.Owner = currentZone
-			applicationResource.Status.Placements = []v1.Placement{
+			applicationResource.Status.Ownership.State = v1.OperationalGlobalState
+			applicationResource.Status.Ownership.Owner = currentZone
+			applicationResource.Status.Ownership.Placements = []v1.Placement{
 				{Zone: "otherzone"},
 			}
 
@@ -780,11 +810,14 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.FailureGlobalState,
-					Placements: []v1.Placement{
-						{Zone: "otherzone"},
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.FailureGlobalState,
+						Placements: []v1.Placement{
+							{Zone: "otherzone"},
+						},
+						Owner: currentZone,
 					},
-					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      "otherzone",
@@ -810,8 +843,8 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("switch to deployment if operational job finds missing resources", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.State = v1.OperationalGlobalState
-			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+			applicationResource.Status.Ownership.State = v1.OperationalGlobalState
+			applicationResource.Status.Ownership.Placements = []v1.Placement{{Zone: currentZone}}
 
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
@@ -844,11 +877,14 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.RelocationGlobalState,
-					Placements: []v1.Placement{
-						{Zone: currentZone},
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.RelocationGlobalState,
+						Placements: []v1.Placement{
+							{Zone: currentZone},
+						},
+						Owner: currentZone,
 					},
-					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:      currentZone,
@@ -880,8 +916,8 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("should set initial version in status", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.State = v1.PlacementGlobalState
-			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+			applicationResource.Status.Ownership.State = v1.PlacementGlobalState
+			applicationResource.Status.Ownership.Placements = []v1.Placement{{Zone: currentZone}}
 
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
@@ -916,11 +952,14 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.RelocationGlobalState,
-					Placements: []v1.Placement{
-						{Zone: currentZone},
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.RelocationGlobalState,
+						Placements: []v1.Placement{
+							{Zone: currentZone},
+						},
+						Owner: currentZone,
 					},
-					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:       currentZone,
@@ -958,8 +997,8 @@ var _ = Describe("GlobalApplication", func() {
 
 		It("switch to deployment if operational job finds new version", func() {
 			applicationResource := makeApplication()
-			applicationResource.Status.State = v1.OperationalGlobalState
-			applicationResource.Status.Placements = []v1.Placement{{Zone: currentZone}}
+			applicationResource.Status.Ownership.State = v1.OperationalGlobalState
+			applicationResource.Status.Ownership.Placements = []v1.Placement{{Zone: currentZone}}
 
 			applicationResource.Status.Zones = []v1.ZoneStatus{
 				{
@@ -994,11 +1033,14 @@ var _ = Describe("GlobalApplication", func() {
 
 			Expect(status).To(Equal(
 				v1.AnyApplicationStatus{
-					State: v1.RelocationGlobalState,
-					Placements: []v1.Placement{
-						{Zone: currentZone},
+					Ownership: v1.OwnershipStatus{
+						Epoch: 1,
+						State: v1.RelocationGlobalState,
+						Placements: []v1.Placement{
+							{Zone: currentZone},
+						},
+						Owner: currentZone,
 					},
-					Owner: currentZone,
 					Zones: []v1.ZoneStatus{
 						{
 							ZoneId:       currentZone,
@@ -1052,7 +1094,10 @@ func makeApplication() *v1.AnyApplication {
 			RecoverStrategy: v1.RecoverStrategySpec{},
 		},
 		Status: v1.AnyApplicationStatus{
-			Owner: CURRENT_ZONE,
+			Ownership: v1.OwnershipStatus{
+				Epoch: 1,
+				Owner: CURRENT_ZONE,
+			},
 		},
 	}
 

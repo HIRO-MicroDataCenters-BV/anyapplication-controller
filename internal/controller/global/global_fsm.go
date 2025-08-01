@@ -96,7 +96,7 @@ func (g *GlobalFSM) handleFailureState() types.NextStateResult {
 func getGlobalState(status *v1.AnyApplicationStatus) v1.GlobalState {
 	state := v1.OperationalGlobalState
 	// TODO state ordering
-	for _, placement := range status.Placements {
+	for _, placement := range status.Ownership.Placements {
 		zoneStatus, zoneStatusFound := status.GetStatusFor(placement.Zone)
 		if !zoneStatusFound {
 			state = v1.RelocationGlobalState
@@ -194,13 +194,13 @@ func isFailureCondition(application *v1.AnyApplication) bool {
 }
 
 func placementExists(status *v1.AnyApplicationStatus) bool {
-	return status.Placements != nil
+	return status.Ownership.Placements != nil
 }
 func placementsContainZone(status *v1.AnyApplicationStatus, currentZone string) bool {
-	if status.Placements == nil {
+	if status.Ownership.Placements == nil {
 		return false
 	}
-	_, ok := lo.Find(status.Placements, func(placement v1.Placement) bool {
+	_, ok := lo.Find(status.Ownership.Placements, func(placement v1.Placement) bool {
 		return placement.Zone == currentZone
 	})
 	return ok

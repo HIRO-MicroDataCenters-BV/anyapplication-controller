@@ -72,7 +72,7 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	if resource.Status.Owner == "" {
+	if resource.Status.Ownership.Owner == "" {
 		return r.InitializeState(ctx, resource.GetNamespacedName())
 	}
 
@@ -175,9 +175,10 @@ func (r *AnyApplicationReconciler) InitializeState(ctx context.Context, resource
 	)
 
 	err := statusUpdater.UpdateStatus(func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
-		if applicationStatus.State == "" {
-			applicationStatus.Owner = r.Config.ZoneId
-			applicationStatus.State = dcpv1.NewGlobalState
+		if applicationStatus.Ownership.State == "" {
+			applicationStatus.Ownership.Owner = r.Config.ZoneId
+			applicationStatus.Ownership.Epoch = 1
+			applicationStatus.Ownership.State = dcpv1.NewGlobalState
 			event := events.Event{
 				Reason: events.GlobalStateChangeReason,
 				Msg:    "Owner set to " + r.Config.ZoneId + ". Global State set to " + string(dcpv1.NewGlobalState),
@@ -254,19 +255,24 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 	updated := false
 	reason := events.GlobalStateChangeReason
 	msg := ""
-	if newStatus.Placements != nil && !reflect.DeepEqual(currentStatus.Placements, newStatus.Placements) {
-		currentStatus.Placements = newStatus.Placements
-		msg += fmt.Sprintf("Placements are set to '%v'. ", newStatus.Placements)
+	if newStatus.Ownership.Placements != nil && !reflect.DeepEqual(currentStatus.Ownership.Placements, newStatus.Ownership.Placements) {
+		currentStatus.Ownership.Placements = newStatus.Ownership.Placements
+		msg += fmt.Sprintf("Placements are set to '%v'. ", newStatus.Ownership.Placements)
 		updated = true
 	}
-	if newStatus.State != dcpv1.UnknownGlobalState && currentStatus.State != newStatus.State {
-		currentStatus.State = newStatus.State
-		msg += "Global state changed to '" + string(newStatus.State) + "'. "
+	if newStatus.Ownership.State != dcpv1.UnknownGlobalState && currentStatus.Ownership.State != newStatus.Ownership.State {
+		currentStatus.Ownership.State = newStatus.Ownership.State
+		msg += fmt.Sprintf("Global state changed to '%s'. ", newStatus.Ownership.State)
 		updated = true
 	}
-	if newStatus.Owner != "" && currentStatus.Owner != newStatus.Owner {
-		currentStatus.Owner = newStatus.Owner
-		msg += "Owner changed to '" + newStatus.Owner + "'."
+	if newStatus.Ownership.Owner != "" && currentStatus.Ownership.Owner != newStatus.Ownership.Owner {
+		currentStatus.Ownership.Owner = newStatus.Ownership.Owner
+		msg += fmt.Sprintf("Owner changed to '%s'. ", newStatus.Ownership.Owner)
+		updated = true
+	}
+	if newStatus.Ownership.Epoch != currentStatus.Ownership.Epoch {
+		currentStatus.Ownership.Epoch = newStatus.Ownership.Epoch
+		msg += fmt.Sprintf("Epoch changed to '%d'.", newStatus.Ownership.Epoch)
 		updated = true
 	}
 
@@ -310,9 +316,9 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 }
 
 func isOwnerOrPlacementZone(resource *dcpv1.AnyApplication, zone string) bool {
-	isOwnerZone := resource.Status.Owner == zone
+	isOwnerZone := resource.Status.Ownership.Owner == zone
 	isPlacementZone := false
-	for _, placement := range resource.Status.Placements {
+	for _, placement := range resource.Status.Ownership.Placements {
 		if placement.Zone == zone {
 			isPlacementZone = true
 		}
@@ -322,5 +328,5 @@ func isOwnerOrPlacementZone(resource *dcpv1.AnyApplication, zone string) bool {
 }
 
 func isNewApplication(resource *dcpv1.AnyApplication) bool {
-	return resource.Status.State == ""
+	return resource.Status.Ownership.State == ""
 }

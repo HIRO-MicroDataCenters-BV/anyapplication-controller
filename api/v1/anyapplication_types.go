@@ -115,10 +115,15 @@ type RecoverStrategySpec struct {
 
 // AnyApplicationStatus defines the observed state of AnyApplication.
 type AnyApplicationStatus struct {
-	State      GlobalState  `json:"state"`
-	Owner      string       `json:"owner"`
-	Placements []Placement  `json:"placements,omitempty"`
-	Zones      []ZoneStatus `json:"zones,omitempty"`
+	Ownership OwnershipStatus `json:"ownership"`
+	Zones     []ZoneStatus    `json:"zones,omitempty"`
+}
+
+type OwnershipStatus struct {
+	Epoch      int64       `json:"epoch"`
+	State      GlobalState `json:"state"`
+	Owner      string      `json:"owner"`
+	Placements []Placement `json:"placements,omitempty"`
 }
 
 type ZoneStatus struct {
