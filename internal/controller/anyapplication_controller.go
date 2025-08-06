@@ -270,9 +270,10 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 		msg += fmt.Sprintf("Owner changed to '%s'. ", newStatus.Ownership.Owner)
 		updated = true
 	}
-	if newStatus.Ownership.Epoch != currentStatus.Ownership.Epoch {
-		currentStatus.Ownership.Epoch = newStatus.Ownership.Epoch
-		msg += fmt.Sprintf("Epoch changed to '%d'.", newStatus.Ownership.Epoch)
+	epoch := max(newStatus.Ownership.Epoch, currentStatus.Ownership.Epoch)
+	if currentStatus.Ownership.Epoch != epoch {
+		currentStatus.Ownership.Epoch = epoch
+		msg += fmt.Sprintf("Epoch changed to '%d'.", epoch)
 		updated = true
 	}
 
