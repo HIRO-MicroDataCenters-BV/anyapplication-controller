@@ -2,6 +2,20 @@ apiVersion: v1
 entries:
   anyapplication:
   - apiVersion: v2
+    appVersion: 0.1.2-dev.7.EDGE-256-impleme.98c89771
+    created: "2025-08-07T08:39:13.486156468Z"
+    description: Decentralized Control Plane Application Controller
+    digest: 050ebcd31f6c1546460850bd52c0a6a9617c9c67bd95dad171f182c709654c45
+    home: https://github.com/HIRO-MicroDataCenters-BV/anyapplication-controller
+    maintainers:
+    - name: HIRO-Microdatacenters
+      url: https://hiro-microdatacenters.nl
+    name: anyapplication
+    type: application
+    urls:
+    - https://HIRO-MicroDataCenters-BV.github.io/anyapplication-controller/dev/anyapplication-0.1.2-dev.7.EDGE-256-impleme.98c89771.tgz
+    version: 0.1.2-dev.7.EDGE-256-impleme.98c89771
+  - apiVersion: v2
     appVersion: 0.1.2-dev.4.EDGE-256-impleme.29926705
     created: "2025-08-06T12:48:57.106675022Z"
     description: Decentralized Control Plane Application Controller
@@ -1317,4 +1331,4 @@ entries:
     urls:
     - https://HIRO-MicroDataCenters-BV.github.io/anyapplication-controller/dev/anyapplication-0.0.1-dev.1.state-management.d36ec583.tgz
     version: 0.0.1-dev.1.state-management.d36ec583
-generated: "2025-08-06T12:48:57.105514135Z"
+generated: "2025-08-07T08:39:13.484789522Z"
