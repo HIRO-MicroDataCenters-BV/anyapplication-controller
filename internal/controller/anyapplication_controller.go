@@ -255,7 +255,8 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 	reason := events.GlobalStateChangeReason
 	msg := ""
 	if currentStatus.Ownership.Placements == nil && newStatus.Ownership.Placements != nil {
-		// Change placements only if it is changed by controller
+		// Set placements only during initial creation when they haven't been set before
+		// (only by local placement policy)
 		currentStatus.Ownership.Placements = newStatus.Ownership.Placements
 		msg += fmt.Sprintf("Placements are set to '%v'. ", newStatus.Ownership.Placements)
 		updated = true
