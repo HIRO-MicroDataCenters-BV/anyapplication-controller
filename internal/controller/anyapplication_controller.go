@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -255,7 +254,9 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 	updated := false
 	reason := events.GlobalStateChangeReason
 	msg := ""
-	if newStatus.Ownership.Placements != nil && !reflect.DeepEqual(currentStatus.Ownership.Placements, newStatus.Ownership.Placements) {
+	if currentStatus.Ownership.Placements == nil && newStatus.Ownership.Placements != nil {
+		// Set placements only during initial creation when they haven't been set before
+		// (only by local placement policy)
 		currentStatus.Ownership.Placements = newStatus.Ownership.Placements
 		msg += fmt.Sprintf("Placements are set to '%v'. ", newStatus.Ownership.Placements)
 		updated = true
