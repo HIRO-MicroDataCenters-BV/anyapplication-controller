@@ -266,7 +266,7 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 		msg += fmt.Sprintf("Global state changed to '%s'. ", newStatus.Ownership.State)
 		updated = true
 	}
-	if newStatus.Ownership.Owner != "" && currentStatus.Ownership.Owner != newStatus.Ownership.Owner {
+	if currentStatus.Ownership.Owner == "" && newStatus.Ownership.Owner != "" {
 		currentStatus.Ownership.Owner = newStatus.Ownership.Owner
 		msg += fmt.Sprintf("Owner changed to '%s'. ", newStatus.Ownership.Owner)
 		updated = true
