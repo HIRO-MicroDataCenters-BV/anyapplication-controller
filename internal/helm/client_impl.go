@@ -5,7 +5,6 @@ package helm
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"net/url"
