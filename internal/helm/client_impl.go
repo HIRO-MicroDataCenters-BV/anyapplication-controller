@@ -1,7 +1,11 @@
+// SPDX-FileCopyrightText: 2025 HIRO affiliate company and DCP contributors
+// SPDX-License-Identifier: Apache-2.0
+
 package helm
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"net/url"
