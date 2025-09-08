@@ -1,6 +1,6 @@
 FROM node:24-alpine
 
-LABEL project=metal_operator
+LABEL project=anyapplication-controller
 
 # Install bash (optional but useful)
 RUN apk add --no-cache bash

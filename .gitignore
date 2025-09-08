@@ -32,3 +32,9 @@ go.work
 /config/anyapplication/kind-kind-cluster1.yaml
 /config/anyapplication/emdc2.yaml
 /config/anyapplication/emdc1.yaml
+node_modules/
+docs/.vitepress/cache/*
+docs/.vitepress/dist/*
+.vitepress/
+.cache
+/**/.DS_Store
