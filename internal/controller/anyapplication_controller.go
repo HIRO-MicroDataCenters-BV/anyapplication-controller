@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -37,7 +38,7 @@ import (
 	"hiro.io/anyapplication/internal/controller/types"
 )
 
-const anyApplicationFinalizerName = "finalizers.dcp.hiro.io/anyapplication"
+const AnyApplicationFinalizerName = "finalizers.dcp.hiro.io/anyapplication"
 
 // AnyApplicationReconciler reconciles a AnyApplication object
 type AnyApplicationReconciler struct {
@@ -80,7 +81,7 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.resourceCleanup(ctx, resource)
 	}
 
-	if !containsString(resource.Finalizers, anyApplicationFinalizerName) {
+	if !slices.Contains(resource.Finalizers, AnyApplicationFinalizerName) {
 		return r.addFinalizer(ctx, resource)
 	}
 
@@ -193,7 +194,7 @@ func (r *AnyApplicationReconciler) InitializeState(ctx context.Context, resource
 }
 
 func (r *AnyApplicationReconciler) addFinalizer(ctx context.Context, resource *dcpv1.AnyApplication) (ctrl.Result, error) {
-	resource.Finalizers = append(resource.Finalizers, anyApplicationFinalizerName)
+	resource.Finalizers = append(resource.Finalizers, AnyApplicationFinalizerName)
 	if err := r.Update(ctx, resource); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -202,7 +203,7 @@ func (r *AnyApplicationReconciler) addFinalizer(ctx context.Context, resource *d
 }
 
 func (r *AnyApplicationReconciler) resourceCleanup(ctx context.Context, resource *dcpv1.AnyApplication) (ctrl.Result, error) {
-	if containsString(resource.Finalizers, anyApplicationFinalizerName) {
+	if slices.Contains(resource.Finalizers, AnyApplicationFinalizerName) {
 		// Perform cleanup logic here
 		applicationId := types.ApplicationId{
 			Name:      resource.Name,
@@ -214,7 +215,7 @@ func (r *AnyApplicationReconciler) resourceCleanup(ctx context.Context, resource
 		}
 
 		// Remove finalizer and update
-		resource.Finalizers = removeString(resource.Finalizers, anyApplicationFinalizerName)
+		resource.Finalizers = removeString(resource.Finalizers, AnyApplicationFinalizerName)
 		if err := r.Update(ctx, resource); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -229,15 +230,6 @@ func (r *AnyApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&dcpv1.AnyApplication{}).
 		Named("anyapplication").
 		Complete(r)
-}
-
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }
 
 func removeString(slice []string, s string) []string {

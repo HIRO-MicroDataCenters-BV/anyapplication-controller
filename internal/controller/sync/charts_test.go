@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025 HIRO-MicroDataCenters BV affiliate company and DCP contributors
+// SPDX-License-Identifier: Apache-2.0
+
 package sync
 
 import (
@@ -66,7 +69,7 @@ var _ = Describe("Charts", func() {
 		Expect(latest).NotTo(BeNil())
 		Expect(latest.ChartId.RepoUrl).To(Equal("https://helm.nginx.com/stable"))
 		Expect(latest.ChartId.ChartName).To(Equal("nginx-ingress"))
-		Expect(latest.Version.ToString()).To(Equal("2.2.1"))
+		Expect(latest.Version.ToString()).To(Equal("2.2.2"))
 	})
 
 	It("should render chart", func() {

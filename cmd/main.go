@@ -82,6 +82,7 @@ func main() {
 	var webhookCertPath, webhookCertName, webhookCertKey string
 	var enableLeaderElection bool
 	var probeAddr string
+	var webhookPort int
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
@@ -89,6 +90,7 @@ func main() {
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.IntVar(&webhookPort, "webhook-port", 9443, "The address the webhook endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -166,8 +168,10 @@ func main() {
 			config.GetCertificate = webhookCertWatcher.GetCertificate
 		})
 	}
+	webhookOptions := webhook.Options{TLSOpts: webhookTLSOpts}
+	webhookOptions.Port = webhookPort
 
-	webhookServer := webhook.NewServer(webhook.Options{TLSOpts: webhookTLSOpts})
+	webhookServer := webhook.NewServer(webhookOptions)
 
 	// Metrics endpoint is enabled in 'config/default/kustomization.yaml'. The Metrics options configure the server.
 	// More info:
@@ -248,6 +252,7 @@ func main() {
 			Major:   "1",
 			Minor:   "23",
 		},
+		ClientId: applicationConfig.ZoneId,
 	})
 	failIfError(err, setupLog, "unable to create helm client")
 

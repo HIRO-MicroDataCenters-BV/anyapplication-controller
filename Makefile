@@ -19,6 +19,8 @@ CONTAINER_TOOL ?= docker
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+CERTIFICATE_LOCAL_PATH = /tmp/k8s-webhook-server/serving-certs
+
 .PHONY: all
 all: build
 
@@ -62,6 +64,7 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
+
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
 # CertManager is installed by default; skip with:
@@ -90,6 +93,17 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 lint-config: golangci-lint ## Verify golangci-lint linter configuration
 	$(GOLANGCI_LINT) config verify
 
+.PHONY: add-license
+add-license: addlicense ## Add license headers to all go files.
+	find . -name '*.go' -exec $(ADDLICENSE) -f hack/license-header.txt {} +
+
+.PHONY: check-license
+check-license: addlicense ## Check that every file has a license header present.
+	find . -name '*.go' -exec $(ADDLICENSE) -check -c 'DCP authors' {} +
+
+.PHONY: check
+check: generate manifests add-license fmt lint test # Generate manifests, code, lint, add licenses, test
+
 ##@ Build
 
 .PHONY: build
@@ -99,6 +113,22 @@ build: manifests generate fmt vet ## Build manager binary.
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go -config ./config/anyapplication/config.yaml
+
+.PHONY: run-kind-kind-cluster1
+run-kind-kind-cluster1: manifests generate fmt vet ## Run a controller from your host.
+	go run ./cmd/main.go -config ./config/anyapplication/kind-kind-cluster1.yaml \
+		-metrics-bind-address :19090 \
+		-health-probe-bind-address : \
+		-webhook-port 9443 \
+		-webhook-cert-path $(CERTIFICATE_LOCAL_PATH)
+
+.PHONY: run-kind-kind-cluster2
+run-kind-kind-cluster2: manifests generate fmt vet ## Run a controller from your host.
+	go run ./cmd/main.go -config ./config/anyapplication/kind-kind-cluster2.yaml \
+		-metrics-bind-address :29090 \
+		-health-probe-bind-address :29091 \
+		-webhook-port 9444 \
+		-webhook-cert-path $(CERTIFICATE_LOCAL_PATH)
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -110,6 +140,10 @@ docker-build: ## Build docker image with the manager.
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
+
+.PHONY: docs
+docs: gen-crd-api-reference-docs ## Run go generate to generate API reference documentation.
+	$(GEN_CRD_API_REFERENCE_DOCS) -api-dir ./api/v1 -config ./hack/api-reference/config.json -template-dir ./hack/api-reference/template -out-file ./docs/api-reference/anyapplication.md
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
@@ -157,6 +191,18 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
+.PHONY: helm
+helm: manifests kubebuilder
+	$(KUBEBUILDER) edit --plugins=helm/v1-alpha
+
+.PHONY: certs
+certs:
+	mkdir -p $(CERTIFICATE_LOCAL_PATH)
+	openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+		-keyout $(CERTIFICATE_LOCAL_PATH)/tls.key \
+		-out $(CERTIFICATE_LOCAL_PATH)/tls.crt \
+		-subj "/CN=localhost"
+
 ##@ Dependencies
 
 ## Location to install dependencies to
@@ -167,19 +213,35 @@ $(LOCALBIN):
 ## Tool Binaries
 KUBECTL ?= kubectl
 KIND ?= kind
+KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+GEN_CRD_API_REFERENCE_DOCS ?= $(LOCALBIN)/gen-crd-api-reference-docs
+ADDLICENSE ?= $(LOCALBIN)/addlicense
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.6.0
-CONTROLLER_TOOLS_VERSION ?= v0.17.2
+CONTROLLER_TOOLS_VERSION ?= v0.18.0
+KUBEBUILDER_VERSION ?= v4.5.1
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 #ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
-GOLANGCI_LINT_VERSION ?= v1.63.4
+GOLANGCI_LINT_VERSION ?= v2.1
+GEN_CRD_API_REFERENCE_DOCS_VERSION ?= v0.3.0
+ADDLICENSE_VERSION ?= v1.1.1
+
+.PHONY: addlicense
+addlicense: $(ADDLICENSE) ## Download addlicense locally if necessary.
+$(ADDLICENSE): $(LOCALBIN)
+	$(call go-install-tool,$(ADDLICENSE),github.com/google/addlicense,$(ADDLICENSE_VERSION))
+
+.PHONY: gen-crd-api-reference-docs
+gen-crd-api-reference-docs: $(GEN_CRD_API_REFERENCE_DOCS) ## Download gen-crd-api-reference-docs locally if necessary.
+$(GEN_CRD_API_REFERENCE_DOCS): $(LOCALBIN)
+	test -s $(LOCALBIN)/gen-crd-api-reference-docs || GOBIN=$(LOCALBIN) go install github.com/ahmetb/gen-crd-api-reference-docs@$(GEN_CRD_API_REFERENCE_DOCS_VERSION)
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -208,6 +270,11 @@ $(ENVTEST): $(LOCALBIN)
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+
+.PHONY: kubebuilder
+kubebuilder: $(KUBEBUILDER) ## Download kubebuilder locally if necessary.
+$(KUBEBUILDER): $(LOCALBIN)
+	$(call go-install-tool,$(KUBEBUILDER),sigs.k8s.io/kubebuilder/v4,$(KUBEBUILDER_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
