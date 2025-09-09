@@ -4,11 +4,14 @@ on:
   # Runs on pushes targeting the `main` branch. Change this to `master` if you're
   # using the `master` branch as the default branch.
   push:
-    branches: [main]
+    branches: [EDGE-293-improve-anyapplication-controller-validation-with-webhook]
   pull_request:
     types: [ assigned, opened, synchronize, reopened ]
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+
+env:
+  DOCS_TARGET_DIR: ./docs
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -62,6 +65,12 @@ jobs:
     runs-on: ubuntu-latest
     name: Deploy
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      # - name: Deploy to GitHub Pages
+      #   id: deployment
+      #   uses: actions/deploy-pages@v4
+      - name: Publish Helm charts
+        uses: stefanprodan/helm-gh-pages@master
+        with:
+          token: ${{ github.token }}
+          charts_dir: "./docs/.vitepress/dist" 
+          target_dir: ${{ env.DOCS_TARGET_DIR }}
