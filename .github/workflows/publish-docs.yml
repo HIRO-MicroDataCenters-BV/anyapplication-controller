@@ -10,10 +10,12 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+env:
+  DOCS_TARGET_DIR: ./docs
+
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: read
-  pages: write
+  contents: write
   id-token: write
 
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
@@ -40,28 +42,21 @@ jobs:
         with:
           node-version: 24
           cache: npm # or pnpm / yarn
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+
       - name: Install dependencies
         run: npm ci # or pnpm install / yarn install / bun install
+       
       - name: Build with VitePress
         run: npm run docs:build # or pnpm docs:build / yarn docs:build / bun run docs:build
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: docs/.vitepress/dist
-        if: github.event_name != 'pull_request' # Skip upload on PRs
 
-  # Deployment job
-  deploy:
-    if: github.event_name != 'pull_request' # Skip deployment on PRs
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    needs: build
-    runs-on: ubuntu-latest
-    name: Deploy
-    steps:
       - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: "./docs/.vitepress/dist" 
+          publish_branch: gh-pages  # The branch to push to
+          destination_dir: ${{ env.DOCS_TARGET_DIR }}
+        if: github.event_name != 'pull_request' # Skip upload on PRs          
+
+
+  
