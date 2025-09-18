@@ -10,7 +10,7 @@ import (
 	"github.com/argoproj/gitops-engine/pkg/cache"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/samber/lo"
-	types "hiro.io/anyapplication/internal/types"
+	"hiro.io/anyapplication/internal/httpapi/api"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -24,7 +24,7 @@ type applicationReports struct {
 	logFetcher   LogFetcher
 }
 
-func NewApplicationReports(clusterCache cache.ClusterCache, logFetcher LogFetcher) types.ApplicationReports {
+func NewApplicationReports(clusterCache cache.ClusterCache, logFetcher LogFetcher) api.ApplicationReports {
 	return &applicationReports{clusterCache: clusterCache, logFetcher: logFetcher}
 }
 
@@ -32,9 +32,9 @@ func (s *applicationReports) Fetch(
 	ctx context.Context,
 	instanceId string,
 	namespace string,
-) (*types.ApplicationReport, error) {
+) (*api.ApplicationReport, error) {
 
-	report := &types.ApplicationReport{}
+	report := &api.ApplicationReport{}
 	podInfo, err := s.GetPodInfo(ctx, instanceId, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("getting pod info: %w", err)
@@ -54,21 +54,21 @@ func (s *applicationReports) GetPodInfo(
 	ctx context.Context,
 	instanceId string,
 	namespace string,
-) ([]types.PodInfo, error) {
+) ([]api.PodInfo, error) {
 
 	pods := s.getPods(instanceId)
 	events, err := s.logFetcher.FetchEvents(ctx, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("fetching events: %w", err)
 	}
-	report := []types.PodInfo{}
+	report := []api.PodInfo{}
 	for _, pod := range pods {
-		podInfo := types.PodInfo{
+		podInfo := api.PodInfo{
 			Name:     pod.Name,
 			Status:   string(pod.Status.Phase),
 			Restarts: 0,
-			Events:   []types.PodEvent{},
-			Logs:     []types.LogInfo{},
+			Events:   []api.PodEvent{},
+			Logs:     []api.LogInfo{},
 		}
 
 		for _, cs := range pod.Status.ContainerStatuses {
@@ -84,7 +84,7 @@ func (s *applicationReports) GetPodInfo(
 			if logErr != nil {
 				logStr = fmt.Sprintf("Error fetching logs: %v", logErr)
 			}
-			podInfo.Logs = append(podInfo.Logs, types.LogInfo{
+			podInfo.Logs = append(podInfo.Logs, api.LogInfo{
 				Container: cs.Name,
 				Log:       truncate(logStr, 1000),
 			})
@@ -92,7 +92,7 @@ func (s *applicationReports) GetPodInfo(
 
 		for _, e := range events.Items {
 			if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == pod.Name && e.Type == "Warning" {
-				podInfo.Events = append(podInfo.Events, types.PodEvent{
+				podInfo.Events = append(podInfo.Events, api.PodEvent{
 					Reason:    e.Reason,
 					Message:   e.Message,
 					Timestamp: e.FirstTimestamp.String(),
@@ -145,8 +145,8 @@ func convertTo[T runtime.Object](resources []*unstructured.Unstructured, sample 
 	return objects
 }
 
-func (r *applicationReports) GetWorkloadStatuses(instanceId string) ([]types.WorkloadStatus, error) {
-	report := make([]types.WorkloadStatus, 0)
+func (r *applicationReports) GetWorkloadStatuses(instanceId string) ([]api.WorkloadStatus, error) {
+	report := make([]api.WorkloadStatus, 0)
 
 	deploymentStatuses := r.getDeployments(instanceId)
 	report = append(report, deploymentStatuses...)
@@ -164,14 +164,14 @@ func (r *applicationReports) GetWorkloadStatuses(instanceId string) ([]types.Wor
 }
 
 // --- Deployment ---
-func (s *applicationReports) getDeployments(instanceId string) []types.WorkloadStatus {
+func (s *applicationReports) getDeployments(instanceId string) []api.WorkloadStatus {
 	deploymentsUnstructured := s.findResources(instanceId, mapset.NewSet("Deployment"))
 	deployments := convertTo(deploymentsUnstructured, &appsv1.Deployment{})
 
-	statuses := make([]types.WorkloadStatus, 0, len(deployments))
+	statuses := make([]api.WorkloadStatus, 0, len(deployments))
 	for _, d := range deployments {
 
-		status := types.WorkloadStatus{
+		status := api.WorkloadStatus{
 			Kind:      "Deployment",
 			Name:      d.Name,
 			Namespace: d.Namespace,
@@ -194,18 +194,18 @@ func (s *applicationReports) getDeployments(instanceId string) []types.WorkloadS
 	return statuses
 }
 
-func (s *applicationReports) getReplicaSets(instanceId string) []types.WorkloadStatus {
+func (s *applicationReports) getReplicaSets(instanceId string) []api.WorkloadStatus {
 	replicaSetsUnstructured := s.findResources(instanceId, mapset.NewSet("ReplicaSet"))
 	replicaSets := convertTo(replicaSetsUnstructured, &appsv1.ReplicaSet{})
 
-	statuses := make([]types.WorkloadStatus, 0, len(replicaSets))
+	statuses := make([]api.WorkloadStatus, 0, len(replicaSets))
 	for _, rs := range replicaSets {
 		// Ignore owned ReplicaSets
 		if len(rs.OwnerReferences) > 0 {
 			continue
 		}
 
-		status := types.WorkloadStatus{
+		status := api.WorkloadStatus{
 			Kind:      "ReplicaSet",
 			Name:      rs.Name,
 			Namespace: rs.Namespace,
@@ -225,13 +225,13 @@ func (s *applicationReports) getReplicaSets(instanceId string) []types.WorkloadS
 }
 
 // --- StatefulSet ---
-func (s *applicationReports) getStatefulSets(instanceId string) []types.WorkloadStatus {
+func (s *applicationReports) getStatefulSets(instanceId string) []api.WorkloadStatus {
 	statefulSetsUnstructured := s.findResources(instanceId, mapset.NewSet("StatefulSet"))
 	statefulSets := convertTo(statefulSetsUnstructured, &appsv1.StatefulSet{})
 
-	statuses := make([]types.WorkloadStatus, 0, len(statefulSets))
+	statuses := make([]api.WorkloadStatus, 0, len(statefulSets))
 	for _, sts := range statefulSets {
-		status := types.WorkloadStatus{
+		status := api.WorkloadStatus{
 			Kind:      "StatefulSet",
 			Name:      sts.Name,
 			Namespace: sts.Namespace,
@@ -249,13 +249,13 @@ func (s *applicationReports) getStatefulSets(instanceId string) []types.Workload
 	}
 	return statuses
 }
-func (s *applicationReports) getDaemonSets(instanceId string) []types.WorkloadStatus {
+func (s *applicationReports) getDaemonSets(instanceId string) []api.WorkloadStatus {
 	daemonSetsUnstructured := s.findResources(instanceId, mapset.NewSet("DaemonSet"))
 	daemonSets := convertTo(daemonSetsUnstructured, &appsv1.DaemonSet{})
 
-	statuses := make([]types.WorkloadStatus, 0, len(daemonSets))
+	statuses := make([]api.WorkloadStatus, 0, len(daemonSets))
 	for _, ds := range daemonSets {
-		status := types.WorkloadStatus{
+		status := api.WorkloadStatus{
 			Kind:      "DaemonSet",
 			Name:      ds.Name,
 			Namespace: ds.Namespace,

@@ -13,8 +13,8 @@ import (
 	v1 "hiro.io/anyapplication/api/v1"
 	"hiro.io/anyapplication/internal/controller/fixture"
 	ctrltypes "hiro.io/anyapplication/internal/controller/types"
+	"hiro.io/anyapplication/internal/httpapi/api"
 
-	types "hiro.io/anyapplication/internal/types"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -25,7 +25,7 @@ import (
 var _ = Describe("K8sReportService", func() {
 	var (
 		fakeClient  *k8sfake.Clientset
-		reporter    types.ApplicationReports
+		reporter    api.ApplicationReports
 		pod         corev1.Pod
 		scheme      *runtime.Scheme
 		updateFuncs []cache.UpdateSettingsFunc
@@ -171,7 +171,7 @@ var _ = Describe("K8sReportService", func() {
 		Expect(report.Workloads).NotTo(BeEmpty())
 
 		// Deployment
-		deployStatus := types.WorkloadStatus{}
+		deployStatus := api.WorkloadStatus{}
 		for _, w := range report.Workloads {
 			if w.Kind == "Deployment" && w.Name == "test-deploy" {
 				deployStatus = w
@@ -185,7 +185,7 @@ var _ = Describe("K8sReportService", func() {
 		Expect(deployStatus.Message).To(ContainSubstring("replicas unavailable"))
 
 		// ReplicaSet
-		rsStatus := types.WorkloadStatus{}
+		rsStatus := api.WorkloadStatus{}
 		for _, w := range report.Workloads {
 			if w.Kind == "ReplicaSet" && w.Name == "test-rs" {
 				rsStatus = w
@@ -199,7 +199,7 @@ var _ = Describe("K8sReportService", func() {
 		Expect(rsStatus.Message).To(ContainSubstring("orphaned replicaset not fully ready"))
 
 		// StatefulSet
-		stsStatus := types.WorkloadStatus{}
+		stsStatus := api.WorkloadStatus{}
 		for _, w := range report.Workloads {
 			if w.Kind == "StatefulSet" && w.Name == "test-sts" {
 				stsStatus = w
@@ -213,7 +213,7 @@ var _ = Describe("K8sReportService", func() {
 		Expect(stsStatus.Message).To(Equal("Healthy"))
 
 		// DaemonSet
-		dsStatus := types.WorkloadStatus{}
+		dsStatus := api.WorkloadStatus{}
 		for _, w := range report.Workloads {
 			if w.Kind == "DaemonSet" && w.Name == "test-ds" {
 				dsStatus = w

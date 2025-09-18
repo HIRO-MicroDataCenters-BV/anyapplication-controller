@@ -1,0 +1,183 @@
+openapi: "3.0.0"
+info:
+  title: AnyApplication Controller
+  description: Application Controller for Decentralized Control Plance
+  contact:
+    name: HIRO-MicroDataCenters
+    email: all-hiro@hiro-microdatacenters.nl
+  license:
+    name: MIT
+    url: https://github.com/HIRO-MicroDataCenters-BV/anyapplication-controller/blob/main/LICENSE
+  version: 0.1.0
+paths:
+  /applications/{namespace}/{name}/status:
+    get:
+      summary: Get Application Status
+      operationId: get_application_status
+      parameters:
+      - name: namespace
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Namespace
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Get Application Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationReport'
+components:
+  schemas:
+    ApplicationReport:
+      type: object
+      required:
+        - pods
+        - workloads
+      properties:
+        pods:
+          items:
+            $ref: '#/components/schemas/PodInfo'
+          type: array
+          title: PodInfo
+        workloads:
+          items:        
+            $ref: '#/components/schemas/WorkloadStatus'
+          type: array
+          title: WorkloadStatus
+    WorkloadStatus:
+      type: object
+      required:
+        - kind
+        - name
+        - namespace
+        - ready
+        - desired
+        - available
+        - unavailable
+        - message
+      properties:
+        kind:
+          type: string
+          title: Kind
+        name:
+          type: string
+          title: Name
+        namespace:
+          type: string
+          title: Namespace
+        ready:
+          type: boolean
+          title: Ready
+        desired:
+          type: integer
+          format: int32
+          title: Desired
+        available:
+          type: integer
+          format: int32
+          title: Available
+        unavailable:
+          type: integer
+          format: int32
+          title: Unavailable
+        message:
+          type: string
+          title: Message
+
+# type WorkloadStatus struct {
+# 	Kind        string `json:"kind"`      // e.g., Deployment
+# 	Name        string `json:"name"`      // workload name
+# 	Namespace   string `json:"namespace"` // ns
+# 	Ready       bool   `json:"ready"`     // summarized status
+# 	Desired     int32  `json:"desired"`
+# 	Available   int32  `json:"available"`
+# 	Unavailable int32  `json:"unavailable"`
+# 	Message     string `json:"message"` // issue summary
+# }
+
+    PodInfo:
+      type: object
+      required:
+        - name
+        - status
+        - restarts
+        - events
+        - logs
+      properties:
+        name:
+          type: string
+          title: Name
+        status:
+          type: string
+          title: Status
+        restarts:
+          type: integer
+          format: int32
+          title: Restarts
+        events:
+          type: array
+          title: Events
+          items:
+            $ref: '#/components/schemas/PodEvent'
+        logs:
+          type: array
+          title: Logs
+          items:
+            $ref: '#/components/schemas/LogInfo'
+
+# type PodInfo struct {
+# 	Name     string     `json:"name"`
+# 	Status   string     `json:"status"`
+# 	Restarts int32      `json:"restarts"`
+# 	Events   []PodEvent `json:"events"`
+# 	Logs     []LogInfo  `json:"logs"`
+# }
+
+    PodEvent:
+      type: object
+      required:
+        - reason
+        - message
+        - timestamp
+      properties:
+        reason:
+          type: string
+          title: Reason
+        message:
+          type: string
+          title: Message
+        timestamp:
+          type: string
+          title: Timestamp
+
+# type PodEvent struct {
+# 	Reason    string `json:"reason"`
+# 	Message   string `json:"message"`
+# 	Timestamp string `json:"timestamp"`
+# }
+    LogInfo:
+      type: object
+      required:
+        - container
+        - log
+      properties:
+        container:
+          type: string
+          title: Container
+        log:
+          type: string
+          title: Log
+
+# type LogInfo struct {
+# 	Container string `json:"container"`
+# 	Log       string `json:"log"`
+# }
+
