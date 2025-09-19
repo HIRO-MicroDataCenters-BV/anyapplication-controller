@@ -11,7 +11,6 @@ require (
 	github.com/argoproj/gitops-engine v0.7.1-0.20250328191959-6d3cf122b03f
 	github.com/cockroachdb/errors v1.12.0
 	github.com/deckarep/golang-set/v2 v2.8.0
-	github.com/go-chi/chi/v5 v5.2.2
 	github.com/mittwald/go-helm-client v0.12.16
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.38.0
