@@ -6,6 +6,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -18,10 +19,29 @@ type ApplicationReport struct {
 	Workloads []WorkloadStatus `json:"workloads"`
 }
 
+// ApplicationSpec defines model for ApplicationSpec.
+type ApplicationSpec struct {
+	Id        ResourceId                       `json:"id"`
+	Resources []ApplicationSpec_Resources_Item `json:"resources"`
+}
+
+// ApplicationSpec_Resources_Item defines model for ApplicationSpec.resources.Item.
+type ApplicationSpec_Resources_Item struct {
+	union json.RawMessage
+}
+
 // LogInfo defines model for LogInfo.
 type LogInfo struct {
 	Container string `json:"container"`
 	Log       string `json:"log"`
+}
+
+// PVCResources defines model for PVCResources.
+type PVCResources struct {
+	Id           ResourceId `json:"id"`
+	Replica      int32      `json:"replica"`
+	Size         *string    `json:"size,omitempty"`
+	StorageClass string     `json:"storage-class"`
 }
 
 // PodEvent defines model for PodEvent.
@@ -40,6 +60,20 @@ type PodInfo struct {
 	Status   string     `json:"status"`
 }
 
+// PodResources defines model for PodResources.
+type PodResources struct {
+	Id       ResourceId        `json:"id"`
+	Limits   map[string]string `json:"limits"`
+	Replica  int32             `json:"replica"`
+	Requests map[string]string `json:"requests"`
+}
+
+// ResourceId defines model for ResourceId.
+type ResourceId struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+}
+
 // WorkloadStatus defines model for WorkloadStatus.
 type WorkloadStatus struct {
 	Available   int32  `json:"available"`
@@ -52,8 +86,73 @@ type WorkloadStatus struct {
 	Unavailable int32  `json:"unavailable"`
 }
 
+// AsPodResources returns the union data inside the ApplicationSpec_Resources_Item as a PodResources
+func (t ApplicationSpec_Resources_Item) AsPodResources() (PodResources, error) {
+	var body PodResources
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromPodResources overwrites any union data inside the ApplicationSpec_Resources_Item as the provided PodResources
+func (t *ApplicationSpec_Resources_Item) FromPodResources(v PodResources) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergePodResources performs a merge with any union data inside the ApplicationSpec_Resources_Item, using the provided PodResources
+func (t *ApplicationSpec_Resources_Item) MergePodResources(v PodResources) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsPVCResources returns the union data inside the ApplicationSpec_Resources_Item as a PVCResources
+func (t ApplicationSpec_Resources_Item) AsPVCResources() (PVCResources, error) {
+	var body PVCResources
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromPVCResources overwrites any union data inside the ApplicationSpec_Resources_Item as the provided PVCResources
+func (t *ApplicationSpec_Resources_Item) FromPVCResources(v PVCResources) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergePVCResources performs a merge with any union data inside the ApplicationSpec_Resources_Item, using the provided PVCResources
+func (t *ApplicationSpec_Resources_Item) MergePVCResources(v PVCResources) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ApplicationSpec_Resources_Item) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ApplicationSpec_Resources_Item) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get Application Spec
+	// (GET /applications/{namespace}/{name}/specification)
+	GetApplicationSpec(w http.ResponseWriter, r *http.Request, namespace string, name string)
 	// Get Application Status
 	// (GET /applications/{namespace}/{name}/status)
 	GetApplicationStatus(w http.ResponseWriter, r *http.Request, namespace string, name string)
@@ -67,6 +166,40 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetApplicationSpec operation middleware
+func (siw *ServerInterfaceWrapper) GetApplicationSpec(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", r.PathValue("namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetApplicationSpec(w, r, namespace, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetApplicationStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetApplicationStatus(w http.ResponseWriter, r *http.Request) {
@@ -222,6 +355,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("GET "+options.BaseURL+"/applications/{namespace}/{name}/specification", wrapper.GetApplicationSpec)
 	m.HandleFunc("GET "+options.BaseURL+"/applications/{namespace}/{name}/status", wrapper.GetApplicationStatus)
 
 	return m

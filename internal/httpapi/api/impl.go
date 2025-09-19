@@ -53,3 +53,7 @@ func (s ServerImpl) GetApplicationStatus(w http.ResponseWriter, r *http.Request,
 	}
 
 }
+
+func (s ServerImpl) GetApplicationSpec(w http.ResponseWriter, r *http.Request, namespace string, name string) {
+
+}

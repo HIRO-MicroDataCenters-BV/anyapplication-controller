@@ -34,6 +34,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationReport'
+  /applications/{namespace}/{name}/specification:
+    get:
+      summary: Get Application Spec
+      operationId: get_application_spec
+      parameters:
+      - name: namespace
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Namespace
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Get Application Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationSpec'
 components:
   schemas:
     ApplicationReport:
@@ -92,17 +116,6 @@ components:
           type: string
           title: Message
 
-# type WorkloadStatus struct {
-# 	Kind        string `json:"kind"`      // e.g., Deployment
-# 	Name        string `json:"name"`      // workload name
-# 	Namespace   string `json:"namespace"` // ns
-# 	Ready       bool   `json:"ready"`     // summarized status
-# 	Desired     int32  `json:"desired"`
-# 	Available   int32  `json:"available"`
-# 	Unavailable int32  `json:"unavailable"`
-# 	Message     string `json:"message"` // issue summary
-# }
-
     PodInfo:
       type: object
       required:
@@ -133,14 +146,6 @@ components:
           items:
             $ref: '#/components/schemas/LogInfo'
 
-# type PodInfo struct {
-# 	Name     string     `json:"name"`
-# 	Status   string     `json:"status"`
-# 	Restarts int32      `json:"restarts"`
-# 	Events   []PodEvent `json:"events"`
-# 	Logs     []LogInfo  `json:"logs"`
-# }
-
     PodEvent:
       type: object
       required:
@@ -158,11 +163,6 @@ components:
           type: string
           title: Timestamp
 
-# type PodEvent struct {
-# 	Reason    string `json:"reason"`
-# 	Message   string `json:"message"`
-# 	Timestamp string `json:"timestamp"`
-# }
     LogInfo:
       type: object
       required:
@@ -176,8 +176,80 @@ components:
           type: string
           title: Log
 
-# type LogInfo struct {
-# 	Container string `json:"container"`
-# 	Log       string `json:"log"`
-# }
+    ApplicationSpec:
+      type: object
+      required:
+        - id
+        - resources
+      properties:
+        id:
+          $ref: '#/components/schemas/ResourceId'
+          title: Id
+        resources:
+          type: array
+          title: Resources
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/PodResources'
+              - $ref: '#/components/schemas/PVCResources'
 
+    ResourceId:
+      type: object
+      required:
+        - name
+        - namespace
+      properties:
+        name:
+          type: string
+          title: Name
+        namespace:
+          type: string
+          title: Namespace
+
+    PodResources:
+      type: object
+      required:
+        - id
+        - replica
+        - requests
+        - limits
+      properties:
+        id:
+          $ref: '#/components/schemas/ResourceId'
+          title: Id
+        replica:
+          type: integer
+          format: int32
+          title: Replica
+        requests:
+          type: object
+          title: Requests
+          additionalProperties:
+            type: string
+        limits:
+          type: object
+          title: Limits
+          additionalProperties:
+            type: string
+
+    PVCResources:
+      type: object
+      required:
+        - id
+        - replica
+        - requests
+        - storage-class
+      properties:
+        id:
+          $ref: '#/components/schemas/ResourceId'
+          title: Id
+        replica:
+          type: integer
+          format: int32
+          title: Replica
+        size:
+          type: string
+          title: Size
+        storage-class:
+          type: string
+          title: Size
