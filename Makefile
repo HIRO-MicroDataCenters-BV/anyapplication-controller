@@ -118,17 +118,13 @@ run: manifests generate fmt vet ## Run a controller from your host.
 run-kind-kind-cluster1: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go -config ./config/anyapplication/kind-kind-cluster1.yaml \
 		-metrics-bind-address :19090 \
-		-health-probe-bind-address : \
-		-webhook-port 9443 \
-		-webhook-cert-path $(CERTIFICATE_LOCAL_PATH)
+		-health-probe-bind-address :
 
 .PHONY: run-kind-kind-cluster2
 run-kind-kind-cluster2: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go -config ./config/anyapplication/kind-kind-cluster2.yaml \
 		-metrics-bind-address :29090 \
-		-health-probe-bind-address :29091 \
-		-webhook-port 9444 \
-		-webhook-cert-path $(CERTIFICATE_LOCAL_PATH)
+		-health-probe-bind-address :29091
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
