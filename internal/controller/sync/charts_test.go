@@ -61,7 +61,7 @@ var _ = Describe("Charts", func() {
 
 	It("should sync new version of chart for a version constraint", func() {
 
-		version, err := types.NewChartVersion("^2.x")
+		version, err := types.NewChartVersion("~2.2.x")
 		Expect(err).NotTo(HaveOccurred())
 
 		latest, err := charts.AddAndGetLatest("nginx-ingress", "https://helm.nginx.com/stable", version)
