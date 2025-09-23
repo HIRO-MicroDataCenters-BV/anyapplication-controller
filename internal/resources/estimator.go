@@ -174,3 +174,62 @@ func (re *ResourceEstimator) addResources(target *ResourceValues, input interfac
 	}
 	return nil
 }
+
+func CollectResources(object []interface{}, replicas int64, totalRequests *map[string]*resource.Quantity, totalLimits *map[string]*resource.Quantity) error {
+	if object == nil {
+		return nil
+	}
+	for _, c := range object {
+		if cMap, ok := c.(map[string]interface{}); ok {
+			if resMap, found, _ := unstructured.NestedMap(cMap, "resources"); found {
+				err := addResources(totalRequests, resMap["requests"], replicas)
+				if err != nil {
+					return err
+				}
+				err = addResources(totalLimits, resMap["limits"], replicas)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func addResources(totals *map[string]*resource.Quantity, input interface{}, replicas int64) error {
+	if input == nil {
+		return nil
+	}
+	resMap, ok := input.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid resource map: %v", input)
+	}
+
+	for k, v := range resMap {
+		valStr, ok := v.(string)
+		if !ok {
+			continue
+		}
+
+		q, err := resource.ParseQuantity(valStr)
+		if err != nil {
+			continue
+		}
+
+		replicas := resource.MustParse(fmt.Sprintf("%d", replicas))
+		replicasInt, ok := replicas.AsInt64()
+		if !ok {
+			return fmt.Errorf("failed to convert replicas to int64: %v", err)
+		}
+		q.Mul(replicasInt)
+
+		key := strings.ToLower(k)
+		current, exists := (*totals)[key]
+		if !exists {
+			(*totals)[key] = &q
+		} else {
+			current.Add(q)
+		}
+	}
+	return nil
+}

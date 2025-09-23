@@ -38,10 +38,11 @@ type LogInfo struct {
 
 // PVCResources defines model for PVCResources.
 type PVCResources struct {
-	Id           ResourceId `json:"id"`
-	Replica      int32      `json:"replica"`
-	Size         *string    `json:"size,omitempty"`
-	StorageClass string     `json:"storage-class"`
+	Id           ResourceId        `json:"id"`
+	Limits       map[string]string `json:"limits"`
+	Replica      int32             `json:"replica"`
+	Requests     map[string]string `json:"requests"`
+	StorageClass string            `json:"storage-class"`
 }
 
 // PodEvent defines model for PodEvent.

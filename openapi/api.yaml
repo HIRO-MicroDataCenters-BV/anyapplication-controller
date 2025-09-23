@@ -238,6 +238,7 @@ components:
         - id
         - replica
         - requests
+        - limits
         - storage-class
       properties:
         id:
@@ -247,9 +248,16 @@ components:
           type: integer
           format: int32
           title: Replica
-        size:
-          type: string
-          title: Size
         storage-class:
           type: string
           title: Size
+        requests:
+          type: object
+          title: Requests
+          additionalProperties:
+            type: string
+        limits:
+          type: object
+          title: Limits
+          additionalProperties:
+            type: string
