@@ -30,7 +30,7 @@ spec:
               memory: "256Mi"
 `
 
-	est := NewResourceEstimator()
+	est := NewWorkloadParser()
 	totals, err := est.EstimateFromYAML(yaml)
 	assert.NoError(t, err)
 
@@ -64,7 +64,7 @@ spec:
               memory: "256Mi"
 `
 
-	est := NewResourceEstimator()
+	est := NewWorkloadParser()
 	totals, err := est.EstimateFromYAML(yaml)
 	assert.NoError(t, err)
 
@@ -75,7 +75,7 @@ spec:
 func TestEstimateFromYAML_InvalidYAML(t *testing.T) {
 	yaml := `this is not valid yaml`
 
-	est := NewResourceEstimator()
+	est := NewWorkloadParser()
 	_, err := est.EstimateFromYAML(yaml)
 	assert.Error(t, err)
 }

@@ -23,13 +23,13 @@ type ResourceTotals struct {
 	Limits   ResourceValues
 }
 
-type ResourceEstimator struct{}
+type WorkloadParser struct{}
 
-func NewResourceEstimator() *ResourceEstimator {
-	return &ResourceEstimator{}
+func NewWorkloadParser() *WorkloadParser {
+	return &WorkloadParser{}
 }
 
-func (re *ResourceEstimator) EstimateFromYAML(renderedYAML string) (ResourceTotals, error) {
+func (re *WorkloadParser) EstimateFromYAML(renderedYAML string) (ResourceTotals, error) {
 	objects, err := re.parseYAMLDocs(renderedYAML)
 	if err != nil {
 		return ResourceTotals{}, err
@@ -54,7 +54,7 @@ func (re *ResourceEstimator) EstimateFromYAML(renderedYAML string) (ResourceTota
 	return total, nil
 }
 
-func (re *ResourceEstimator) parseYAMLDocs(yamlText string) ([]*unstructured.Unstructured, error) {
+func (re *WorkloadParser) parseYAMLDocs(yamlText string) ([]*unstructured.Unstructured, error) {
 	docs := strings.Split(yamlText, "\n---")
 	objects := make([]*unstructured.Unstructured, 0, len(docs))
 
@@ -76,7 +76,7 @@ func (re *ResourceEstimator) parseYAMLDocs(yamlText string) ([]*unstructured.Uns
 	return objects, nil
 }
 
-func (re *ResourceEstimator) extractResources(obj *unstructured.Unstructured) (ResourceTotals, error) {
+func (re *WorkloadParser) extractResources(obj *unstructured.Unstructured) (ResourceTotals, error) {
 	kind := obj.GetKind()
 	spec, _, _ := unstructured.NestedMap(obj.Object, "spec")
 
@@ -115,7 +115,7 @@ func (re *ResourceEstimator) extractResources(obj *unstructured.Unstructured) (R
 	return totals, nil
 }
 
-func (re *ResourceEstimator) collectResources(containers []interface{}, replicas int64, totals *ResourceTotals) error {
+func (re *WorkloadParser) collectResources(containers []interface{}, replicas int64, totals *ResourceTotals) error {
 	if containers == nil {
 		return nil
 	}
@@ -136,7 +136,7 @@ func (re *ResourceEstimator) collectResources(containers []interface{}, replicas
 	return nil
 }
 
-func (re *ResourceEstimator) addResources(target *ResourceValues, input interface{}, replicas int64) error {
+func (re *WorkloadParser) addResources(target *ResourceValues, input interface{}, replicas int64) error {
 	if input == nil {
 		return nil
 	}
