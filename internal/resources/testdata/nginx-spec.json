@@ -1,0 +1,1 @@
+{"id":{"name":"nginx","namespace":"default"},"resources":[{"id":{"name":"","namespace":""},"limits":{},"replica":1,"requests":{}}]}

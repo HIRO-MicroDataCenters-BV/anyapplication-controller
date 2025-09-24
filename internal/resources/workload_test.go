@@ -93,3 +93,76 @@ spec:
 
 	assert.Equal(t, []api.PVCResources(nil), pvc)
 }
+
+func TestParseYAML_StatefullSetWithPVC(t *testing.T) {
+	yamlString := `
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+spec:
+  selector:
+    matchLabels:
+      app: nginx # has to match .spec.template.metadata.labels
+  serviceName: "nginx"
+  replicas: 3 # by default is 1
+  minReadySeconds: 10 # by default is 0
+  template:
+    metadata:
+      labels:
+        app: nginx # has to match .spec.selector.matchLabels
+    spec:
+      terminationGracePeriodSeconds: 10
+      initContainers:
+        - name: init
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+      containers:
+        - name: app
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "256Mi"
+  volumeClaimTemplates:
+  - metadata:
+      name: www
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "my-storage-class"
+      resources:
+        requests:
+          storage: 1Gi
+`
+	u := &unstructured.Unstructured{}
+	err := yaml.Unmarshal([]byte(yamlString), u)
+	assert.NoError(t, err)
+
+	est := NewWorkloadParser()
+	totals, pvc, err := est.Parse(u)
+	assert.NoError(t, err)
+
+	assert.Equal(t, &api.PodResources{
+		Id:       api.ResourceId{Name: "web", Namespace: ""},
+		Limits:   map[string]string{},
+		Replica:  3,
+		Requests: map[string]string{"cpu": "200m", "memory": "320Mi"},
+	}, totals)
+
+	assert.Equal(t, []api.PVCResources{
+		{
+			Id: api.ResourceId{
+				Name:      "www",
+				Namespace: "",
+			},
+			Limits:  map[string]string{},
+			Replica: 3,
+			Requests: map[string]string{
+				"storage": "1Gi",
+			},
+			StorageClass: "my-storage-class",
+		},
+	}, pvc)
+
+}

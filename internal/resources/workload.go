@@ -49,17 +49,59 @@ func (re *WorkloadParser) Parse(obj *unstructured.Unstructured) (*api.PodResourc
 			templateSpec, _, _ = unstructured.NestedMap(tmplMap, "spec")
 		}
 	}
+	podResources, err := CollectPodResources(templateSpec, replicas, name, namespace)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	volumeClaimTemplateSpec := []interface{}(nil)
+	if tmpl, ok := spec["volumeClaimTemplates"]; ok {
+		if tmplMap, ok := tmpl.([]interface{}); ok {
+			volumeClaimTemplateSpec = tmplMap
+		}
+	}
+
+	pvcResources, err := CollectPVCResources(volumeClaimTemplateSpec, replicas)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return podResources, pvcResources, nil
+}
+
+func CollectPVCResources(volumeClaimTemplateSpecs []interface{}, replicas int32) ([]api.PVCResources, error) {
+	if volumeClaimTemplateSpecs == nil {
+		return nil, nil
+	}
+	pvcResources := make([]api.PVCResources, 0)
+	for _, spec := range volumeClaimTemplateSpecs {
+		if volumeClaimTemplateSpec, ok := spec.(map[string]interface{}); ok {
+			est := NewPVCParser()
+			parsed, err := est.ParseClaimTemplate(volumeClaimTemplateSpec)
+			if err != nil {
+				return nil, err
+			}
+			parsed.Replica = 3
+			pvcResources = append(pvcResources, *parsed)
+		}
+	}
+
+	return pvcResources, nil
+}
+
+func CollectPodResources(templateSpec map[string]interface{}, replicas int32, name string, namespace string) (*api.PodResources, error) {
+
 	objectsWithResources := make([]interface{}, 0)
 	containers, containersFound, err := unstructured.NestedSlice(templateSpec, "containers")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if containersFound {
 		objectsWithResources = append(objectsWithResources, containers...)
 	}
 	initContainers, initContainersFound, err := unstructured.NestedSlice(templateSpec, "initContainers")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if initContainersFound {
 		objectsWithResources = append(objectsWithResources, initContainers...)
@@ -68,7 +110,7 @@ func (re *WorkloadParser) Parse(obj *unstructured.Unstructured) (*api.PodResourc
 	requests := map[string]*resource.Quantity{}
 	limits := map[string]*resource.Quantity{}
 	if err := CollectResources(objectsWithResources, 1, &requests, &limits); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	Limits := map[string]string{}
 	for k, v := range limits {
@@ -85,7 +127,7 @@ func (re *WorkloadParser) Parse(obj *unstructured.Unstructured) (*api.PodResourc
 		Replica:  replicas,
 		Requests: Requests,
 	}
-	return &totals, nil, nil
+	return &totals, nil
 }
 
 func CollectResources(object []interface{}, replicas int64, totalRequests *map[string]*resource.Quantity, totalLimits *map[string]*resource.Quantity) error {

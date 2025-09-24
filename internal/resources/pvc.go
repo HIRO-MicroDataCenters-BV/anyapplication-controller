@@ -11,6 +11,28 @@ type PVCParser struct{}
 func NewPVCParser() *PVCParser {
 	return &PVCParser{}
 }
+func (p *PVCParser) ParseClaimTemplate(claimTemplate map[string]interface{}) (*api.PVCResources, error) {
+	name := getNestedString(claimTemplate, "metadata", "name")
+	namespace := getNestedString(claimTemplate, "metadata", "namespace")
+
+	spec, found, err := unstructured.NestedMap(claimTemplate, "spec")
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil
+	}
+
+	totals, err := p.parseUnstructured(spec)
+	if err != nil {
+		return nil, err
+	}
+	totals.Id.Name = name
+	totals.Id.Namespace = namespace
+
+	return totals, nil
+
+}
 
 func (p *PVCParser) Parse(obj *unstructured.Unstructured) (*api.PVCResources, error) {
 	name := obj.GetName()
@@ -23,6 +45,19 @@ func (p *PVCParser) Parse(obj *unstructured.Unstructured) (*api.PVCResources, er
 	if !found {
 		return nil, nil
 	}
+
+	totals, err := p.parseUnstructured(spec)
+	if err != nil {
+		return nil, err
+	}
+	totals.Id.Name = name
+	totals.Id.Namespace = namespace
+
+	return totals, nil
+
+}
+
+func (p *PVCParser) parseUnstructured(spec map[string]interface{}) (*api.PVCResources, error) {
 	storageClass := getNestedString(spec, "storageClassName")
 	requests := map[string]*resource.Quantity{}
 	limits := map[string]*resource.Quantity{}
@@ -39,7 +74,7 @@ func (p *PVCParser) Parse(obj *unstructured.Unstructured) (*api.PVCResources, er
 	}
 
 	totals := api.PVCResources{
-		Id:           api.ResourceId{Name: name, Namespace: namespace},
+		Id:           api.ResourceId{},
 		Limits:       Limits,
 		Replica:      1,
 		Requests:     Requests,
