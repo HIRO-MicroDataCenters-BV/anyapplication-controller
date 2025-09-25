@@ -5,6 +5,8 @@ package api
 
 import (
 	"context"
+
+	v1 "hiro.io/anyapplication/api/v1"
 )
 
 type ApplicationReports interface {
@@ -12,5 +14,5 @@ type ApplicationReports interface {
 }
 
 type ApplicationSpecs interface {
-	GetApplicationSpec(ctx context.Context, namespace string, name string) (*ApplicationSpec, error)
+	GetApplicationSpec(ctx context.Context, application *v1.AnyApplication) (*ApplicationSpec, error)
 }

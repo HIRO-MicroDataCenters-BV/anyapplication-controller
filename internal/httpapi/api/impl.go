@@ -64,7 +64,7 @@ func (s ServerImpl) GetApplicationSpec(w http.ResponseWriter, r *http.Request, n
 		return
 	}
 
-	applicationSpec, err := s.applicationSpecs.GetApplicationSpec(r.Context(), name, namespace)
+	applicationSpec, err := s.applicationSpecs.GetApplicationSpec(r.Context(), application)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
