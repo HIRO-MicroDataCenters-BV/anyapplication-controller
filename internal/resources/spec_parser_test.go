@@ -22,3 +22,15 @@ func TestParseSpec_Nginx(t *testing.T) {
 
 	assert.Equal(t, &expected, actual)
 }
+
+func TestParseSpec_Kafka(t *testing.T) {
+	// helm template my-release oci://registry-1.docker.io/bitnamicharts/kafka > kafka.yaml
+	resources := fixture.LoadYamlFixture("kafka.yaml")
+	expected := fixture.LoadJSONFixture[api.ApplicationSpec]("kafka-spec.json")
+
+	est := NewSpecParser("kafka", "default", resources)
+	actual, err := est.Parse()
+	assert.NoError(t, err)
+
+	assert.Equal(t, &expected, actual)
+}
