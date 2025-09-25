@@ -16,6 +16,20 @@ entries:
     - https://HIRO-MicroDataCenters-BV.github.io/anyapplication-controller/helm-charts/anyapplication-0.2.0.tgz
     version: 0.2.0
   - apiVersion: v2
+    appVersion: 0.2.0-dev.11.main.ee8c1d60
+    created: "2025-09-25T10:07:54.283882897Z"
+    description: Decentralized Control Plane Application Controller
+    digest: 901c2108b0f209426ff457031705d93d0833f19983d1134f2b6aab22a8891b37
+    home: https://github.com/HIRO-MicroDataCenters-BV/anyapplication-controller
+    maintainers:
+    - name: HIRO-Microdatacenters
+      url: https://hiro-microdatacenters.nl
+    name: anyapplication
+    type: application
+    urls:
+    - https://HIRO-MicroDataCenters-BV.github.io/anyapplication-controller/helm-charts/anyapplication-0.2.0-dev.11.main.ee8c1d60.tgz
+    version: 0.2.0-dev.11.main.ee8c1d60
+  - apiVersion: v2
     appVersion: 0.1.3
     created: "2025-08-21T08:35:20.159422762Z"
     description: Decentralized Control Plane Application Controller
@@ -449,4 +463,4 @@ entries:
     urls:
     - https://HIRO-MicroDataCenters-BV.github.io/anyapplication-controller/helm-charts/anyapplication-0.0.1-dev.13.main.a38d3fc9.tgz
     version: 0.0.1-dev.13.main.a38d3fc9
-generated: "2025-09-19T09:52:32.426768694Z"
+generated: "2025-09-25T10:07:54.283213203Z"
