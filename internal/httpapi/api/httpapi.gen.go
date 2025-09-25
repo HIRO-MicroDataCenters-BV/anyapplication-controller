@@ -30,6 +30,24 @@ type ApplicationSpec_Resources_Item struct {
 	union json.RawMessage
 }
 
+// ErrorResponse defines model for ErrorResponse.
+type ErrorResponse struct {
+	// Code Machine-readable error code
+	Code string `json:"code"`
+
+	// Details Additional error details (optional)
+	Details *[]struct {
+		Field *string `json:"field,omitempty"`
+		Issue *string `json:"issue,omitempty"`
+	} `json:"details,omitempty"`
+
+	// Message Human-readable description of the error
+	Message string `json:"message"`
+
+	// Status HTTP status code
+	Status int `json:"status"`
+}
+
 // LogInfo defines model for LogInfo.
 type LogInfo struct {
 	Container string `json:"container"`
@@ -38,10 +56,11 @@ type LogInfo struct {
 
 // PVCResources defines model for PVCResources.
 type PVCResources struct {
-	Id           ResourceId `json:"id"`
-	Replica      int32      `json:"replica"`
-	Size         *string    `json:"size,omitempty"`
-	StorageClass string     `json:"storage-class"`
+	Id           ResourceId        `json:"id"`
+	Limits       map[string]string `json:"limits"`
+	Replica      int32             `json:"replica"`
+	Requests     map[string]string `json:"requests"`
+	StorageClass string            `json:"storage-class"`
 }
 
 // PodEvent defines model for PodEvent.

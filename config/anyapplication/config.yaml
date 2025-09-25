@@ -70,3 +70,4 @@ logging:
     ClusterCache: none
     Controller: none
     Jobs: info
+    API: info

@@ -247,6 +247,18 @@ func (m *applications) isManagedFunc(instanceId string) IsManagedResourceFunc {
 	}
 }
 
+func (m *applications) GetRenderedChart(application *v1.AnyApplication) (*types.RenderedChart, error) {
+	version, err := m.DetermineTargetVersion(application)
+	if err != nil {
+		return nil, err
+	}
+	cachedApp, err := m.getOrRenderAppVersion(application, version)
+	if err != nil {
+		return nil, err
+	}
+	return cachedApp.renderedChart, nil
+}
+
 func (m *applications) GetAggregatedStatusVersion(
 	application *v1.AnyApplication,
 	version *types.SpecificVersion,

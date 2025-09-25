@@ -5,6 +5,7 @@ package helm
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"net/url"
@@ -130,6 +131,15 @@ func (h *HelmClientImpl) FetchVersions(repoURL string, chartName string) ([]*sem
 	indexFile, err := chartRepo.DownloadIndexFile()
 	if err != nil {
 		return nil, fmt.Errorf("looks like %q is not a valid chart repository or cannot be reached: %w", repoURL, err)
+	}
+	attempts := 10
+	for attempts > 0 {
+		data, err := os.ReadFile(indexFile)
+		if err == nil && len(data) != 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+		attempts--
 	}
 
 	repoIndex, err := repo.LoadIndexFile(indexFile)
