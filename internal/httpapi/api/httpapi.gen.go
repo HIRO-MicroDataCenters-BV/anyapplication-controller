@@ -30,6 +30,24 @@ type ApplicationSpec_Resources_Item struct {
 	union json.RawMessage
 }
 
+// ErrorResponse defines model for ErrorResponse.
+type ErrorResponse struct {
+	// Code Machine-readable error code
+	Code string `json:"code"`
+
+	// Details Additional error details (optional)
+	Details *[]struct {
+		Field *string `json:"field,omitempty"`
+		Issue *string `json:"issue,omitempty"`
+	} `json:"details,omitempty"`
+
+	// Message Human-readable description of the error
+	Message string `json:"message"`
+
+	// Status HTTP status code
+	Status int `json:"status"`
+}
+
 // LogInfo defines model for LogInfo.
 type LogInfo struct {
 	Container string `json:"container"`
