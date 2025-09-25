@@ -25,10 +25,11 @@ type ApiServer struct {
 func NewHttpServer(
 	options ApplicationApiOptions,
 	applicationReports api.ApplicationReports,
+	applicationSpecs api.ApplicationSpecs,
 	applications *ctrltypes.Applications,
 	kubeClient client.Client,
 ) *ApiServer {
-	serverImpl := api.NewServer(applicationReports, *applications, kubeClient)
+	serverImpl := api.NewServer(applicationReports, applicationSpecs, *applications, kubeClient)
 	r := http.NewServeMux()
 	// get an `http.Handler` that we can use
 	httpHandler := api.HandlerFromMux(serverImpl, r)

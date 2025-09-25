@@ -46,9 +46,9 @@ func LoadJSONFixture[T any](filename string) T {
 	return data
 }
 
-func LoadYamlFixture(filename string) []unstructured.Unstructured {
+func LoadYamlFixture(filename string) []*unstructured.Unstructured {
 
-	var data []unstructured.Unstructured
+	data := make([]*unstructured.Unstructured, 0)
 
 	path := filepath.Join("testdata", filename)
 	raw, err := os.ReadFile(path)
@@ -67,7 +67,7 @@ func LoadYamlFixture(filename string) []unstructured.Unstructured {
 		if err := json.Unmarshal(jsonData, &obj.Object); err != nil {
 			log.Fatalf("Failed to unmarshal JSON into unstructured for resource #%d: %v", i+1, err)
 		}
-		data = append(data, obj)
+		data = append(data, &obj)
 	}
 
 	return data

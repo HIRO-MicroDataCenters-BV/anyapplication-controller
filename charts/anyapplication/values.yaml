@@ -76,3 +76,4 @@ configuration:
       ClusterCache: none
       Controller: none
       Jobs: info
+      API: info

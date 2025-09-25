@@ -71,6 +71,8 @@ type Applications interface {
 	GetInstanceId(application *v1.AnyApplication) string
 	LoadApplication(application *v1.AnyApplication) (GlobalApplication, error)
 
+	GetRenderedChart(application *v1.AnyApplication) (*RenderedChart, error)
+
 	GetAggregatedStatusVersion(application *v1.AnyApplication, version *SpecificVersion) *AggregatedStatus
 	SyncVersion(ctx context.Context, application *v1.AnyApplication, version *SpecificVersion) (*SyncResult, error)
 	DeleteVersion(ctx context.Context, application *v1.AnyApplication, version *SpecificVersion) (*DeleteResult, error)

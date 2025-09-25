@@ -20,16 +20,19 @@ var _ ServerInterface = (*ServerImpl)(nil)
 type ServerImpl struct {
 	applicationReports ApplicationReports
 	applications       ctrltypes.Applications
+	applicationSpecs   ApplicationSpecs
 	kubeClient         client.Client
 }
 
 func NewServer(
 	applicationReports ApplicationReports,
+	applicationSpecs ApplicationSpecs,
 	applications ctrltypes.Applications,
 	kubeClient client.Client,
 ) ServerInterface {
 	return ServerImpl{
 		applicationReports: applicationReports,
+		applicationSpecs:   applicationSpecs,
 		applications:       applications,
 		kubeClient:         kubeClient,
 	}
@@ -55,5 +58,19 @@ func (s ServerImpl) GetApplicationStatus(w http.ResponseWriter, r *http.Request,
 }
 
 func (s ServerImpl) GetApplicationSpec(w http.ResponseWriter, r *http.Request, namespace string, name string) {
+	application := &v1.AnyApplication{}
+	if err := s.kubeClient.Get(r.Context(), client.ObjectKey{Namespace: namespace, Name: name}, application); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	applicationSpec, err := s.applicationSpecs.GetApplicationSpec(r.Context(), name, namespace)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := json.NewEncoder(w).Encode(applicationSpec); err != nil {
+		log.Printf("failed to encode: %s", err)
+	}
 
 }

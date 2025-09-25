@@ -60,6 +60,7 @@ import (
 	"hiro.io/anyapplication/internal/errorctx"
 	"hiro.io/anyapplication/internal/helm"
 	"hiro.io/anyapplication/internal/httpapi"
+	"hiro.io/anyapplication/internal/resources"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -338,7 +339,8 @@ func main() {
 	applicationReports := errorctx.NewApplicationReports(clusterCache, logFetcher)
 
 	options := httpapi.ApplicationApiOptions{Address: controllerConfig.Api.BindAddress}
-	httpServer := httpapi.NewHttpServer(options, applicationReports, &applications, kubeClient)
+	applicationSpecs := resources.NewApplicationSpecs(applications, kubeClient, loggers["API"])
+	httpServer := httpapi.NewHttpServer(options, applicationReports, applicationSpecs, &applications, kubeClient)
 
 	go func() {
 		if err := httpServer.Start(); err != nil {

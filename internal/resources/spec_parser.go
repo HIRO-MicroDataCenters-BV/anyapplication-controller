@@ -13,10 +13,10 @@ import (
 type ApplicationSpecParser struct {
 	name      string
 	namespace string
-	resources []unstructured.Unstructured
+	resources []*unstructured.Unstructured
 }
 
-func NewSpecParser(name string, namespace string, resources []unstructured.Unstructured) *ApplicationSpecParser {
+func NewSpecParser(name string, namespace string, resources []*unstructured.Unstructured) *ApplicationSpecParser {
 	return &ApplicationSpecParser{
 		name:      name,
 		namespace: namespace,
@@ -27,7 +27,7 @@ func NewSpecParser(name string, namespace string, resources []unstructured.Unstr
 func (p *ApplicationSpecParser) Parse() (*api.ApplicationSpec, error) {
 	resources := make([]api.ApplicationSpec_Resources_Item, 0)
 	for _, resource := range p.resources {
-		extracted, err := p.extractSpec(&resource)
+		extracted, err := p.extractSpec(resource)
 		if err != nil {
 			return nil, err
 		}
