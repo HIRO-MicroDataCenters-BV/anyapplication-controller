@@ -32,9 +32,14 @@ func NewWorkloadParser() *WorkloadParser {
 func (re *WorkloadParser) Parse(obj *unstructured.Unstructured) (*api.PodResources, []api.PVCResources, error) {
 	name := obj.GetName()
 	namespace := obj.GetNamespace()
-
 	kind := obj.GetKind()
-	spec, _, _ := unstructured.NestedMap(obj.Object, "spec")
+	spec, specFound, err := unstructured.NestedMap(obj.Object, "spec")
+	if err != nil {
+		return nil, nil, err
+	}
+	if !specFound {
+		return nil, nil, nil
+	}
 
 	replicas := int32(1)
 	if kind == "Deployment" || kind == "StatefulSet" {
@@ -42,7 +47,6 @@ func (re *WorkloadParser) Parse(obj *unstructured.Unstructured) (*api.PodResourc
 			replicas = int32(r)
 		}
 	}
-
 	templateSpec := spec
 	if tmpl, ok := spec["template"]; ok {
 		if tmplMap, ok := tmpl.(map[string]interface{}); ok {
@@ -134,6 +138,7 @@ func CollectResources(object []interface{}, replicas int64, totalRequests *map[s
 	if object == nil {
 		return nil
 	}
+
 	for _, c := range object {
 		if cMap, ok := c.(map[string]interface{}); ok {
 			if resMap, found, _ := unstructured.NestedMap(cMap, "resources"); found {

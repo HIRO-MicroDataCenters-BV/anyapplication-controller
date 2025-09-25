@@ -4,8 +4,6 @@
 package resources
 
 import (
-	"encoding/json"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,11 +19,6 @@ func TestParseSpec_Nginx(t *testing.T) {
 	est := NewSpecParser("nginx", "default", resources)
 	actual, err := est.Parse()
 	assert.NoError(t, err)
-
-	b, _ := json.Marshal(actual)
-
-	fmt.Printf("actual %v\n", b)
-	// fixture.SaveStringFixture("nginx-spec.json", string(b))
 
 	assert.Equal(t, &expected, actual)
 }

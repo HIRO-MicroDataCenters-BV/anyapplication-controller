@@ -4,15 +4,15 @@
 package fixture
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/yaml"
 )
 
 func SaveStringFixture(filename string, value string) error {
@@ -56,23 +56,18 @@ func LoadYamlFixture(filename string) []unstructured.Unstructured {
 		panic(fmt.Sprintf("failed to read fixture file %s: %v", filename, err))
 	}
 
-	dec := yaml.NewDecoder(strings.NewReader(string(raw)))
-
-	for {
-		var raw map[string]interface{}
-		if err := dec.Decode(&raw); err != nil {
-			if err.Error() == "EOF" {
-				break
-			}
-			log.Fatalf("failed to decode YAML: %v", err)
+	docs := bytes.Split(raw, []byte("\n---"))
+	for i, d := range docs {
+		jsonData, err := yaml.YAMLToJSON(d)
+		if err != nil {
+			log.Fatalf("Failed to convert YAML to JSON for resource #%d: %v", i+1, err)
 		}
 
-		// Skip empty docs (can happen with ---)
-		if len(raw) == 0 {
-			continue
+		var obj unstructured.Unstructured
+		if err := json.Unmarshal(jsonData, &obj.Object); err != nil {
+			log.Fatalf("Failed to unmarshal JSON into unstructured for resource #%d: %v", i+1, err)
 		}
-
-		data = append(data, unstructured.Unstructured{Object: raw})
+		data = append(data, obj)
 	}
 
 	return data

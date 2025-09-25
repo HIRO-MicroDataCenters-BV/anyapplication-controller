@@ -64,13 +64,13 @@ func (p *ApplicationSpecParser) extractSpec(u *unstructured.Unstructured) ([]api
 		if err != nil {
 			return nil, err
 		}
-
-		item := api.ApplicationSpec_Resources_Item{}
-		if err := item.FromPodResources(*podResources); err != nil {
-			return nil, err
+		if podResources != nil {
+			item := api.ApplicationSpec_Resources_Item{}
+			if err := item.FromPodResources(*podResources); err != nil {
+				return nil, err
+			}
+			resourceItems = append(resourceItems, item)
 		}
-		resourceItems = append(resourceItems, item)
-
 		for _, pvcResource := range pvcResources {
 			item := api.ApplicationSpec_Resources_Item{}
 			if err := item.FromPVCResources(pvcResource); err != nil {

@@ -1,1 +1,20 @@
-{"id":{"name":"nginx","namespace":"default"},"resources":[{"id":{"name":"","namespace":""},"limits":{},"replica":1,"requests":{}}]}
+{
+    "id": {
+        "name": "nginx",
+        "namespace": "default"
+    },
+    "resources": [
+        {
+            "id": {
+                "name": "test-release-nginx-ingress-controller",
+                "namespace": "default"
+            },
+            "limits": {},
+            "replica": 1,
+            "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+            }
+        }
+    ]
+}
