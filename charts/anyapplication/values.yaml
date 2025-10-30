@@ -27,6 +27,14 @@ tolerations: []
 
 # nodeSelector:  
 
+resources:
+  requests:
+    cpu: 1
+    memory: 500Mi
+  limits:
+    cpu: 1
+    memory: 500Mi
+
 services:
   type: ClusterIP
   # the port for the API endpoint
@@ -35,8 +43,6 @@ services:
   # the port for the HTTP health endpoint
   health:
     port: 8081
-
-resources: {}
 
 livenessProbe:
   failureThreshold: 3
