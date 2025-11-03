@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/HIRO-MicroDataCenters-BV/anyapplication-controller)
+
 # anyapplication-controller
 // TODO(user): Add simple overview of use/purpose
 
