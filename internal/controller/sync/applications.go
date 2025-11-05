@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
@@ -503,7 +502,7 @@ func getFullName(obj *unstructured.Unstructured) string {
 }
 
 type cachedInstances struct {
-	// map[uniqueConfiguration]*cachedApp
+	// map[str(uniqueConfiguration)]*cachedApp
 	configurations sync.Map
 }
 
@@ -514,7 +513,7 @@ func NewCachedInstances() *cachedInstances {
 }
 
 func (m *cachedInstances) Contains(config *instanceKey) bool {
-	_, ok := m.configurations.Load(*config)
+	_, ok := m.configurations.Load(config.ToString())
 	return ok
 }
 
@@ -522,13 +521,13 @@ func (c *cachedInstances) Put(
 	config *instanceKey,
 	app *cachedApp,
 ) {
-	c.configurations.Store(*config, app)
+	c.configurations.Store(config.ToString(), app)
 }
 
 func (c *cachedInstances) Get(
-	config *instanceKey,
+	key *instanceKey,
 ) (*cachedApp, bool) {
-	if app, ok := c.configurations.Load(*config); ok {
+	if app, ok := c.configurations.Load(key.ToString()); ok {
 		return app.(*cachedApp), true
 	}
 	return nil, false
@@ -556,15 +555,16 @@ type instanceKey struct {
 	Instance *types.ApplicationInstance
 }
 
+func (key *instanceKey) ToString() string {
+	return "instanceKey{ChartKey: " + key.ChartKey.ToString() + ", Instance: " + key.Instance.ToString() + "}"
+}
+
 func (c *instanceKey) Revision() (string, error) {
-	jsonBytes, err := json.Marshal(c)
-	if err != nil {
-		return "", err
-	}
 
-	hash := sha256.Sum256(jsonBytes)
+	hash := sha256.Sum256([]byte(c.ToString()))
 
-	return hex.EncodeToString(hash[:]), nil
+	revision := hex.EncodeToString(hash[:])
+	return revision, nil
 }
 
 func splitResourcesByVersion(resources []*unstructured.Unstructured, log logr.Logger) (map[string][]*unstructured.Unstructured, error) {
