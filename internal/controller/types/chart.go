@@ -29,12 +29,21 @@ type ChartKey struct {
 	Version SpecificVersion
 }
 
+func (ck *ChartKey) ToString() string {
+	return ck.ChartId.RepoUrl + "/" + ck.ChartId.ChartName + ":" + ck.Version.ToString()
+}
+
 type ApplicationInstance struct {
 	InstanceId  string
 	Name        string
 	Namespace   string
 	ReleaseName string
 	ValuesYaml  string
+}
+
+func (ai *ApplicationInstance) ToString() string {
+	return ai.Namespace + "/" + ai.Name + " (" + ai.InstanceId + ") " +
+		ai.ReleaseName + " values{" + ai.ValuesYaml + "}"
 }
 
 type RenderedChart struct {
