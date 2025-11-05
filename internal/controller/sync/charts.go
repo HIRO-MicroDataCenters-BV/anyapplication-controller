@@ -102,14 +102,14 @@ func (c *charts) RegisterChart(chartName string, repoUrl string) error {
 }
 
 func (c *charts) getOrCreateVersions(chartId *types.ChartId) (*ChartVersions, error) {
-	versions, exists := c.charts.Load(chartId)
+	versions, exists := c.charts.Load(*chartId)
 	if !exists {
 		repoName, err := c.helmClient.AddOrUpdateChartRepo(chartId.RepoUrl)
 		if err != nil {
 			return nil, err
 		}
 		versions = &ChartVersions{repoName: repoName, charts: sync.Map{}}
-		c.charts.Store(chartId, versions)
+		c.charts.Store(*chartId, versions)
 	}
 
 	return versions.(*ChartVersions), nil
@@ -135,9 +135,9 @@ func (c *charts) RunSyncCycle() {
 
 	}
 	c.charts.Range(func(key, value any) bool {
-		chartId := key.(*types.ChartId)
+		chartId := key.(types.ChartId)
 		versions := value.(*ChartVersions)
-		c.updateAvailableVersions(chartId, versions)
+		c.updateAvailableVersions(&chartId, versions)
 		return true
 	})
 }
