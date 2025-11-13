@@ -8,16 +8,22 @@ spec:
   type: {{ .Values.services.type }}
   ports:
     # the port for the API endpoint
-    - port: {{ .Values.services.api.port }}
+    - name: api
+      protocol: TCP    
+      port: {{ .Values.services.api.port }}
       {{- if .Values.services.api.nodePort }}
       nodePort: {{ .Values.services.api.nodePort }}
-      {{- end }}
-      protocol: TCP
-      name: api
+      {{- end }}      
     # the port for the HTTP health endpoint
-    - port: {{ .Values.services.health.port }}
-      targetPort: http
+    - name: http
       protocol: TCP
-      name: http
+      port: {{ .Values.services.health.port }}
+      targetPort: {{ .Values.services.health.port }}
+    # the port for the Metrics endpoint
+    - name: metrics
+      port: {{ .Values.services.metrics.port }}
+      protocol: TCP
+      targetPort: {{ .Values.services.metrics.port }}
+
   selector:
     {{- include "app.selectorLabels" . | nindent 4 }}
