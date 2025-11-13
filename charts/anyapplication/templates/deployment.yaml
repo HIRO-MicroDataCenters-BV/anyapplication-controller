@@ -34,11 +34,13 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}          
-          args:
-            - /manager 
-            - --leader-elect
-            - --health-probe-bind-address=:8081
-            - --config=/etc/dcp/application-controller.yaml
+          args: [
+            "--leader-elect",
+            "--health-probe-bind-address=:{{ .Values.services.health.port }}",
+            "--metrics-bind-address=:{{ .Values.services.metrics.port }}", 
+            "--metrics-secure={{ .Values.services.metrics.secure }}",
+            "--config=/etc/dcp/application-controller.yaml"
+          ]
           ports:
           - name: api
             containerPort: {{ .Values.services.api.port }}
@@ -46,6 +48,10 @@ spec:
           # the port for the HTTP health endpoint
           - name: health
             containerPort: {{ .Values.services.health.port }}
+            protocol: TCP
+          # the port for the metrics endpoint            
+          - name: metrics
+            containerPort: {{ .Values.services.metrics.port }}
             protocol: TCP
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}

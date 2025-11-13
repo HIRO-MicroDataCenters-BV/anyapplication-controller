@@ -9,6 +9,7 @@ spec:
   endpoints:
   - interval: 10s
     path: /metrics
+    port: metrics
   namespaceSelector:
     matchNames:
     - {{ .Release.Namespace }}

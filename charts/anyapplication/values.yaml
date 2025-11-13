@@ -45,6 +45,10 @@ services:
   # the port for the HTTP health endpoint
   health:
     port: 8081
+  # the port for the metrics endpoint    
+  metrics:
+    port: 8085
+    secure: false
 
 livenessProbe:
   failureThreshold: 3
