@@ -4843,6 +4843,7 @@ metadata:
     dcp.hiro.io/test: dcp
     helm.sh/chart: nginx-ingress-2.0.1
   name: test-release-nginx-ingress
+  namespace: default
 rules:
 - apiGroups:
   - ""
@@ -4946,6 +4947,7 @@ metadata:
     dcp.hiro.io/test: dcp
     helm.sh/chart: nginx-ingress-2.0.1
   name: test-release-nginx-ingress
+  namespace: default
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -5201,6 +5203,7 @@ metadata:
     dcp.hiro.io/test: dcp
     helm.sh/chart: nginx-ingress-2.0.1
   name: nginx
+  namespace: default
 spec:
   controller: nginx.org/ingress-controller
 ---

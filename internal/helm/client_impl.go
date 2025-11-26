@@ -32,12 +32,13 @@ const (
 )
 
 type HelmClientOptions struct {
-	RestConfig  *rest.Config
-	Debug       bool
-	Linting     bool
-	KubeVersion *chartutil.KubeVersion
-	ClientId    string
-	Log         logr.Logger
+	RestConfig           *rest.Config
+	Debug                bool
+	Linting              bool
+	KubeVersion          *chartutil.KubeVersion
+	ClientId             string
+	Log                  logr.Logger
+	buildClusterScopeMap func(cfg *rest.Config) (map[schema.GroupVersionKind]bool, error)
 }
 
 type HelmClientImpl struct {
@@ -46,7 +47,7 @@ type HelmClientImpl struct {
 }
 
 func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
-
+	options.buildClusterScopeMap = buildGVKClusterScopeMap
 	if options.ClientId == "" {
 		clientId, err := RandClient()
 		if err != nil {
@@ -68,6 +69,12 @@ func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
 	client, err := helmclient.NewClientFromRestConf(&opts)
 
 	return &HelmClientImpl{client, options}, err
+}
+
+func NewTestClient(options *HelmClientOptions) (*HelmClientImpl, error) {
+	client, err := NewHelmClient(options)
+	options.buildClusterScopeMap = BuildStaticGVKClusterScopeMapForTests
+	return client, err
 }
 
 type TemplateArgs struct {
@@ -204,7 +211,7 @@ func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 	}
 	manifest := string(chartBytes)
 
-	isClusterScope, err := buildGVKClusterScopeMap(h.options.RestConfig)
+	isClusterScope, err := h.options.buildClusterScopeMap(h.options.RestConfig)
 	if err != nil {
 		return "", errors.Wrap(err, "Unable to build resource map and discover cluster-wide resources")
 	}
@@ -350,8 +357,6 @@ func buildGVKClusterScopeMap(cfg *rest.Config) (map[schema.GroupVersionKind]bool
 				Group:   groupResources.Group.Name, // core="" , others correct
 				Version: version,
 			}
-
-			fmt.Printf("buildGVKClusterScopeMap %v \n", version)
 			for _, r := range resources {
 				// skip subresources
 				if strings.Contains(r.Name, "/") {

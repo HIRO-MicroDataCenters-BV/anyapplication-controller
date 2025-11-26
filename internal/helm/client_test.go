@@ -26,7 +26,7 @@ var _ = Describe("HelmClient", func() {
 			},
 			ClientId: "tests",
 		}
-		client, err := NewHelmClient(options)
+		client, err := NewTestClient(options)
 
 		if err != nil {
 			Fail("Failed to create Helm client")

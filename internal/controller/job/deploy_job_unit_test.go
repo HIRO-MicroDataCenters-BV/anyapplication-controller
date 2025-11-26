@@ -105,13 +105,13 @@ var _ = Describe("DeployJobUnitests", func() {
 
 		status := deployJob.GetStatus()
 		Expect(status.Status).To(Equal(string(v1.DeploymentStatusPull)))
-		waitForJobMsg(deployJob, "Deployment failure: Retrying deployment (attempt 2 of 3)")
+		waitForJobMsg(deployJob, "Deployment failure: Retrying deployment (attempt 2 of 3).")
 
 		fakeClock.Advance(1 * time.Second)
 
 		status = deployJob.GetStatus()
 		Expect(status.Status).To(Equal(string(v1.DeploymentStatusPull)))
-		waitForJobMsg(deployJob, "Deployment failure: Retrying deployment (attempt 3 of 3)")
+		waitForJobMsg(deployJob, "Deployment failure: Retrying deployment (attempt 3 of 3).")
 
 		fakeClock.Advance(1 * time.Second)
 

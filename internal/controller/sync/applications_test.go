@@ -94,6 +94,7 @@ var _ = Describe("Applications", func() {
 	})
 
 	BeforeEach(func() {
+
 		config := &rest.Config{
 			Host: "https://test",
 		}
@@ -106,7 +107,7 @@ var _ = Describe("Applications", func() {
 			},
 			ClientId: "tests",
 		}
-		helmClient, _ = helm.NewHelmClient(&options)
+		helmClient, _ = helm.NewTestClient(&options)
 
 		updateFuncs = []cache.UpdateSettingsFunc{
 			cache.SetPopulateResourceInfoHandler(func(un *unstructured.Unstructured, _ bool) (info any, cacheManifest bool) {
