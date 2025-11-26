@@ -110,10 +110,10 @@ func (job *DeployJob) runSyncCycle(context types.AsyncJobContext) bool {
 		if job.attempt < job.retryAttempts {
 			job.attempt++
 			job.startTime = job.clock.NowTime().Time
-			job.log.Info("Retrying deployment", "attempt", job.attempt, "maxAttempts", job.retryAttempts)
+			job.log.Info("Retrying deployment", "attempt", job.attempt, "maxAttempts", job.retryAttempts, "healthStatusMessage", healthStatus.Message)
 			job.AttemptFailure(
 				context,
-				fmt.Sprintf("Retrying deployment (attempt %v of %v)", job.attempt, job.retryAttempts),
+				fmt.Sprintf("Retrying deployment (attempt %v of %v). HealthStatusMsg: %v", job.attempt, job.retryAttempts, healthStatus.Message),
 				"Timeout",
 			)
 		} else {
