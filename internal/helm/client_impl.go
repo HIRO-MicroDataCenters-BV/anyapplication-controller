@@ -269,23 +269,35 @@ func AddLabels(newLabels map[string]string, log logr.Logger) func(obj unstructur
 			labels[k] = v
 		}
 		obj.SetLabels(labels)
-		// TODO tests and edge cases (no metadata)
 		if obj.GetKind() == "Deployment" || obj.GetKind() == "StatefulSet" || obj.GetKind() == "DaemonSet" || obj.GetKind() == "Job" {
 			// add labels to the spec template
-			spec, found, err := unstructured.NestedMap(obj.Object, "spec", "template", "metadata")
+			_, found, err := unstructured.NestedMap(obj.Object, "spec", "template")
 			if err != nil {
-				log.Error(err, "Failed to get spec template metadata",
+				log.Error(err, "Failed to get spec template",
 					"kind", obj.GetKind(), "name", obj.GetName(), "namespace", obj.GetNamespace())
 			}
 			if found {
-				if spec["labels"] == nil {
-					spec["labels"] = make(map[string]interface{})
+				_, found, _ := unstructured.NestedMap(obj.Object, "spec", "template", "metadata")
+				if !found {
+					if err := unstructured.SetNestedMap(obj.Object, make(map[string]interface{}), "spec", "template", "metadata"); err != nil {
+						log.Error(err, "Failed to set empty metadata",
+							"kind", obj.GetKind(), "name", obj.GetName(), "namespace", obj.GetNamespace())
+					}
 				}
-				for k, v := range newLabels {
-					spec["labels"].(map[string]interface{})[k] = v
-				}
-				if err := unstructured.SetNestedMap(obj.Object, spec, "spec", "template", "metadata"); err != nil {
-					log.Error(err, "Failed to set spec template metadata",
+				meta, found, _ := unstructured.NestedMap(obj.Object, "spec", "template", "metadata")
+				if found {
+					if meta["labels"] == nil {
+						meta["labels"] = make(map[string]interface{})
+					}
+					for k, v := range newLabels {
+						meta["labels"].(map[string]interface{})[k] = v
+					}
+					if err := unstructured.SetNestedMap(obj.Object, meta, "spec", "template", "metadata"); err != nil {
+						log.Error(err, "Failed to set spec template metadata",
+							"kind", obj.GetKind(), "name", obj.GetName(), "namespace", obj.GetNamespace())
+					}
+				} else {
+					log.Error(err, "Failed to set labels to template spec",
 						"kind", obj.GetKind(), "name", obj.GetName(), "namespace", obj.GetNamespace())
 				}
 			}
