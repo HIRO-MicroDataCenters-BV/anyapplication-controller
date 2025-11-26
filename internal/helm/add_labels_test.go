@@ -104,10 +104,8 @@ var _ = Describe("AddLabels", func() {
 
 	It("should merge labels into spec.template.metadata.labels for StatefulSet", func() {
 		obj := unstructured.Unstructured{}
-		obj.SetKind("StatefulSet")
-		obj.SetName("test-ss")
-		obj.SetNamespace("default")
 		obj.Object = map[string]interface{}{
+			"kind": "StatefulSet",
 			"spec": map[string]interface{}{
 				"template": map[string]interface{}{
 					"metadata": map[string]interface{}{
@@ -118,12 +116,14 @@ var _ = Describe("AddLabels", func() {
 				},
 			},
 		}
+		obj.SetName("test-ss")
+		obj.SetNamespace("default")
 
-		labels := map[string]string{
+		newLabels := map[string]string{
 			"foo": "bar",
 		}
 
-		result := AddLabels(labels, log)(obj)
+		result := AddLabels(newLabels, log)(obj)
 		labelsMap, found, err := unstructured.NestedStringMap(result.Object, "spec", "template", "metadata", "labels")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(found).To(BeTrue())
