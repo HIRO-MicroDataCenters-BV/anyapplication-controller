@@ -5,6 +5,7 @@ package job
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/argoproj/gitops-engine/pkg/health"
@@ -110,12 +111,12 @@ func (job *DeployJob) runSyncCycle(context types.AsyncJobContext) bool {
 		if job.attempt < job.retryAttempts {
 			job.attempt++
 			job.startTime = job.clock.NowTime().Time
-			job.log.Info("Retrying deployment", "attempt", job.attempt, "maxAttempts", job.retryAttempts)
-			job.AttemptFailure(
-				context,
-				fmt.Sprintf("Retrying deployment (attempt %v of %v)", job.attempt, job.retryAttempts),
-				"Timeout",
-			)
+			job.log.Info("Retrying deployment", "attempt", job.attempt, "maxAttempts", job.retryAttempts, "healthStatusMessage", healthStatus.Message)
+			msg := fmt.Sprintf("Retrying deployment (attempt %v of %v).", job.attempt, job.retryAttempts)
+			if strings.TrimSpace(healthStatus.Message) != "" {
+				msg = fmt.Sprintf("%v. HealthStatusMsg: %v", msg, healthStatus.Message)
+			}
+			job.AttemptFailure(context, msg, "Timeout")
 		} else {
 			job.Fail(
 				context,

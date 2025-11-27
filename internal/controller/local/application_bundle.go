@@ -107,8 +107,7 @@ func (bundle *ApplicationBundle) IsDeployed() bool {
 			Name:      expectedItem.GetName(),
 		}
 		if _, exists := availableResourceMap[gvk][name]; !exists {
-			bundle.log.Info("Resource is missing: {gvk} {namespace}/{name}\n",
-				"gvk", gvk.String(), "namespace", name.Namespace, "name", name.Name)
+			bundle.log.Info("Resource is missing", "gvk", gvk.String(), "name", name)
 			return false // Resource is missing
 		}
 	}
@@ -183,7 +182,7 @@ func (bundle *ApplicationBundle) toResourceMap(
 			availableResourceMap[gvk] = make(map[types.NamespacedName]*unstructured.Unstructured)
 		}
 		if _, exists := availableResourceMap[gvk][name]; exists {
-			bundle.log.Info("Duplicate resource found: %s %s/%s", gvk.String(), name.Namespace, name.Name)
+			bundle.log.Info("Duplicate resource found", "gvk", gvk.String(), "name", name)
 			continue // Skip duplicates
 		}
 		availableResourceMap[gvk][name] = resource

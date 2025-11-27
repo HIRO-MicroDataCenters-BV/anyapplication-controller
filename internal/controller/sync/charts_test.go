@@ -37,7 +37,7 @@ var _ = Describe("Charts", func() {
 			},
 			ClientId: "tests",
 		}
-		helmClient, _ = helm.NewHelmClient(&options)
+		helmClient, _ = helm.NewTestClient(&options)
 
 		ctx = context.Background()
 

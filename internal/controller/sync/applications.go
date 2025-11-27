@@ -448,7 +448,6 @@ func (m *applications) loadLocalApplicationVersions(
 		if ok {
 			localApplications[*version] = &local
 		}
-
 	}
 	return localApplications, nil
 }

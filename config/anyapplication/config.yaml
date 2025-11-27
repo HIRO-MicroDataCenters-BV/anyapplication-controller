@@ -65,9 +65,10 @@ cache:
 logging:
   default_level: info
   components:
-    SyncManager: none
-    GitOpsEngine: none
-    ClusterCache: none
-    Controller: none
+    SyncManager: error
+    GitOpsEngine: error
+    ClusterCache: error
+    Controller: error
     Jobs: info
     API: info
+    Helm: error

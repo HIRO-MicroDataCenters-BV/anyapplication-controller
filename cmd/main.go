@@ -254,6 +254,7 @@ func main() {
 			Minor:   "23",
 		},
 		ClientId: applicationConfig.ZoneId,
+		Log:      loggers["Helm"],
 	})
 	failIfError(err, setupLog, "unable to create helm client")
 

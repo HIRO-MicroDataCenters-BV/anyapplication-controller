@@ -12,15 +12,18 @@ import (
 	"strings"
 
 	semver "github.com/Masterminds/semver/v3"
+	"github.com/cockroachdb/errors"
+	"github.com/go-logr/logr"
 	helmclient "github.com/mittwald/go-helm-client"
 	"github.com/mittwald/go-helm-client/values"
-	"sigs.k8s.io/yaml"
-
-	"github.com/cockroachdb/errors"
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/repo"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -29,11 +32,13 @@ const (
 )
 
 type HelmClientOptions struct {
-	RestConfig  *rest.Config
-	Debug       bool
-	Linting     bool
-	KubeVersion *chartutil.KubeVersion
-	ClientId    string
+	RestConfig           *rest.Config
+	Debug                bool
+	Linting              bool
+	KubeVersion          *chartutil.KubeVersion
+	ClientId             string
+	Log                  logr.Logger
+	buildClusterScopeMap func(cfg *rest.Config) (map[schema.GroupVersionKind]bool, error)
 }
 
 type HelmClientImpl struct {
@@ -42,7 +47,7 @@ type HelmClientImpl struct {
 }
 
 func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
-
+	options.buildClusterScopeMap = buildGVKClusterScopeMap
 	if options.ClientId == "" {
 		clientId, err := RandClient()
 		if err != nil {
@@ -53,7 +58,6 @@ func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
 
 	opts := helmclient.RestConfClientOptions{
 		Options: &helmclient.Options{
-			Namespace:        "default",
 			Debug:            options.Debug,
 			DebugLog:         func(format string, v ...interface{}) {},
 			Linting:          options.Linting,
@@ -65,6 +69,12 @@ func NewHelmClient(options *HelmClientOptions) (*HelmClientImpl, error) {
 	client, err := helmclient.NewClientFromRestConf(&opts)
 
 	return &HelmClientImpl{client, options}, err
+}
+
+func NewTestClient(options *HelmClientOptions) (*HelmClientImpl, error) {
+	client, err := NewHelmClient(options)
+	options.buildClusterScopeMap = BuildStaticGVKClusterScopeMapForTests
+	return client, err
 }
 
 type TemplateArgs struct {
@@ -171,7 +181,6 @@ func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	chartSpec := helmclient.ChartSpec{
 		ReleaseName: args.ReleaseName,
 		ChartName:   repoName + "/" + args.ChartName,
@@ -201,7 +210,18 @@ func (h *HelmClientImpl) Template(args *TemplateArgs) (string, error) {
 		return "", errors.Wrap(err, "Failed to template chart")
 	}
 	manifest := string(chartBytes)
-	return AddLabelsToManifest(manifest, args.Labels)
+
+	isClusterScope, err := h.options.buildClusterScopeMap(h.options.RestConfig)
+	if err != nil {
+		return "", errors.Wrap(err, "Unable to build resource map and discover cluster-wide resources")
+	}
+	// Go Helm Client does not support extra labels and namespace post processing
+	// This is post processing step to fix that
+	return PostProcessManifests(
+		manifest,
+		AddLabels(args.Labels, h.options.Log),
+		AddNamespace(args.Namespace, isClusterScope, h.options.Log),
+	)
 }
 
 func DeriveUniqueHelmRepoName(repoURL string) (string, error) {
@@ -217,9 +237,78 @@ func DeriveUniqueHelmRepoName(repoURL string) (string, error) {
 	return domain + "-" + pathPart, nil
 }
 
-// Go Helm Client does not support extra labels
-// This is post processing step to fix that
-func AddLabelsToManifest(manifest string, newLabels map[string]string) (string, error) {
+// Go Helm Client does not namespace postprocessing
+func AddNamespace(namespace string, isClusterScopeRegistry map[schema.GroupVersionKind]bool, log logr.Logger) func(obj unstructured.Unstructured) unstructured.Unstructured {
+	return func(obj unstructured.Unstructured) unstructured.Unstructured {
+		var updateNamespace = false
+		gvk := obj.GroupVersionKind()
+		isClusterScope, exists := isClusterScopeRegistry[gvk]
+		if exists && !isClusterScope {
+			updateNamespace = true
+		}
+		if !exists && obj.GetKind() != "CustomResourceDefinition" {
+			updateNamespace = true
+		}
+
+		if updateNamespace && obj.GetNamespace() == "" {
+			obj.SetNamespace(namespace)
+		}
+
+		return obj
+	}
+}
+
+func AddLabels(newLabels map[string]string, log logr.Logger) func(obj unstructured.Unstructured) unstructured.Unstructured {
+	return func(obj unstructured.Unstructured) unstructured.Unstructured {
+		// Merge new labels into existing ones
+		labels := obj.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		for k, v := range newLabels {
+			labels[k] = v
+		}
+		obj.SetLabels(labels)
+		if obj.GetKind() == "Deployment" || obj.GetKind() == "StatefulSet" || obj.GetKind() == "DaemonSet" || obj.GetKind() == "Job" {
+			// add labels to the spec template
+			_, found, err := unstructured.NestedMap(obj.Object, "spec", "template")
+			if err != nil {
+				log.Error(err, "Failed to get spec template",
+					"kind", obj.GetKind(), "name", obj.GetName(), "namespace", obj.GetNamespace())
+			}
+			if found {
+				_, found, _ := unstructured.NestedMap(obj.Object, "spec", "template", "metadata")
+				if !found {
+					if err := unstructured.SetNestedMap(obj.Object, make(map[string]interface{}), "spec", "template", "metadata"); err != nil {
+						log.Error(err, "Failed to set empty metadata",
+							"kind", obj.GetKind(), "name", obj.GetName(), "namespace", obj.GetNamespace())
+					}
+				}
+				meta, found, _ := unstructured.NestedMap(obj.Object, "spec", "template", "metadata")
+				if found {
+					if meta["labels"] == nil {
+						meta["labels"] = make(map[string]interface{})
+					}
+					for k, v := range newLabels {
+						meta["labels"].(map[string]interface{})[k] = v
+					}
+					if err := unstructured.SetNestedMap(obj.Object, meta, "spec", "template", "metadata"); err != nil {
+						log.Error(err, "Failed to set spec template metadata",
+							"kind", obj.GetKind(), "name", obj.GetName(), "namespace", obj.GetNamespace())
+					}
+				} else {
+					log.Error(err, "Failed to set labels to template spec",
+						"kind", obj.GetKind(), "name", obj.GetName(), "namespace", obj.GetNamespace())
+				}
+			}
+		}
+
+		return obj
+	}
+}
+
+// This is post processing step to fix custom labels and namespaces
+func PostProcessManifests(manifest string, funcs ...func(obj unstructured.Unstructured) unstructured.Unstructured) (string, error) {
 	docs := strings.Split(manifest, "---")
 	output := make([]string, 0, 10)
 
@@ -241,33 +330,9 @@ func AddLabelsToManifest(manifest string, newLabels map[string]string) (string, 
 			output = append(output, doc)
 			continue
 		}
-		// Merge new labels into existing ones
-		labels := obj.GetLabels()
-		if labels == nil {
-			labels = make(map[string]string)
-		}
-		for k, v := range newLabels {
-			labels[k] = v
-		}
-		obj.SetLabels(labels)
 
-		if obj.GetKind() == "Deployment" || obj.GetKind() == "StatefulSet" || obj.GetKind() == "DaemonSet" {
-			// add labels to the spec template
-			spec, found, err := unstructured.NestedMap(obj.Object, "spec", "template", "metadata")
-			if err != nil {
-				return "", errors.Wrap(err, "Failed to get spec template metadata")
-			}
-			if found {
-				if spec["labels"] == nil {
-					spec["labels"] = make(map[string]interface{})
-				}
-				for k, v := range newLabels {
-					spec["labels"].(map[string]interface{})[k] = v
-				}
-				if err := unstructured.SetNestedMap(obj.Object, spec, "spec", "template", "metadata"); err != nil {
-					return "", errors.Wrap(err, "Failed to set spec template metadata")
-				}
-			}
+		for _, postprocessor := range funcs {
+			obj = postprocessor(obj)
 		}
 
 		// Marshal back to YAML
@@ -280,4 +345,40 @@ func AddLabelsToManifest(manifest string, newLabels map[string]string) (string, 
 	}
 
 	return strings.Join(output, "---\n"), nil
+}
+
+// BuildGVKClusterScopeMap returns a map where true = cluster-scoped, false = namespaced.
+func buildGVKClusterScopeMap(cfg *rest.Config) (map[schema.GroupVersionKind]bool, error) {
+	disc, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create discovery client: %w", err)
+	}
+
+	gr, err := restmapper.GetAPIGroupResources(disc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API group resources: %w", err)
+	}
+
+	result := make(map[schema.GroupVersionKind]bool)
+
+	for _, groupResources := range gr {
+
+		// groupResources.VersionedResources is: map[groupVersionString][]APIResource
+		for version, resources := range groupResources.VersionedResources {
+			gv := schema.GroupVersion{
+				Group:   groupResources.Group.Name, // core="" , others correct
+				Version: version,
+			}
+			for _, r := range resources {
+				// skip subresources
+				if strings.Contains(r.Name, "/") {
+					continue
+				}
+				gvk := gv.WithKind(r.Kind)
+				result[gvk] = !r.Namespaced
+			}
+		}
+	}
+
+	return result, nil
 }
