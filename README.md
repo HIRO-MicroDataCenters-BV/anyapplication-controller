@@ -44,6 +44,7 @@ The `AnyApplication` CRD defines how applications should be deployed across zone
 ### Application States
 
 The controller tracks applications through various states:
+- `Unknown`: State cannot be determined
 - `New`: Initial state when application is created
 - `Placement`: Application placement is being determined
 - `Operational`: Application is running successfully
@@ -60,14 +61,14 @@ apiVersion: dcp.hiro.io/v1
 kind: AnyApplication
 metadata:
   name: nginx-app
-  namespace: default
+  namespace: test
 spec:
   source: 
     helm:
       repository: https://helm.nginx.com/stable
       chart: nginx-ingress
       version: 2.0.1
-      namespace: default
+      namespace: test
   zones: 1
   placementStrategy: 
     strategy: Global
