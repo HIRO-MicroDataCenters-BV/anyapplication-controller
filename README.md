@@ -2,7 +2,7 @@
 
 # anyapplication-controller
 
-A Kubernetes controller for managing Helm-based applications across multiple zones in distributed cloud platforms (DCP). The controller provides automated deployment, synchronization, and recovery strategies for applications deployed in micro data centers.
+A Kubernetes controller for managing Helm-based applications across multiple zones using decentralized control plane (DCP). The controller provides automated deployment, synchronization, and recovery strategies for applications deployed in micro data centers.
 
 ## Description
 
@@ -49,7 +49,6 @@ The controller tracks applications through various states:
 - `Placement`: Application placement is being determined
 - `Operational`: Application is running successfully
 - `Relocation`: Application is being moved between zones
-- `OwnershipTransfer`: Ownership is being transferred
 - `Failure`: Application has encountered an error
 
 ## Quick Start Example
@@ -85,16 +84,12 @@ spec:
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+### To Run local environment
+**Make sure proper context is configured:**
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/anyapplication-controller:tag
+kubectl config use-context <context>
 ```
-
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
 
 **Install the CRDs into the cluster:**
 
@@ -102,29 +97,67 @@ Make sure you have the proper permission to the registry if the above commands d
 make install
 ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+**Run the manager:**
 
 ```sh
-make deploy IMG=<some-registry>/anyapplication-controller:tag
+make run
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
-
-**Create instances of your solution**
+**Run sample application**
 You can apply the samples (examples) from the config/sample:
 
 ```sh
-kubectl apply -k config/samples/
+kubectl apply -f config/samples/nginx.yaml
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+### To Deploy on the cluster
+**Build and push your image to the location specified by `IMG`:**
+
+```sh
+make docker-build docker-push IMG=ghcr.io/hiro-microdatacenters-bv/dcp-application-controller-dev:test-tag
+```
+
+**NOTE:** This image ought to be published in the personal registry you specified.
+And it is required to have access to pull the image from the working environment.
+Make sure you have the proper permission to the registry if the above commands don’t work.
+
+**Configure values:**
+
+```sh
+cat > values.yaml <<EOF
+image:
+  repository: "ghcr.io/hiro-microdatacenters-bv/dcp-application-controller-dev"
+  tag: "test-tag"
+configuration:
+  runtime:
+    zone: myzone
+EOF
+```
+
+**Install helm chart:**
+
+```sh
+helm install anyapp ./charts/anyapplication --values ./values.yaml
+```
+
+**Run sample application**
+You can apply the samples (examples) from the config/sample:
+
+```sh
+kubectl apply -f config/samples/nginx.yaml
+```
 
 ### To Uninstall
 **Delete the instances (CRs) from the cluster:**
 
 ```sh
-kubectl delete -k config/samples/
+kubectl delete -f config/samples/nginx.yaml
+```
+
+**Unnstall helm chart:**
+
+```sh
+helm uninstall anyapp
 ```
 
 **Delete the APIs(CRDs) from the cluster:**
@@ -133,78 +166,17 @@ kubectl delete -k config/samples/
 make uninstall
 ```
 
-**UnDeploy the controller from the cluster:**
+### Deploy a release
 
 ```sh
-make undeploy
+helm repo add anyapp-repo https://hiro-microdatacenters-bv.github.io/anyapplication-controller/helm-charts/
+helm repo update
+helm install anyapp anyapp-repo/anyapplication --version 0.2.5 --values ./values.yaml
 ```
 
-## Project Distribution
-
-Following the options to release and provide this solution to the users.
-
-### By providing a bundle with all YAML files
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=<some-registry>/anyapplication-controller:tag
-```
-
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
-
-2. Using the installer
-
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/anyapplication-controller/<tag or branch>/dist/install.yaml
-```
-
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v1-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
+The project is automatically built using github actions.
 
 ## Advanced Configuration
-
-### Sync Policy
-
-Configure automated synchronization with advanced options:
-
-```yaml
-spec:
-  syncPolicy:
-    automated:
-      prune: true        # Delete resources not in source
-      selfHeal: true     # Revert manual changes
-      allowEmpty: false  # Prevent empty deployments
-    syncOptions:
-      - CreateNamespace=true
-    retry:
-      limit: 5
-      backoff:
-        duration: "5s"
-        factor: 2
-        maxDuration: "3m"
-```
 
 ### Multiple Zones
 
@@ -232,12 +204,7 @@ spec:
       chart: my-app
       version: 1.0.0
       namespace: production
-      parameters:
-        - name: replicas
-          value: "3"
-          forceString: true
-      skipCrds: false
-      values: |
+      values: |-
         service:
           type: LoadBalancer
         resources:
