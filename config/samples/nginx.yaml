@@ -1,0 +1,25 @@
+---
+apiVersion: dcp.hiro.io/v1
+kind: AnyApplication
+metadata:
+  name: nginx-app
+  namespace: default
+spec:
+  source: 
+    helm:
+      repository: https://helm.nginx.com/stable
+      chart: nginx-ingress
+      version: ~2.0
+      namespace: default
+      values: |-
+        controller:
+          name: blabla
+          appprotect:
+            enable: false
+  zones: 1
+  placementStrategy: 
+    strategy: Global
+  recoverStrategy:
+    tolerance: 1
+    maxRetries: 3
+
