@@ -104,7 +104,7 @@ make run
 ```
 
 **Run sample application**
-You can apply the samples (examples) from the config/sample:
+You can apply the examples from the config/samples:
 
 ```sh
 kubectl apply -f config/samples/nginx.yaml
@@ -166,15 +166,13 @@ helm uninstall anyapp
 make uninstall
 ```
 
-### Deploy a release
+### Deploy a github release
 
 ```sh
 helm repo add anyapp-repo https://hiro-microdatacenters-bv.github.io/anyapplication-controller/helm-charts/
 helm repo update
 helm install anyapp anyapp-repo/anyapplication --version 0.2.5 --values ./values.yaml
 ```
-
-The project is automatically built using github actions.
 
 ## Advanced Configuration
 
