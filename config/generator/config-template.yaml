@@ -1,0 +1,19 @@
+tags:
+  anyapplication-controller: 0.2.5
+  mesh-controller: 0.2.7
+  placement-controller: 0.2.10
+
+orchestrationlib: 
+  enabled: false
+  base-url: localhost
+
+clusters:
+  - name: kind-cluster1
+    mesh-endpoint: kind-cluster1:9102
+    placement-endpoint: kind-cluster1
+
+  - name: kind-cluster2
+    mesh-endpoint: kind-cluster2:9102
+    placement-endpoint: kind-cluster2
+
+
