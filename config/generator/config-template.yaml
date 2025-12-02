@@ -1,11 +1,14 @@
+# two cluster mesh template 
 tags:
   anyapplication-controller: 0.2.5
   mesh-controller: 0.2.7
   placement-controller: 0.2.10
 
 orchestrationlib: 
+  # enabled=true if decisions are to be saved to orchestration lib
   enabled: false
-  base-url: localhost
+  # orchestraton lib url
+  base-url: http://localhost/
 
 clusters:
   - name: kind-kind-cluster1
