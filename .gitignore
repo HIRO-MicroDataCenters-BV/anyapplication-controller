@@ -35,7 +35,8 @@ go.work
 node_modules/
 docs/.vitepress/cache/*
 docs/.vitepress/dist/*
-.vitepress/
+.vitepress/cache
+.vitepress/dist
 .cache
 /**/.DS_Store
 config/generator/target
