@@ -1,0 +1,1 @@
+import{_ as e,c as t,o as n}from"./chunks/framework.ioxFAZXm.js";const _=JSON.parse('{"title":"","description":"","frontmatter":{},"headers":[],"relativePath":"development/index.md","filePath":"development/index.md"}'),a={name:"development/index.md"};function o(r,d,s,c,i,p){return n(),t("div")}const l=e(a,[["render",o]]);export{_ as __pageData,l as default};
