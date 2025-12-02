@@ -16,7 +16,7 @@ serviceAccount:
   annotations: {}
   name: ""
 
-serviceMonitorEnabled: true
+serviceMonitorEnabled: false
 
 podAnnotations: {}
 podLabels: {}

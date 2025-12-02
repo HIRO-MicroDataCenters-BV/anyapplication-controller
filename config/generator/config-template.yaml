@@ -8,12 +8,12 @@ orchestrationlib:
   base-url: localhost
 
 clusters:
-  - name: kind-cluster1
-    mesh-endpoint: kind-cluster1:9102
-    placement-endpoint: kind-cluster1
+  - name: kind-kind-cluster1
+    anyapplication-endpoint: anyapp-anyapplication.default.svc.cluster1.local
+    mesh-endpoint: mesh-mesh-controller.default.svc.cluster1.local:9102
+    placement-endpoint: placement-placement-controller.default.svc.cluster1.local
 
-  - name: kind-cluster2
-    mesh-endpoint: kind-cluster2:9102
-    placement-endpoint: kind-cluster2
-
-
+  - name: kind-kind-cluster2
+    anyapplication-endpoint: anyapp-anyapplication.default.svc.cluster2.local
+    mesh-endpoint: mesh-mesh-controller.default.svc.cluster2.local:9102
+    placement-endpoint: placement-placement-controller.default.svc.cluster2.local

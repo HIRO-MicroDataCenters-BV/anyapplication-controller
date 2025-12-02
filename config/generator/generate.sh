@@ -13,7 +13,8 @@ main () {
           create_config "$@"
           ;;
       delete-config)
-          delete_config
+          shift
+          delete_config "$@"
           ;;
       *)
           echo "Error: Invalid command '$1'"
@@ -23,7 +24,8 @@ main () {
 }
 
 create_config () {    
-    validate()
+    validate
+    add_repos
 
     if [ $# -ne 2 ]; then
         usage
@@ -34,6 +36,7 @@ create_config () {
     extract_yaml_list "${config_file}" '.clusters[].name' clusters
     extract_yaml_list "${config_file}" '.clusters[].mesh-endpoint' mesh_endpoints
     extract_yaml_list "${config_file}" '.clusters[].placement-endpoint' placement_endpoints
+    extract_yaml_list "${config_file}" '.clusters[].anyapplication-endpoint' anyapplication_endpoints
 
     extract_yaml_value "${config_file}" '.tags.anyapplication-controller' anyapplication_tag
     extract_yaml_value "${config_file}" '.tags.mesh-controller' mesh_tag
@@ -46,20 +49,26 @@ create_config () {
     echo " - Clusters:  ${clusters[@]}"
     echo " - Mesh endpoints: ${mesh_endpoints[@]}"
     echo " - Placement endpoints: ${placement_endpoints[@]}"
+    echo " - AnyApplication endpoints: ${anyapplication_endpoints[@]}"
+    
     echo " - anyapplication controller version: ${anyapplication_tag}"
     echo " - mesh controller           version: ${mesh_tag}"
     echo " - placement controller      version: ${placement_tag}"
 
     for i in "${!clusters[@]}"; do
+        local cluster="${clusters[$i]}"    
+        generate_keys "${cluster}" "${target_dir}"
+    done
+
+    for i in "${!clusters[@]}"; do
         local cluster="${clusters[$i]}"
         local mesh_ip="${mesh_endpoints[$i]}"
         local placement_ip="${placement_endpoints[$i]}"
-    
-        generate_keys "${cluster}" "${target_dir}"
+        local anyapplication_ip="${anyapplication_endpoints[$i]}"
 
         generate_anyapplication_values "${cluster}" "${target_dir}" "${anyapplication_tag}"
         generate_mesh_values "${cluster}" "${target_dir}" "${mesh_tag}" "${mesh_ip}"
-        generate_placement_values "${cluster}" "${target_dir}" "${placement_tag}" "${placement_ip}"
+        generate_placement_values "${cluster}" "${target_dir}" "${placement_tag}" "${placement_ip}" "${anyapplication_ip}"
     done
 }
 
@@ -75,7 +84,20 @@ validate() {
     exit 1
   fi
 
+  if ! command -v helm &> /dev/null; then
+    echo "helm is not installed. Please install it before running this script."
+    exit 1
+  fi
+
   mkdir -p target
+}
+
+add_repos() {
+  echo "Adding helm repositories..."
+
+  helm repo add anyapp-repo https://hiro-microdatacenters-bv.github.io/anyapplication-controller/helm-charts/
+  helm repo add mesh-repo https://hiro-microdatacenters-bv.github.io/mesh-controller/helm-charts/
+  helm repo add placement-repo https://hiro-microdatacenters-bv.github.io/placement-controller/helm-charts/
 }
 
 generate_keys() {
@@ -102,6 +124,7 @@ generate_anyapplication_values() {
     cat > "${target_dir}/${cluster}/anyapplication-values.yaml" <<EOF
 image:
     tag: "$tag"
+serviceMonitorEnabled: false
 configuration:
     runtime:
         zone: $zone
@@ -141,6 +164,8 @@ image:
 secretKey: "${private_key}"
 # pub: ${public_key}
 
+serviceMonitorEnabled: false
+
 configuration:
   mesh:
     zone: "${cluster}"
@@ -150,10 +175,15 @@ $(for i in "${!clusters[@]}"; do
     local cluster_i="${clusters[$i]}"
     local cluster_i_pub_key=$(cat "${target_dir}/${cluster_i}/public.base64.txt")
     local cluster_i_mesh_endpoint="${mesh_endpoints[$i]}"
+    if [[ $cluster_i_mesh_endpoint == $mesh_endpoint ]]; then
+        local comment="#"
+    else
+        local comment=""
+    fi
     echo "    # ${cluster_i}:"
-    echo "    - public_key: ${cluster_i_pub_key}"
-    echo "      endpoints:"
-    echo "        - ${cluster_i_mesh_endpoint}"
+    echo "    ${comment} - public_key: ${cluster_i_pub_key}"
+    echo "    ${comment}   endpoints:"
+    echo "    ${comment}     - ${cluster_i_mesh_endpoint}"
     echo ""
 done)  
 EOF
@@ -177,6 +207,7 @@ generate_placement_values() {
     local target_dir=$2
     local tag=$3
     local load_balancer_ip=$4
+    local anyapplication_endpoint=$5
 
     # global clusters
     # global placement_endpoints
@@ -188,6 +219,8 @@ image:
 service:
   type: LoadBalancer
   loadBalancerIP: ${load_balancer_ip}
+
+serviceMonitorEnabled: false
 
 settings:
   k8s:
@@ -212,7 +245,7 @@ $(for i in "${!placement_endpoints[@]}"; do
     echo "      ${cluster_i}: http://${placement_endpoint_ip_i}:8000"
 done)
 
-    application_controller_endpoint: http://anyapp-anyapplication.default.svc.cluster.local:9000
+    application_controller_endpoint: http://${anyapplication_endpoint}:9000
 
 $(gen_orchestration_lib_section)
 
@@ -236,9 +269,9 @@ EOF
 
     cat > "${target_dir}/${cluster}/placement-install.sh" <<EOF
 helm repo update     
-helm install --kube-context "${cluster}" mesh mesh-repo/mesh-controller \\
+helm install --kube-context "${cluster}" placement placement-repo/placement-controller \\
     --version "${tag}" \\
-    --values "${target_dir}/${cluster}/mesh-values.yaml"
+    --values "${target_dir}/${cluster}/placement-values.yaml"
 EOF
 
     cat > "${target_dir}/${cluster}/placement-uninstall.sh" <<EOF
@@ -258,6 +291,16 @@ gen_orchestration_lib_section() {
         echo "    enabled: false"
         echo "    base_url: localhost"
     fi
+}
+
+delete_config() {
+    if [ $# -ne 1 ]; then
+        usage
+    fi
+    local target_dir=${1?Please specify target_dir} 
+
+    echo "Delete configuration from target dir ${target_dir}"
+    rm -r ${target_dir}
 }
 
 extract_yaml_list() {
