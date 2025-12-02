@@ -5,7 +5,7 @@ import { fileURLToPath, URL } from 'node:url'
 export default withMermaid({
   title: "AnyApplication controller",
   description: "AnyApplication Controller for Decentralized Control Plane",
-  base: "/anyapplication-controller/", 
+  base: "/anyapplication-controller/docs/", 
   head: [['link', { rel: 'icon', href: 'https://raw.githubusercontent.com/HIRO-MicroDataCenters-BV/anyapplication-controller/refs/heads/main/docs/assets/dcp-log.png' }]],
   vite: {
       resolve: {
