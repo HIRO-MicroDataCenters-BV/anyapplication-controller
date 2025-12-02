@@ -47,7 +47,7 @@ export default withMermaid({
         items: [
           { text: 'Quick Start', link: '/usage/installation' },
           { text: 'Architecture', link: '/architecture' },
-          { text: 'API Reference', link: '/api-reference/index' },
+          { text: 'API Reference', link: '/api-reference/anyapplication' },
         ]
       },
       {
