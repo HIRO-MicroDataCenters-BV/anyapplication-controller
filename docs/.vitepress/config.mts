@@ -6,7 +6,7 @@ export default withMermaid({
   title: "AnyApplication controller",
   description: "AnyApplication Controller for Decentralized Control Plane",
   base: "/anyapplication-controller/", 
-  head: [['link', { rel: 'icon', href: 'https://github.com/HIRO-MicroDataCenters-BV/anyapplication-controller/refs/heads/main/docs/assets/dcp-log.png' }]],
+  head: [['link', { rel: 'icon', href: 'https://raw.githubusercontent.com/HIRO-MicroDataCenters-BV/anyapplication-controller/refs/heads/main/docs/assets/dcp-log.png' }]],
   vite: {
       resolve: {
           alias: [
@@ -33,7 +33,7 @@ export default withMermaid({
     },
 
     logo: {
-        src: 'https://github.com/HIRO-MicroDataCenters-BV/anyapplication-controller/refs/heads/main/docs/assets/dcp-log.png',
+        src: 'https://raw.githubusercontent.com/HIRO-MicroDataCenters-BV/anyapplication-controller/refs/heads/main/docs/assets/dcp-log.png',
         width: 24,
         height: 24
     },
