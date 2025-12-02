@@ -1,0 +1,22 @@
+# two cluster mesh template 
+tags:
+  anyapplication-controller: 0.2.5
+  mesh-controller: 0.2.7
+  placement-controller: 0.2.10
+
+orchestrationlib: 
+  # enabled=true if decisions are to be saved to orchestration lib
+  enabled: false
+  # orchestraton lib url
+  base-url: http://localhost/
+
+clusters:
+  - name: kind-kind-cluster1
+    anyapplication-endpoint: anyapp-anyapplication.default.svc.cluster1.local
+    mesh-endpoint: mesh-mesh-controller.default.svc.cluster1.local:9102
+    placement-endpoint: placement-placement-controller.default.svc.cluster1.local
+
+  - name: kind-kind-cluster2
+    anyapplication-endpoint: anyapp-anyapplication.default.svc.cluster2.local
+    mesh-endpoint: mesh-mesh-controller.default.svc.cluster2.local:9102
+    placement-endpoint: placement-placement-controller.default.svc.cluster2.local
