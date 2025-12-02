@@ -1,7 +1,24 @@
 #!/bin/bash
-
+#
+# This script automates the generation and deletion of configuration files and installation scripts
+# for deploying AnyApplication, Mesh, and Placement controllers across multiple Kubernetes clusters.
+# It reads cluster and deployment information from a YAML configuration file, generates cryptographic
+# keys, prepares Helm values files, and creates install/uninstall scripts for each cluster.
+#
+# Usage:
+#   ./generate.sh create-config <config.yaml> <target_dir>
+#   ./generate.sh delete-config <target_dir>
+#
+# Requirements:
+#   - openssl: for key generation
+#   - yq: for parsing YAML configuration
+#   - helm: for managing Helm charts
+#
+# The script expects a YAML config describing clusters, endpoints, and image tags.
+# It creates a directory structure under <target_dir> with all necessary files for deployment.
+#
 usage() {
-    echo "Usage: $0 {create|delete}"
+    echo "Usage: $0 {create-config|delete-config}"
     exit 1
 }
 
