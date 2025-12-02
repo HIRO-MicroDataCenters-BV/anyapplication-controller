@@ -4,10 +4,14 @@ Copied and adapted from: https://github.com/vuejs/vitepress/blob/main/src/client
 -->
 
 <script setup lang="ts">
-import { useSidebar } from 'vitepress/theme';
-import {withBase} from "vitepress";
 
+import { useData } from '../composables/data'
+const { theme, frontmatter } = useData()
+
+import { useSidebar } from 'vitepress/theme';
 const { hasSidebar } = useSidebar()
+
+// import {withBase} from "vitepress";
 </script>
 
 <template>

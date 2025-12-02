@@ -59,6 +59,11 @@ export default withMermaid({
       }
     ],
 
+    footer: {
+      message: 'Released under the Apache License 2.0.',
+      copyright: 'Copyright © 2025-present HIRO-MicroDataCenters BV'
+    },
+
     socialLinks: [
       { icon: 'github', link: 'https://github.com/HIRO-MicroDataCenters-BV/anyapplication-controller' }
     ],
