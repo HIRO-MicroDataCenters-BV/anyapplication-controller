@@ -17,8 +17,70 @@ Requirements:
 
 ## Run local controllers from repo
 
-    TBD
+### Run AnyApplication Controller (kind-cluster1)
 
+  Checkout and build project:
+
+  ```sh
+    # Check out repository
+    git clone https://github.com/HIRO-MicroDataCenters-BV/anyapplication-controller.git
+    cd anyapplication-controller/
+
+    # Build project
+    make build
+  ```
+
+  Run Controller:
+
+  ```sh
+    # install CRDS
+    kubectl config use-context kind-kind-cluster1
+    make install
+
+    # run controller    
+    make run-kind-kind-cluster1
+  ```
+
+### Run Mesh Controller (kind-cluster1)
+
+  Install [cargo and rust](https://rust-lang.org/tools/install/) and build project:
+
+  ```sh
+    # Check out repository
+    git clone https://github.com/HIRO-MicroDataCenters-BV/mesh-controller.git
+    cd mesh-controller/
+
+    # build project
+    cargo build
+  ```  
+
+  Run controller:
+  ```sh
+    # install CRDS
+    kubectl --context kind-kind-cluster1 apply -f ./charts/mesh-controller/crds/meshpeer.yaml
+    
+    # run controller    
+    cargo run -- -c ./env/kind-cluster1.yaml
+  ```
+
+### Run Placement Controller (kind-cluster1)
+
+  Install [uv](https://github.com/astral-sh/uv) and build project
+
+  ```sh
+    # Check out repository
+    git clone https://github.com/HIRO-MicroDataCenters-BV/placement-controller.git
+    cd placement-controller/
+
+    # build project
+    uv build
+  ```
+
+  Run controller:
+
+  ```sh    
+    uv run python -m placement_controller.main --config ./etc/kind-kind-cluster1.yaml
+  ```
 
 ## Run containerized versions via helm charts
 
