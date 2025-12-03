@@ -65,9 +65,6 @@ Requirements:
     
   ```
 
-    echo -n $(xxd -plain -cols 32 -s -32 ./private-key1.der) > "./private-key-test.hex"
-    echo -n $(xxd -plain -cols 32 -s -32 ./public-key1.der) > "./public-key-test.hex"
-
   Note that this has to be done for all peers (clusters) and configured in the corresponding `kind-cluster<X>.yaml`.
 
   ```yaml
