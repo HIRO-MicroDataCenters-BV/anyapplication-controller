@@ -52,7 +52,32 @@ Requirements:
 
     # build project
     cargo build
-  ```  
+  ```
+  
+  Install [openssl](https://github.com/openssl/openssl) and generate private/public keys and configure them:
+  
+  ```sh
+    openssl genpkey -algorithm ed25519 -outform der -out "./private-key1.der"
+    openssl pkey -in "./private-key1.der" -inform DER -pubout -outform DER -out "./public-key1.der"
+
+    echo -n $(xxd -plain -cols 32 -s -32 ./private-key1.der) > "./private-key1.hex"
+    echo -n $(xxd -plain -cols 32 -s -32 ./public-key1.der) > "./public-key1.hex"
+    
+  ```
+
+  Note that this has to be done for all peers (clusters) and configured in the corresponding `kind-cluster<X>.yaml`.
+
+  ```yaml
+
+    private_key_path: "./private-key1.hex"
+    
+    nodes:
+    # public keys and endpoints of other known peers except self
+    - public_key: "43b2bb39061bc3267e869303268a81734fb8767d3a17ee490813955bd734fd3a"
+        endpoints:
+        - "localhost:9102"
+
+  ```
 
   Run controller:
   ```sh
