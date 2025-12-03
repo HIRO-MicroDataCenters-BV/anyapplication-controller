@@ -1,6 +1,6 @@
 # Decentralised Control Plane for Containerised Applications
 
-# Overview
+## Overview
 
 Decentralized Control Plane for kubernetes applications enables application deployment into a mesh of disjoint kubernetes clusters with intelligent orchestration that considers various optimization criteria - such as application energy consumption, dynamic energy prices, data security zones etc.
 
@@ -12,7 +12,7 @@ Each DCP zone is an autonomous peer that replicates entire state and its updates
 
 The intelligent orchestration enables zone-local decisions taking into account global state in all zones. The orchestration system is extensible with a variety of decision making algorithms.
 
-# Features
+## Features
 
 - Application orchestration in a mesh of disjoint kubernetes clusters
 - Optimal application placement decision and continuous decision review
