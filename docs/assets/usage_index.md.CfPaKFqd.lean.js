@@ -1,1 +1,0 @@
-import{_ as e,c as t,o as a}from"./chunks/framework.pthEGswZ.js";const m=JSON.parse('{"title":"","description":"","frontmatter":{},"headers":[],"relativePath":"usage/index.md","filePath":"usage/index.md"}'),n={name:"usage/index.md"};function s(r,o,c,d,i,p){return a(),t("div")}const f=e(n,[["render",s]]);export{m as __pageData,f as default};

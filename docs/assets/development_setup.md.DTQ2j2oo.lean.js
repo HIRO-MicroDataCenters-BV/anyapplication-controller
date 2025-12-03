@@ -1,1 +1,0 @@
-import{_ as e,c as t,o as a}from"./chunks/framework.pthEGswZ.js";const i=JSON.parse('{"title":"","description":"","frontmatter":{},"headers":[],"relativePath":"development/setup.md","filePath":"development/setup.md"}'),o={name:"development/setup.md"};function s(n,p,r,c,d,m){return a(),t("div")}const l=e(o,[["render",s]]);export{i as __pageData,l as default};
