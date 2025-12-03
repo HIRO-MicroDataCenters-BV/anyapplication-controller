@@ -28,8 +28,6 @@ go.work
 /internal/.DS_Store
 /examples/secret2.yaml
 /examples/secret1.yaml
-/config/anyapplication/kind-kind-cluster2.yaml
-/config/anyapplication/kind-kind-cluster1.yaml
 /config/anyapplication/emdc2.yaml
 /config/anyapplication/emdc1.yaml
 node_modules/

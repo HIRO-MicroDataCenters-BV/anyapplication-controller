@@ -1,0 +1,77 @@
+peers:
+  - url: localhost:18080
+runtime:
+  zone: kind-kind-cluster1
+  operationalPollDuration: 5s
+  syncPollDuration: 10s
+  chartVersionPollDuration: 60s
+  defaultSyncTimeout: 180s
+  defaultUndeployTimeout: 180s
+api:
+  bind_address: :19092
+cache:
+  excludes:
+    - projectcalico.org/FelixConfiguration
+    - projectcalico.org/GlobalNetworkPolicy
+    - projectcalico.org/KubeControllersConfiguration
+    - projectcalico.org/NetworkSet
+    - projectcalico.org/CalicoNodeStatus
+    - projectcalico.org/NetworkPolicy
+    - projectcalico.org/StagedNetworkPolicy
+    - projectcalico.org/HostEndpoint
+    - projectcalico.org/Profile
+    - projectcalico.org/BGPPeer
+    - projectcalico.org/BGPConfiguration
+    - projectcalico.org/IPReservation
+    - projectcalico.org/BGPFilter
+    - projectcalico.org/StagedGlobalNetworkPolicy
+    - projectcalico.org/StagedKubernetesNetworkPolicy
+    - projectcalico.org/IPPool
+    - projectcalico.org/Tier
+    - projectcalico.org/BlockAffinity
+    - projectcalico.org/ClusterInformation
+    - projectcalico.org/IPAMConfiguration
+    - projectcalico.org/GlobalNetworkSet  
+    - crd.projectcalico.org/BGPConfiguration
+    - crd.projectcalico.org/HostEndpoint
+    - crd.projectcalico.org/GlobalNetworkSet
+    - crd.projectcalico.org/KubeControllersConfiguration
+    - crd.projectcalico.org/CalicoNodeStatus
+    - crd.projectcalico.org/StagedKubernetesNetworkPolicy
+    - crd.projectcalico.org/BlockAffinity
+    - crd.projectcalico.org/GlobalNetworkPolicy
+    - crd.projectcalico.org/IPAMConfig
+    - crd.projectcalico.org/IPPool
+    - crd.projectcalico.org/IPReservation
+    - crd.projectcalico.org/StagedNetworkPolicy
+    - crd.projectcalico.org/BGPPeer
+    - crd.projectcalico.org/IPAMBlock
+    - crd.projectcalico.org/ClusterInformation
+    - crd.projectcalico.org/IPAMHandle
+    - crd.projectcalico.org/NetworkSet
+    - crd.projectcalico.org/StagedGlobalNetworkPolicy
+    - crd.projectcalico.org/NetworkPolicy
+    - crd.projectcalico.org/Tier
+    - crd.projectcalico.org/BGPFilter
+    - crd.projectcalico.org/FelixConfiguration
+    - operator.tigera.io/Installation
+    - operator.tigera.io/APIServer
+    - operator.tigera.io/ManagementClusterConnection
+    - operator.tigera.io/TigeraStatus
+    - operator.tigera.io/Goldmane
+    - operator.tigera.io/GatewayAPI
+    - operator.tigera.io/ImageSet
+    - operator.tigera.io/Whisker
+    - policy.networking.k8s.io/BaselineAdminNetworkPolicy
+    - policy.networking.k8s.io/AdminNetworkPolicy
+    - dcp.hiro.io/anyapplication
+logging:
+  default_level: info
+  components:
+    SyncManager: info
+    GitOpsEngine: info
+    ClusterCache: info
+    Controller: info
+    Jobs: info
+    API: info
+    Helm: info
