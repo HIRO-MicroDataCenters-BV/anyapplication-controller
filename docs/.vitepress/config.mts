@@ -24,7 +24,7 @@ export default withMermaid({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Concepts', link: '/concepts' },
-      { text: 'Usage', link: '/usage' },
+      { text: 'Usage', link: '/usage/installation' },
     ],
 
     editLink: {
