@@ -279,6 +279,9 @@ func (application *AnyApplication) IncrementZoneVersion(zoneId string) {
 	}
 
 	zoneStatus.ZoneVersion = latestVersion
+	if application.Status.Ownership.Owner == zoneId {
+		application.Status.Ownership.OwnerVersion = latestVersion
+	}
 }
 
 func (status *AnyApplicationStatus) LogStatus() {
