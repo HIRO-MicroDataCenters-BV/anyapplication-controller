@@ -120,10 +120,11 @@ type AnyApplicationStatus struct {
 }
 
 type OwnershipStatus struct {
-	Epoch      int64       `json:"epoch"`
-	State      GlobalState `json:"state"`
-	Owner      string      `json:"owner"`
-	Placements []Placement `json:"placements,omitempty"`
+	Epoch        int64       `json:"epoch"`
+	State        GlobalState `json:"state"`
+	Owner        string      `json:"owner"`
+	OwnerVersion int64       `json:"ownerVersion"`
+	Placements   []Placement `json:"placements,omitempty"`
 }
 
 type ZoneStatus struct {
