@@ -76,7 +76,7 @@ func (job *LocalPlacementJob) Run(context types.AsyncJobContext) {
 		Msg:    job.msg + " Placement set to zone '" + job.runtimeConfig.ZoneId + "'",
 	}
 	err := statusUpdater.UpdateStatus(
-		func(applicationStatus *v1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
+		func(applicationStatus *v1.AnyApplicationStatus, zoneId string) (bool, *events.Event) {
 			applicationStatus.Ownership.Placements = []v1.Placement{
 				{
 					Zone: job.runtimeConfig.ZoneId,
@@ -84,7 +84,7 @@ func (job *LocalPlacementJob) Run(context types.AsyncJobContext) {
 			}
 			applicationStatus.AddOrUpdate(&condition, zoneId)
 			fmt.Printf("status %v\n", applicationStatus)
-			return true, event
+			return true, &event
 		})
 
 	if err != nil {

@@ -279,8 +279,16 @@ func (application *AnyApplication) IncrementZoneVersion(zoneId string) {
 	}
 
 	zoneStatus.ZoneVersion = latestVersion
-	if application.Status.Ownership.Owner == zoneId {
-		application.Status.Ownership.OwnerVersion = latestVersion
+}
+
+func (application *AnyApplication) IncrementOwnershipVersion(currentZoneId string) {
+	if application.Status.Ownership.Owner == currentZoneId {
+		zoneStatus, found := application.Status.GetStatusFor(currentZoneId)
+		ownerVersion := application.Status.Ownership.OwnerVersion + 1
+		if found {
+			ownerVersion = max(ownerVersion, zoneStatus.ZoneVersion)
+		}
+		application.Status.Ownership.OwnerVersion = ownerVersion
 	}
 }
 

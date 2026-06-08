@@ -18,6 +18,7 @@ const (
 	RelocationGlobalState        GlobalState = "Relocation"
 	FailureGlobalState           GlobalState = "Failure"
 	OwnershipTransferGlobalState GlobalState = "OwnershipTransfer"
+	RemovingGlobalState          GlobalState = "Removing"
 )
 
 func (s *GlobalState) UnmarshalJSON(data []byte) error {
@@ -33,7 +34,8 @@ func (s *GlobalState) UnmarshalJSON(data []byte) error {
 		string(OperationalGlobalState),
 		string(RelocationGlobalState),
 		string(FailureGlobalState),
-		string(OwnershipTransferGlobalState):
+		string(OwnershipTransferGlobalState),
+		string(RemovingGlobalState):
 		*s = GlobalState(str)
 		return nil
 	default:
