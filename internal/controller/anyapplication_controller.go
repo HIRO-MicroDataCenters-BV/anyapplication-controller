@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -73,7 +74,7 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if resource.Status.Ownership.Owner == "" {
-		return r.InitializeState(ctx, resource.GetNamespacedName())
+		return r.InitializeState(ctx, resource.GetNamespacedName(), resource.ResourceVersion)
 	}
 
 	if !resource.DeletionTimestamp.IsZero() {
@@ -136,7 +137,7 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			r.Events,
 		)
 
-		err = statusUpdater.UpdateStatus(func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
+		err = statusUpdater.UpdateStatus(func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, *events.Event) {
 			return mergeStatus(applicationStatus, &newStatus, zoneId)
 		})
 		if err != nil {
@@ -164,7 +165,16 @@ func (r *AnyApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrlResult, err
 }
 
-func (r *AnyApplicationReconciler) InitializeState(ctx context.Context, resourceName client.ObjectKey) (ctrl.Result, error) {
+func (r *AnyApplicationReconciler) InitializeState(
+	ctx context.Context,
+	resourceName client.ObjectKey,
+	resourceVersion string,
+) (ctrl.Result, error) {
+	currentResourceVersion, e := strconv.ParseInt(resourceVersion, 10, 64)
+	if e != nil {
+		currentResourceVersion = 0
+	}
+
 	statusUpdater := status.NewStatusUpdater(
 		ctx,
 		r.Log.WithName("Controller StatusUpdater"),
@@ -174,18 +184,19 @@ func (r *AnyApplicationReconciler) InitializeState(ctx context.Context, resource
 		r.Events,
 	)
 
-	err := statusUpdater.UpdateStatus(func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
+	err := statusUpdater.UpdateStatus(func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, *events.Event) {
 		if applicationStatus.Ownership.State == "" {
 			applicationStatus.Ownership.Owner = r.Config.ZoneId
 			applicationStatus.Ownership.Epoch = 1
+			applicationStatus.Ownership.OwnerVersion = currentResourceVersion
 			applicationStatus.Ownership.State = dcpv1.NewGlobalState
 			event := events.Event{
 				Reason: events.GlobalStateChangeReason,
 				Msg:    "Owner set to " + r.Config.ZoneId + ". Global State set to " + string(dcpv1.NewGlobalState),
 			}
-			return true, event
+			return true, &event
 		}
-		return false, events.Event{}
+		return false, nil
 	})
 	if err != nil {
 		return ctrl.Result{}, err
@@ -203,24 +214,48 @@ func (r *AnyApplicationReconciler) addFinalizer(ctx context.Context, resource *d
 }
 
 func (r *AnyApplicationReconciler) resourceCleanup(ctx context.Context, resource *dcpv1.AnyApplication) (ctrl.Result, error) {
-	if slices.Contains(resource.Finalizers, AnyApplicationFinalizerName) {
-		// Perform cleanup logic here
-		applicationId := types.ApplicationId{
-			Name:      resource.Name,
-			Namespace: resource.Namespace,
-		}
-		r.Jobs.Stop(applicationId)
-		if _, err := r.Applications.Cleanup(ctx, resource); err != nil {
-			return ctrl.Result{}, err
-		}
+	if resource.Status.Ownership.State != dcpv1.RemovingGlobalState {
+		if resource.Status.Ownership.Owner == r.Config.ZoneId {
+			statusUpdater := status.NewStatusUpdater(
+				ctx,
+				r.Log.WithName("Controller StatusUpdater"),
+				r.Client,
+				resource.GetNamespacedName(),
+				r.Config.ZoneId,
+				r.Events,
+			)
 
-		// Remove finalizer and update
-		resource.Finalizers = removeString(resource.Finalizers, AnyApplicationFinalizerName)
-		if err := r.Update(ctx, resource); err != nil {
-			return ctrl.Result{}, err
+			err := statusUpdater.UpdateStatus(func(applicationStatus *dcpv1.AnyApplicationStatus, zoneId string) (bool, *events.Event) {
+				applicationStatus.Ownership.State = dcpv1.RemovingGlobalState
+				event := events.Event{
+					Reason: events.GlobalStateChangeReason,
+					Msg:    "Owner set to " + r.Config.ZoneId + ". Global State set to " + string(dcpv1.RemovingGlobalState),
+				}
+				return true, &event
+			})
+			return ctrl.Result{Requeue: true}, err
 		}
 	}
+	if resource.Status.Ownership.State == dcpv1.RemovingGlobalState {
+		if slices.Contains(resource.Finalizers, AnyApplicationFinalizerName) {
+			r.Log.Info("Removing Application resource", "name", resource.GetNamespacedName())
+			// Perform cleanup logic here
+			applicationId := types.ApplicationId{
+				Name:      resource.Name,
+				Namespace: resource.Namespace,
+			}
+			r.Jobs.Stop(applicationId)
+			if _, err := r.Applications.Cleanup(ctx, resource); err != nil {
+				return ctrl.Result{}, err
+			}
 
+			// Remove finalizer and update
+			resource.Finalizers = removeString(resource.Finalizers, AnyApplicationFinalizerName)
+			if err := r.Update(ctx, resource); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -242,7 +277,7 @@ func removeString(slice []string, s string) []string {
 	return result
 }
 
-func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.AnyApplicationStatus, zone string) (bool, events.Event) {
+func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.AnyApplicationStatus, zone string) (bool, *events.Event) {
 	updated := false
 	reason := events.GlobalStateChangeReason
 	msg := ""
@@ -267,6 +302,13 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 	if currentStatus.Ownership.Epoch != epoch {
 		currentStatus.Ownership.Epoch = epoch
 		msg += fmt.Sprintf("Epoch changed to '%d'.", epoch)
+		updated = true
+	}
+
+	ownerVersion := max(newStatus.Ownership.OwnerVersion, currentStatus.Ownership.OwnerVersion)
+	if currentStatus.Ownership.OwnerVersion != ownerVersion {
+		currentStatus.Ownership.OwnerVersion = ownerVersion
+		msg += fmt.Sprintf("OwnerVersion changed to '%d'.", ownerVersion)
 		updated = true
 	}
 
@@ -306,7 +348,7 @@ func mergeStatus(currentStatus *dcpv1.AnyApplicationStatus, newStatus *dcpv1.Any
 		currentStatus.RemoveZone(zone)
 	}
 	event := events.Event{Reason: reason, Msg: msg}
-	return updated, event
+	return updated, &event
 }
 
 func isOwnerOrPlacementZone(resource *dcpv1.AnyApplication, zone string) bool {

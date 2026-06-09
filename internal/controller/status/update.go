@@ -44,7 +44,7 @@ func NewStatusUpdater(
 }
 
 func (su *StatusUpdater) UpdateStatus(
-	statusUpdate func(status *v1.AnyApplicationStatus, zoneId string) (bool, events.Event),
+	statusUpdate func(status *v1.AnyApplicationStatus, zoneId string) (bool, *events.Event),
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var application v1.AnyApplication
@@ -57,7 +57,7 @@ func (su *StatusUpdater) UpdateStatus(
 
 		updatedApplication := application.DeepCopy()
 		updated := false
-		eventToSend := events.Event{}
+		var eventToSend *events.Event = nil
 		if statusUpdate != nil {
 			updated, eventToSend = statusUpdate(&updatedApplication.Status, su.zoneId)
 		}
@@ -67,10 +67,13 @@ func (su *StatusUpdater) UpdateStatus(
 				return nil // stop retrying
 			}
 			updatedApplication.IncrementZoneVersion(su.zoneId)
+			updatedApplication.IncrementOwnershipVersion(su.zoneId)
 
 			err := su.client.Status().Update(su.ctx, updatedApplication)
 			if err == nil {
-				su.events.Emit(updatedApplication, eventToSend)
+				if eventToSend != nil {
+					su.events.Emit(updatedApplication, *eventToSend)
+				}
 				updatedApplication.Status.LogStatus()
 				su.log.Info("Updating status", "status", updatedApplication.Status, "error", err)
 			}
@@ -85,12 +88,12 @@ func (su *StatusUpdater) UpdateCondition(
 	conditionToUpdate v1.ConditionStatus,
 	conditionsToRemove ...v1.ApplicationConditionType,
 ) error {
-	return su.UpdateStatus(func(status *v1.AnyApplicationStatus, zoneId string) (bool, events.Event) {
+	return su.UpdateStatus(func(status *v1.AnyApplicationStatus, zoneId string) (bool, *events.Event) {
 		updated := status.AddOrUpdate(&conditionToUpdate, zoneId)
 		for _, condType := range conditionsToRemove {
 			removed := status.Remove(condType, zoneId)
 			updated = updated || removed
 		}
-		return updated, event
+		return updated, &event
 	})
 }

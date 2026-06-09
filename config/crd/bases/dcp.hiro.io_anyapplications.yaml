@@ -170,6 +170,9 @@ spec:
                     type: integer
                   owner:
                     type: string
+                  ownerVersion:
+                    format: int64
+                    type: integer
                   placements:
                     items:
                       properties:
@@ -188,6 +191,7 @@ spec:
                 required:
                 - epoch
                 - owner
+                - ownerVersion
                 - state
                 type: object
               zones:

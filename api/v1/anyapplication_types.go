@@ -120,10 +120,11 @@ type AnyApplicationStatus struct {
 }
 
 type OwnershipStatus struct {
-	Epoch      int64       `json:"epoch"`
-	State      GlobalState `json:"state"`
-	Owner      string      `json:"owner"`
-	Placements []Placement `json:"placements,omitempty"`
+	Epoch        int64       `json:"epoch"`
+	State        GlobalState `json:"state"`
+	Owner        string      `json:"owner"`
+	OwnerVersion int64       `json:"ownerVersion"`
+	Placements   []Placement `json:"placements,omitempty"`
 }
 
 type ZoneStatus struct {
@@ -278,6 +279,17 @@ func (application *AnyApplication) IncrementZoneVersion(zoneId string) {
 	}
 
 	zoneStatus.ZoneVersion = latestVersion
+}
+
+func (application *AnyApplication) IncrementOwnershipVersion(currentZoneId string) {
+	if application.Status.Ownership.Owner == currentZoneId {
+		zoneStatus, found := application.Status.GetStatusFor(currentZoneId)
+		ownerVersion := application.Status.Ownership.OwnerVersion + 1
+		if found {
+			ownerVersion = max(ownerVersion, zoneStatus.ZoneVersion)
+		}
+		application.Status.Ownership.OwnerVersion = ownerVersion
+	}
 }
 
 func (status *AnyApplicationStatus) LogStatus() {
