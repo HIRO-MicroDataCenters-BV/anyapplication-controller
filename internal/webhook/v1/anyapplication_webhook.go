@@ -101,7 +101,7 @@ func (v *AnyApplicationCustomValidator) ValidateDelete(ctx context.Context, obj 
 	if !isOwnerZone {
 		if !isRemovingState {
 			v.log.Info("Cannot remove from non owner zone not in removing state", "name", anyapplication.GetName())
-			return nil, fmt.Errorf("Cannot remove from non owner zone not in removing state %T", obj)
+			return nil, fmt.Errorf("cannot remove from non owner zone not in removing state %T", obj)
 		}
 	}
 

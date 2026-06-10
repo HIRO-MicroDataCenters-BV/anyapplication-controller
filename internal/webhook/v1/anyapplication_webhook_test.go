@@ -51,7 +51,7 @@ var _ = Describe("AnyApplication Webhook", func() {
 			By("simulating a scenario where defaults should be applied")
 			obj.Finalizers = nil
 			By("calling the Default method to apply defaults")
-			defaulter.Default(ctx, obj)
+			Expect(defaulter.Default(ctx, obj)).Error().To(Not(HaveOccurred()))
 			By("checking that the default values are set")
 			Expect(obj.Finalizers).To(Equal([]string{controller.AnyApplicationFinalizerName}))
 		})

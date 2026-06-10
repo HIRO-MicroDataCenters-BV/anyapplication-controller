@@ -109,7 +109,8 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
-	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate. If empty, certificates will be auto-generated in production mode.")
+	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate. "+
+		"If empty, certificates will be auto-generated in production mode.")
 	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
 	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
 	flag.StringVar(&webhookServiceName, "webhook-service-name", "", "The webhook service name.")
@@ -173,7 +174,8 @@ func main() {
 	if len(webhookCertPath) == 0 && os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		webhookCertPath = "/tmp/k8s-webhook-server/serving-certs"
 
-		generateAndPatchWebhookCertificates(clientset, setupLog, webhookCertPath, webhookCertName, webhookCertKey, webhookServiceName)
+		generateAndPatchWebhookCertificates(clientset, setupLog,
+			webhookCertPath, webhookCertName, webhookCertKey, webhookServiceName)
 	}
 	// -----------------------------------------------------------------
 
@@ -339,7 +341,8 @@ func main() {
 	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err = webhookdcpv1.SetupAnyApplicationWebhookWithManager(mgr, loggers["Controller"], applicationConfig.ZoneId); err != nil {
+		if err = webhookdcpv1.SetupAnyApplicationWebhookWithManager(
+			mgr, loggers["Controller"], applicationConfig.ZoneId); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "AnyApplication")
 			os.Exit(1)
 		}
@@ -508,16 +511,23 @@ func generateSelfSignedCert(serviceName, namespace string) (caBundle, certPEM, k
 }
 
 // Helper function to programmatically update the caBundle field on both Mutating and Validating configurations
-func patchWebhookCABundle(clientset *kubernetes.Clientset, setupLog logr.Logger, webhookConfigName string, caBundle []byte) error {
+func patchWebhookCABundle(
+	clientset *kubernetes.Clientset,
+	setupLog logr.Logger,
+	webhookConfigName string,
+	caBundle []byte,
+) error {
 	ctx := context.Background()
 
 	// 1. Attempt to patch ValidatingWebhookConfiguration
-	vWebhookConfig, err := clientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(ctx, webhookConfigName, metav1.GetOptions{})
+	vWebhookConfig, err := clientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(
+		ctx, webhookConfigName, metav1.GetOptions{})
 	if err == nil {
 		for i := range vWebhookConfig.Webhooks {
 			vWebhookConfig.Webhooks[i].ClientConfig.CABundle = caBundle
 		}
-		_, err = clientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(ctx, vWebhookConfig, metav1.UpdateOptions{})
+		_, err = clientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(
+			ctx, vWebhookConfig, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("failed upgrading validating webhook configuration: %w", err)
 		}
