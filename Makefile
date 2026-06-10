@@ -118,13 +118,17 @@ run: manifests generate fmt vet ## Run a controller from your host.
 run-kind-kind-cluster1: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go -config ./config/anyapplication/kind-kind-cluster1.yaml \
 		-metrics-bind-address :19090 \
-		-health-probe-bind-address :
+		-webhook-port 19443 \
+		-health-probe-bind-address : \
+		-webhook-cert-path $(CERTIFICATE_LOCAL_PATH)
 
 .PHONY: run-kind-kind-cluster2
 run-kind-kind-cluster2: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go -config ./config/anyapplication/kind-kind-cluster2.yaml \
 		-metrics-bind-address :29090 \
-		-health-probe-bind-address :29091
+		-webhook-port 29443 \
+		-health-probe-bind-address :29091 \
+		-webhook-cert-path $(CERTIFICATE_LOCAL_PATH)
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -197,8 +201,20 @@ certs:
 	openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 		-keyout $(CERTIFICATE_LOCAL_PATH)/tls.key \
 		-out $(CERTIFICATE_LOCAL_PATH)/tls.crt \
-		-subj "/CN=localhost"
+		-config config/anyapplication/openssl.local.cnf \
+		-extensions v3_req
+	base64 < $(CERTIFICATE_LOCAL_PATH)/tls.crt | tr -d '\n'
 
+
+# openssl req \
+#   -x509 \
+#   -nodes \
+#   -days 365 \
+#   -newkey rsa:2048 \
+#   -keyout tls.key \
+#   -out tls.crt \
+#   -config openssl.local.cnf \
+#   -extensions v3_req
 ##@ Dependencies
 
 ## Location to install dependencies to
