@@ -92,7 +92,7 @@ func main() {
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
-	var webhookServiceName string
+	var webhookServiceName, webhookValidationConfigurationName string
 	var enableLeaderElection bool
 	var probeAddr string
 	var webhookPort int
@@ -114,6 +114,7 @@ func main() {
 	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
 	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
 	flag.StringVar(&webhookServiceName, "webhook-service-name", "", "The webhook service name.")
+	flag.StringVar(&webhookValidationConfigurationName, "webhook-validation-configuration-name", "anyapplication-webhook-configuration", "The webhook service name.")
 	flag.StringVar(&metricsCertPath, "metrics-cert-path", "",
 		"The directory that contains the metrics server certificate.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
@@ -175,7 +176,7 @@ func main() {
 		webhookCertPath = "/tmp/k8s-webhook-server/serving-certs"
 
 		generateAndPatchWebhookCertificates(clientset, setupLog,
-			webhookCertPath, webhookCertName, webhookCertKey, webhookServiceName)
+			webhookCertPath, webhookCertName, webhookCertKey, webhookServiceName, webhookValidationConfigurationName)
 	}
 	// -----------------------------------------------------------------
 
@@ -388,6 +389,7 @@ func generateAndPatchWebhookCertificates(
 	webhookCertName string,
 	webhookCertKey string,
 	webhookServiceName string,
+	webhookValidationConfigurationName string,
 ) {
 
 	setupLog.Info("No webhook-cert-path provided. Initializing auto-generated self-signed certificates...")
@@ -401,7 +403,6 @@ func generateAndPatchWebhookCertificates(
 	if namespace == "" {
 		namespace = "default" // fallback default
 	}
-	webhookConfigName := "anyapplication-webhook-configuration"
 
 	certFilePath := filepath.Join(webhookCertPath, webhookCertName)
 	certKeyFilePath := filepath.Join(webhookCertPath, webhookCertKey)
@@ -433,7 +434,7 @@ func generateAndPatchWebhookCertificates(
 	}
 
 	// Patch Validating and Mutating configurations on the cluster api server
-	err = patchWebhookCABundle(clientset, setupLog, webhookConfigName, certificateBundle)
+	err = patchWebhookCABundle(clientset, setupLog, webhookValidationConfigurationName, certificateBundle)
 	failIfError(err, setupLog, "failed to patch admission webhooks caBundle")
 	setupLog.Info("Successfully auto-generated certs and patched webhook caBundles directly.")
 }

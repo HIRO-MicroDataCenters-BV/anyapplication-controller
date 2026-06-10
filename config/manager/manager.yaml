@@ -90,6 +90,7 @@ spec:
           - --health-probe-bind-address=:8081
           - --config=/etc/dcp/application-controller.yaml
           - --webhook-service-name=anyapplication-controller-webhook-service
+          - --webhook-validation-configuration-name=anyapplication-controller-validating-webhook-configuration
         image: controller:latest
         name: manager
         ports: []
