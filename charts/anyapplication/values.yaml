@@ -49,6 +49,8 @@ services:
   metrics:
     port: 8085
     secure: false
+  webhook:
+    port: 9443
 
 livenessProbe:
   failureThreshold: 3

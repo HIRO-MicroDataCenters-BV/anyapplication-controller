@@ -1,3 +1,4 @@
+{{- $fullname := include "app.fullname" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -33,11 +34,13 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}          
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: [
             "--leader-elect",
             "--health-probe-bind-address=:{{ .Values.services.health.port }}",
-            "--metrics-bind-address=:{{ .Values.services.metrics.port }}", 
+            "--metrics-bind-address=:{{ .Values.services.metrics.port }}",
+            "--webhook-port={{ .Values.services.webhook.port }}", 
+            "--webhook-service-name={{ $fullname }}",
             "--metrics-secure={{ .Values.services.metrics.secure }}",
             "--config=/etc/dcp/application-controller.yaml"
           ]

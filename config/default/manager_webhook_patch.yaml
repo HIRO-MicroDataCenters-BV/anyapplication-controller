@@ -1,0 +1,10 @@
+# This patch ensures the webhook certificates are properly mounted in the manager container.
+# It configures the necessary arguments, volumes, volume mounts, and container ports.
+
+# Add the port configuration for the webhook server
+- op: add
+  path: /spec/template/spec/containers/0/ports/-
+  value:
+    containerPort: 9443
+    name: webhook-server
+    protocol: TCP

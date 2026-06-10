@@ -17,13 +17,22 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"math/big"
 	"os"
 	"path/filepath"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -35,6 +44,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -61,6 +71,7 @@ import (
 	"hiro.io/anyapplication/internal/helm"
 	"hiro.io/anyapplication/internal/httpapi"
 	"hiro.io/anyapplication/internal/resources"
+	webhookdcpv1 "hiro.io/anyapplication/internal/webhook/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -81,6 +92,7 @@ func main() {
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
+	var webhookServiceName, webhookValidationConfigurationName string
 	var enableLeaderElection bool
 	var probeAddr string
 	var webhookPort int
@@ -97,9 +109,13 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
-	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate.")
+	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate. "+
+		"If empty, certificates will be auto-generated in production mode.")
 	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
 	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
+	flag.StringVar(&webhookServiceName, "webhook-service-name", "", "The webhook service name.")
+	flag.StringVar(&webhookValidationConfigurationName, "webhook-validation-configuration-name",
+		"anyapplication-webhook-configuration", "The webhook service name.")
 	flag.StringVar(&metricsCertPath, "metrics-cert-path", "",
 		"The directory that contains the metrics server certificate.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
@@ -148,6 +164,23 @@ func main() {
 		tlsOpts = append(tlsOpts, disableHTTP2)
 	}
 
+	// Fetch base REST Configuration early to setup internal self-signed rotation if needed
+	config, err := configctrl.GetConfigWithContext(applicationConfig.ZoneId)
+	failIfError(err, setupLog, "unable to get config")
+
+	// Get kubernetes clientset for configuration manipulations
+	clientset, err := kubernetes.NewForConfig(config)
+	failIfError(err, setupLog, "unable to create kubernetes clientset")
+
+	// --- Automated In-Memory Webhook Certificate Generation Logic ---
+	if len(webhookCertPath) == 0 && os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		webhookCertPath = "/tmp/k8s-webhook-server/serving-certs"
+
+		generateAndPatchWebhookCertificates(clientset, setupLog,
+			webhookCertPath, webhookCertName, webhookCertKey, webhookServiceName, webhookValidationConfigurationName)
+	}
+	// -----------------------------------------------------------------
+
 	// Create watchers for metrics and webhooks certificates
 	var metricsCertWatcher, webhookCertWatcher *certwatcher.CertWatcher
 
@@ -155,7 +188,7 @@ func main() {
 	webhookTLSOpts := tlsOpts
 
 	if len(webhookCertPath) > 0 {
-		setupLog.Info("Initializing webhook certificate watcher using provided certificates",
+		setupLog.Info("Initializing webhook certificate watcher using certificates",
 			"webhook-cert-path", webhookCertPath, "webhook-cert-name", webhookCertName, "webhook-cert-key", webhookCertKey)
 
 		var err error
@@ -192,14 +225,6 @@ func main() {
 		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
 	}
 
-	// If the certificate is not specified, controller-runtime will automatically
-	// generate self-signed certificates for the metrics server. While convenient for development and testing,
-	// this setup is not recommended for production.
-	//
-	// TODO(user): If you enable certManager, uncomment the following lines:
-	// - [METRICS-WITH-CERTS] at config/default/kustomization.yaml to generate and use certificates
-	// managed by cert-manager for the metrics server.
-	// - [PROMETHEUS-WITH-CERTS] at config/prometheus/kustomization.yaml for TLS certification.
 	if len(metricsCertPath) > 0 {
 		setupLog.Info("Initializing metrics certificate watcher using provided certificates",
 			"metrics-cert-path", metricsCertPath, "metrics-cert-name", metricsCertName, "metrics-cert-key", metricsCertKey)
@@ -219,9 +244,7 @@ func main() {
 			config.GetCertificate = metricsCertWatcher.GetCertificate
 		})
 	}
-	// config := ctrl.GetConfigOrDie()
-	config, err := configctrl.GetConfigWithContext(applicationConfig.ZoneId)
-	failIfError(err, setupLog, "unable to get config")
+
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -318,6 +341,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "AnyApplication")
 		os.Exit(1)
 	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = webhookdcpv1.SetupAnyApplicationWebhookWithManager(
+			mgr, loggers["Controller"], applicationConfig.ZoneId); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "AnyApplication")
+			os.Exit(1)
+		}
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {
@@ -334,8 +365,6 @@ func main() {
 	failIfError(mgr.AddReadyzCheck("readyz", healthz.Ping), setupLog, "unable to set up ready check")
 	setupLog.Info("starting Application API Server")
 
-	clientset, err := kubernetes.NewForConfig(config)
-	failIfError(err, setupLog, "unable to create kubernetes clientset for log fetcher")
 	logFetcher := errorctx.NewRealLogFetcher(clientset)
 	applicationReports := errorctx.NewApplicationReports(clusterCache, logFetcher)
 
@@ -352,6 +381,163 @@ func main() {
 	setupLog.Info("starting manager")
 	failIfError(mgr.Start(ctrl.SetupSignalHandler()), setupLog, "problem running manager")
 	stopFunc()
+}
+
+func generateAndPatchWebhookCertificates(
+	clientset *kubernetes.Clientset,
+	setupLog logr.Logger,
+	webhookCertPath string,
+	webhookCertName string,
+	webhookCertKey string,
+	webhookServiceName string,
+	webhookValidationConfigurationName string,
+) {
+
+	setupLog.Info("No webhook-cert-path provided. Initializing auto-generated self-signed certificates...")
+
+	// Setup a temporary directory to save the certificates for the file watcher
+	err := os.MkdirAll(webhookCertPath, 0755)
+	failIfError(err, setupLog, "failed to create directory for auto-generated certificates")
+
+	// Deduce parameters or use reasonable defaults (update these to match your actual service name/namespace)
+	namespace := os.Getenv("POD_NAMESPACE")
+	if namespace == "" {
+		namespace = "default" // fallback default
+	}
+
+	certFilePath := filepath.Join(webhookCertPath, webhookCertName)
+	certKeyFilePath := filepath.Join(webhookCertPath, webhookCertKey)
+	caFilePath := filepath.Join(webhookCertPath, "ca.crt")
+	var certificateBundle []byte
+
+	if !fileExists(caFilePath) || !fileExists(certFilePath) || !fileExists(certKeyFilePath) {
+		// Generate certs in memory
+		caBundle, crt, key, err := generateSelfSignedCert(webhookServiceName, namespace)
+		failIfError(err, setupLog, "failed to generate self-signed certificates")
+		certificateBundle = caBundle
+
+		// Write to temp filesystem so Kubebuilder's certwatcher can process them normally
+		err = os.WriteFile(certFilePath, crt, 0600)
+		failIfError(err, setupLog, "failed to write generated certificate to disk")
+		setupLog.Info("webhook certificate is saved", "path", certFilePath)
+
+		err = os.WriteFile(certKeyFilePath, key, 0600)
+		failIfError(err, setupLog, "failed to write generated key to disk")
+		setupLog.Info("webhook certificate key is saved", "path", certKeyFilePath)
+
+		err = os.WriteFile(caFilePath, caBundle, 0600)
+		failIfError(err, setupLog, "failed to write CA bundle to disk")
+		setupLog.Info("webhook ca bundle is saved", "path", caFilePath)
+	} else {
+		setupLog.Info("loading existing certificate", "path", caFilePath)
+		certificateBundle, err = os.ReadFile(caFilePath)
+		failIfError(err, setupLog, "failed to load existing certificate")
+	}
+
+	// Patch Validating and Mutating configurations on the cluster api server
+	err = patchWebhookCABundle(clientset, setupLog, webhookValidationConfigurationName, certificateBundle)
+	failIfError(err, setupLog, "failed to patch admission webhooks caBundle")
+	setupLog.Info("Successfully auto-generated certs and patched webhook caBundles directly.")
+}
+
+// Helper function to dynamically generate a self-signed root CA and a serving certificate valid for Kubernetes DNS
+func generateSelfSignedCert(serviceName, namespace string) (caBundle, certPEM, keyPEM []byte, err error) {
+	// 1. Setup Root CA
+	ca := &x509.Certificate{
+		SerialNumber: big.NewInt(2026),
+		Subject: pkix.Name{
+			Organization: []string{"hiro.io"},
+			CommonName:   "anyapplication-operator-ca",
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(10, 0, 0), // 10 years validity
+		IsCA:                  true,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+	}
+
+	caPrivKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caPrivKey.PublicKey, caPrivKey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	caPEMBytes := new(bytes.Buffer)
+	_ = pem.Encode(caPEMBytes, &pem.Block{Type: "CERTIFICATE", Bytes: caBytes})
+
+	// 2. Setup Server Certificate targeted for the specific Kubernetes Service address
+	dnsNames := []string{
+		serviceName,
+		"host.docker.internal",
+		"127.0.0.1",
+		fmt.Sprintf("%s.%s", serviceName, namespace),
+		fmt.Sprintf("%s.%s.svc", serviceName, namespace),
+		fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, namespace),
+	}
+
+	cert := &x509.Certificate{
+		SerialNumber: big.NewInt(2027),
+		Subject: pkix.Name{
+			Organization: []string{"hiro.io"},
+			CommonName:   fmt.Sprintf("%s.%s.svc", serviceName, namespace),
+		},
+		DNSNames:    dnsNames,
+		NotBefore:   time.Now(),
+		NotAfter:    time.Now().AddDate(1, 0, 0), // 1 year validity
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		KeyUsage:    x509.KeyUsageDigitalSignature,
+	}
+
+	certPrivKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	certBytes, err := x509.CreateCertificate(rand.Reader, cert, ca, &certPrivKey.PublicKey, caPrivKey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	certPEMBytes := new(bytes.Buffer)
+	_ = pem.Encode(certPEMBytes, &pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
+
+	keyPEMBytes := new(bytes.Buffer)
+	_ = pem.Encode(keyPEMBytes, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(certPrivKey)})
+
+	return caPEMBytes.Bytes(), certPEMBytes.Bytes(), keyPEMBytes.Bytes(), nil
+}
+
+// Helper function to programmatically update the caBundle field on both Mutating and Validating configurations
+func patchWebhookCABundle(
+	clientset *kubernetes.Clientset,
+	setupLog logr.Logger,
+	webhookConfigName string,
+	caBundle []byte,
+) error {
+	ctx := context.Background()
+
+	// 1. Attempt to patch ValidatingWebhookConfiguration
+	vWebhookConfig, err := clientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(
+		ctx, webhookConfigName, metav1.GetOptions{})
+	if err == nil {
+		for i := range vWebhookConfig.Webhooks {
+			vWebhookConfig.Webhooks[i].ClientConfig.CABundle = caBundle
+		}
+		_, err = clientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(
+			ctx, vWebhookConfig, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed upgrading validating webhook configuration: %w", err)
+		}
+		setupLog.Info("Patched ValidatingWebhookConfiguration caBundle.", "name", webhookConfigName)
+
+	}
+
+	return nil
 }
 
 func failIfError(err error, log logr.Logger, msg string) {
@@ -383,4 +569,16 @@ type ResourceFilterFunc func(group, kind, cluster string) bool
 
 func (f ResourceFilterFunc) IsExcludedResource(group, kind, cluster string) bool {
 	return f(group, kind, cluster)
+}
+
+func fileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	if err == nil {
+		return true // File exists
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false // File does not exist
+	}
+	// File might exist but has permission issues or other errors
+	return false
 }
