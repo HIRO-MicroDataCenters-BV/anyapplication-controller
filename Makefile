@@ -203,16 +203,6 @@ certs:
 		-extensions v3_req
 	base64 < $(CERTIFICATE_LOCAL_PATH)/tls.crt | tr -d '\n'
 
-
-# openssl req \
-#   -x509 \
-#   -nodes \
-#   -days 365 \
-#   -newkey rsa:2048 \
-#   -keyout tls.key \
-#   -out tls.crt \
-#   -config openssl.local.cnf \
-#   -extensions v3_req
 ##@ Dependencies
 
 ## Location to install dependencies to

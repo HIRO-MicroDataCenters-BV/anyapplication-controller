@@ -38,7 +38,8 @@ func SetupAnyApplicationWebhookWithManager(mgr ctrl.Manager, log logr.Logger, cu
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/mutate-dcp-hiro-io-v1-anyapplication,mutating=true,failurePolicy=fail,sideEffects=None,groups=dcp.hiro.io,resources=anyapplications,verbs=create;update,versions=v1,name=manyapplication-v1.kb.io,admissionReviewVersions=v1
+// Mutating hooks are disabled
+// -kubebuilder:webhook:path=/mutate-dcp-hiro-io-v1-anyapplication,failurePolicy=fail,sideEffects=None,groups=dcp.hiro.io,resources=anyapplications,verbs=create;update,versions=v1,name=manyapplication-v1.kb.io,admissionReviewVersions=v1
 
 // AnyApplicationCustomDefaulter struct is responsible for setting default values on the custom resource of the
 // Kind AnyApplication when those are created or updated.
@@ -66,7 +67,7 @@ func (d *AnyApplicationCustomDefaulter) Default(ctx context.Context, obj runtime
 
 // NOTE: The 'path' attribute must follow a specific pattern and should not be modified directly here.
 // Modifying the path for an invalid path can cause API server errors; failing to locate the webhook.
-// +kubebuilder:webhook:path=/validate-dcp-hiro-io-v1-anyapplication,mutating=false,failurePolicy=fail,sideEffects=None,groups=dcp.hiro.io,resources=anyapplications,verbs=create;update;delete,versions=v1,name=vanyapplication-v1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-dcp-hiro-io-v1-anyapplication,mutating=false,failurePolicy=fail,sideEffects=None,groups=dcp.hiro.io,resources=anyapplications,verbs=delete,versions=v1,name=vanyapplication-v1.kb.io,admissionReviewVersions=v1
 
 // AnyApplicationCustomValidator struct is responsible for validating the AnyApplication resource
 // when it is created, updated, or deleted.
