@@ -114,7 +114,8 @@ func main() {
 	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
 	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
 	flag.StringVar(&webhookServiceName, "webhook-service-name", "", "The webhook service name.")
-	flag.StringVar(&webhookValidationConfigurationName, "webhook-validation-configuration-name", "anyapplication-webhook-configuration", "The webhook service name.")
+	flag.StringVar(&webhookValidationConfigurationName, "webhook-validation-configuration-name",
+		"anyapplication-webhook-configuration", "The webhook service name.")
 	flag.StringVar(&metricsCertPath, "metrics-cert-path", "",
 		"The directory that contains the metrics server certificate.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
