@@ -24,6 +24,10 @@ spec:
       port: {{ .Values.services.metrics.port }}
       protocol: TCP
       targetPort: {{ .Values.services.metrics.port }}
+    - name: webhook
+      port: 443
+      protocol: TCP
+      targetPort: 9443
 
   selector:
     {{- include "app.selectorLabels" . | nindent 4 }}

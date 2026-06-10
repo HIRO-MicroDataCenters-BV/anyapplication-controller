@@ -37,7 +37,9 @@ spec:
           args: [
             "--leader-elect",
             "--health-probe-bind-address=:{{ .Values.services.health.port }}",
-            "--metrics-bind-address=:{{ .Values.services.metrics.port }}", 
+            "--metrics-bind-address=:{{ .Values.services.metrics.port }}",
+            "--webhook-port={{ .Values.services.webhook.port }}", 
+            "--webhook-service-name={{ include \"app.fullname\" . }}",
             "--metrics-secure={{ .Values.services.metrics.secure }}",
             "--config=/etc/dcp/application-controller.yaml"
           ]

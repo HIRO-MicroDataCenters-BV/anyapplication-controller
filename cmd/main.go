@@ -92,6 +92,7 @@ func main() {
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
+	var webhookServiceName string
 	var enableLeaderElection bool
 	var probeAddr string
 	var webhookPort int
@@ -111,6 +112,7 @@ func main() {
 	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate. If empty, certificates will be auto-generated in production mode.")
 	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
 	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
+	flag.StringVar(&webhookServiceName, "webhook-service-name", "", "The webhook service name.")
 	flag.StringVar(&metricsCertPath, "metrics-cert-path", "",
 		"The directory that contains the metrics server certificate.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
@@ -171,7 +173,7 @@ func main() {
 	if len(webhookCertPath) == 0 && os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		webhookCertPath = "/tmp/k8s-webhook-server/serving-certs"
 
-		generateAndPatchWebhookCertificates(clientset, setupLog, webhookCertPath, webhookCertName, webhookCertKey)
+		generateAndPatchWebhookCertificates(clientset, setupLog, webhookCertPath, webhookCertName, webhookCertKey, webhookServiceName)
 	}
 	// -----------------------------------------------------------------
 
@@ -382,6 +384,7 @@ func generateAndPatchWebhookCertificates(
 	webhookCertPath string,
 	webhookCertName string,
 	webhookCertKey string,
+	webhookServiceName string,
 ) {
 
 	setupLog.Info("No webhook-cert-path provided. Initializing auto-generated self-signed certificates...")
@@ -391,7 +394,6 @@ func generateAndPatchWebhookCertificates(
 	failIfError(err, setupLog, "failed to create directory for auto-generated certificates")
 
 	// Deduce parameters or use reasonable defaults (update these to match your actual service name/namespace)
-	serviceName := "anyapplication-webhook-service"
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
 		namespace = "default" // fallback default
@@ -405,7 +407,7 @@ func generateAndPatchWebhookCertificates(
 
 	if !fileExists(caFilePath) || !fileExists(certFilePath) || !fileExists(certKeyFilePath) {
 		// Generate certs in memory
-		caBundle, crt, key, err := generateSelfSignedCert(serviceName, namespace)
+		caBundle, crt, key, err := generateSelfSignedCert(webhookServiceName, namespace)
 		failIfError(err, setupLog, "failed to generate self-signed certificates")
 		certificateBundle = caBundle
 
